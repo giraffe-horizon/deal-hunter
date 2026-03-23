@@ -25,7 +25,9 @@ filters/base.py         Bazowy scoring engine (score_rules, penalties, budget, t
 filters/bike_filter.py  Rozszerzony scorer dla rowerów (rozmiary, kolory, opony, race keywords)
 notifiers/telegram.py   Telegram Bot API z retry + rate limiting
 notifiers/notion.py     Notion API (opcjonalne per profil)
-profiles/*.yaml         Profile produktów
+profiles/*.yaml         Profile produktów (gitignored poza example.yaml)
+profiles/example.yaml   Przykładowy profil z opisem WSZYSTKICH opcji
+docs/creating-profiles.md  Dokumentacja tworzenia profili
 state/*.json            Persistent state per profil (co już widziane, TTL 14 dni)
 ```
 
@@ -116,8 +118,11 @@ NOTION_API_KEY_PATH=~/.config/notion/api_key
 
 ## Dodawanie nowego profilu
 
-1. Stwórz `profiles/nazwa.yaml` — wzoruj się na `nas_hdd.yaml` (prosty) lub `bikes.yaml` (z custom filtrem)
-2. Jeśli potrzebny custom filtr → stwórz w `filters/`, zarejestruj w `FILTER_REGISTRY`, ustaw `custom_filter` w YAML
+**WAŻNE:** Profile użytkownika NIE są w repo (gitignored). Tylko `profiles/example.yaml` jest commitowany.
+
+1. Stwórz `profiles/nazwa.yaml` — wzoruj się na `profiles/example.yaml`
+2. Szczegółowa dokumentacja: `docs/creating-profiles.md`
+3. Jeśli potrzebny custom filtr → stwórz w `filters/`, zarejestruj w `FILTER_REGISTRY`, ustaw `custom_filter` w YAML
 
 ## Dodawanie custom filtra
 

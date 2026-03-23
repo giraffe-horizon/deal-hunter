@@ -18,9 +18,10 @@ deal-hunter/
 ├── notifiers/                  Backendy powiadomień
 │   ├── telegram.py             Telegram Bot API (retry + rate limiting)
 │   └── notion.py               Notion API (opcjonalne per profil)
-├── profiles/                   Profile produktów (YAML)
-│   ├── bikes.yaml              🚲 Rowery endurance/gravel (Pepper)
-│   └── nas_hdd.yaml            💾 Dyski HDD 12TB NAS (Pepper + Ceneo + Proshop)
+├── profiles/                   Profile produktów (YAML, gitignored poza example)
+│   └── example.yaml            📋 Template z opisem wszystkich opcji
+├── docs/                       Dokumentacja
+│   └── creating-profiles.md    📖 Przewodnik tworzenia profili
 ├── state/                      Persistent state per profil (JSON, TTL 14 dni)
 ├── .env                        Tokeny i klucze (nie commitowane)
 ├── .env.example                Szablon zmiennych środowiskowych
@@ -64,14 +65,21 @@ python deal_hunter.py --list
 
 ## Profile
 
-| Profil | Emoji | Źródła | Budżet | Opis |
-|--------|-------|--------|--------|------|
-| `bikes` | 🚲 | Pepper | 10 000–15 000 PLN | Rowery endurance/gravel, carbon, Di2/AXS, rozmiar XL/58+ |
-| `nas_hdd` | 💾 | Pepper, Ceneo, Proshop | 400–900 PLN | Dyski HDD 12TB NAS-grade (IronWolf, Exos, Ultrastar) |
+Katalog `profiles/` nie jest commitowany do repo (poza `profiles/example.yaml`). Każdy użytkownik tworzy własne profile lokalnie.
+
+Przykładowy profil z opisem wszystkich opcji: [`profiles/example.yaml`](profiles/example.yaml)
 
 ## Tworzenie nowego profilu
 
-Stwórz `profiles/nazwa.yaml`:
+> 📖 **Szczegółowy przewodnik:** [docs/creating-profiles.md](docs/creating-profiles.md)
+
+Skopiuj template i dostosuj:
+
+```bash
+cp profiles/example.yaml profiles/moj_profil.yaml
+```
+
+Struktura `profiles/nazwa.yaml`:
 
 ```yaml
 name: nazwa
@@ -186,6 +194,11 @@ Custom filtry (np. `BikeFilter`) rozszerzają bazowy scorer o dodatkową logikę
 | `TELEGRAM_BOT_TOKEN` | Token bota Telegram | ✅ |
 | `TELEGRAM_CHAT_ID` | ID czatu/grupy Telegram | ✅ |
 | `NOTION_API_KEY_PATH` | Ścieżka do pliku z kluczem Notion API | ❌ (tylko jeśli profil używa Notion) |
+
+## Dokumentacja
+
+- [Tworzenie profili](docs/creating-profiles.md) — szczegółowy przewodnik po konfiguracji profili YAML
+- [Przykładowy profil](profiles/example.yaml) — template z opisem wszystkich opcji
 
 ## Licencja
 

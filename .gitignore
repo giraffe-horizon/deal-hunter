@@ -5,3 +5,7 @@ state/
 *.log
 venv/
 .venv/
+
+# Profile użytkownika (poza example)
+profiles/*.yaml
+!profiles/example.yaml

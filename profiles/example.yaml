@@ -1,0 +1,128 @@
+# ============================================================================
+# Deal Hunter — Przykładowy profil produktu
+# ============================================================================
+# Ten plik pokazuje WSZYSTKIE dostępne opcje konfiguracji profilu.
+# Skopiuj go i dostosuj do swoich potrzeb:
+#   cp profiles/example.yaml profiles/moj_profil.yaml
+#
+# Szczegółowa dokumentacja: docs/creating-profiles.md
+# ============================================================================
+
+# --- Nazwa i identyfikacja ---
+# Nazwa profilu (używana w CLI: --profile nazwa)
+name: example
+# Emoji wyświetlany w alertach Telegram
+emoji: "🎯"
+
+# --- Źródła do skanowania ---
+# Możesz użyć jednego lub wielu źródeł jednocześnie.
+# Każde źródło ma własną konfigurację.
+sources:
+  # Pepper.pl — agregator okazji/promocji
+  # Konfiguracja: lista URLi do skanowania (strony kategorii lub wyniki wyszukiwania)
+  pepper:
+    urls:
+      - "https://www.pepper.pl/search?q=twoje+zapytanie"
+      - "https://www.pepper.pl/grupa/kategoria"
+      # Możesz dodać wiele stron, np. kolejne strony wyników:
+      # - "https://www.pepper.pl/grupa/kategoria?page=2"
+
+  # Ceneo.pl — porównywarka cen
+  # Konfiguracja: lista zapytań wyszukiwania (tekst)
+  ceneo:
+    queries:
+      - "nazwa produktu"
+      - "alternatywna fraza"
+
+  # Proshop.pl — sklep online
+  # Konfiguracja: lista zapytań wyszukiwania (tekst)
+  proshop:
+    queries:
+      - "nazwa produktu"
+
+# --- Budżet (PLN) ---
+# Oferty w zakresie budżetu dostają bonus +5 pkt.
+# Poniżej min → kara -20, powyżej max → kara -30.
+budget:
+  min: 100
+  max: 500
+
+# --- Reguły scoringu (pozytywne punkty) ---
+# Słowo kluczowe znalezione w tytule lub opisie oferty → dodaje punkty.
+# Im więcej punktów, tym ważniejszy keyword.
+# Wielkość liter nie ma znaczenia.
+score_rules:
+  # Nazwa produktu / modelu → dużo punktów
+  "model premium": 50
+  "model standard": 30
+  # Pożądane cechy → średnio punktów
+  "cecha1": 25
+  "cecha2": 20
+  # Mniej ważne cechy → mało punktów
+  "miły bonus": 10
+  nowy: 10
+
+# --- Kary (negatywne punkty) ---
+# Słowo kluczowe → odejmuje punkty. Wartości powinny być ujemne.
+penalties:
+  # Niechciane warianty
+  "zły model": -40
+  używany: -25
+  refurbished: -30
+  # Zupełnie inne produkty (pomyłki wyszukiwania)
+  "inny produkt": -50
+
+# --- Wymagane słowa (opcjonalne) ---
+# Minimum JEDNO z tych słów musi wystąpić w ofercie.
+# Jeśli żadne nie matchuje → oferta odrzucona (hard reject).
+# Przydatne gdy szukasz konkretnej pojemności, rozmiaru itp.
+required_any:
+  - "wymagane_slowo1"
+  - "wymagane_slowo2"
+
+# --- Wykluczone słowa (opcjonalne) ---
+# Jeśli KTÓREKOLWIEK z tych słów wystąpi → oferta odrzucona (hard reject).
+# Przydatne do odsiewania niechcianych kategorii.
+excluded_words:
+  - "spam"
+  - "niechciana_kategoria"
+
+# --- Progi scoringu ---
+# Minimalny score aby oferta pojawiła się jako alert
+score_threshold: 50
+# Score od którego oferta jest oznaczona jako "gorąca perełka" 🔥🔥🔥
+score_threshold_alert: 80
+
+# --- Custom filtr (opcjonalne) ---
+# Jeśli bazowy scoring nie wystarcza, możesz podpiąć własny filtr.
+# Filtr musi dziedziczyć po BaseFilter i być zarejestrowany w filters/__init__.py.
+# Format: "nazwa_pliku.NazwaKlasy" (plik w katalogu filters/)
+# custom_filter: "bike_filter.BikeFilter"
+
+# --- Custom data (opcjonalne) ---
+# Dowolne dane przekazywane do custom filtra przez self.profile["custom_data"].
+# Struktura zależy od Twojego filtra — to jest tylko przykład.
+# custom_data:
+#   preferred_sizes: ["L", "XL"]
+#   excluded_colors:
+#     - "biały"
+#     - "żółty"
+#   extra_config:
+#     strict_mode: true
+
+# --- Powiadomienia Telegram ---
+# topic_id — ID wątku w grupie Telegram (jeśli grupa ma wątki/tematy).
+#   Znajdziesz go w URL wątku: t.me/c/GRUPAID/TOPICID
+# max_alerts — max liczba alertów wysyłanych w jednym uruchomieniu.
+#   Chroni przed zalewem wiadomości gdy jest dużo wyników.
+telegram:
+  topic_id: 31
+  max_alerts: 5
+
+# --- Powiadomienia Notion (opcjonalne) ---
+# Ustaw null aby wyłączyć Notion.
+# Aby włączyć → podaj database_id bazy Notion do której trafiają oferty.
+# Wymaga skonfigurowania NOTION_API_KEY_PATH w .env
+notion: null
+# notion:
+#   database_id: "twoj-notion-database-id"
