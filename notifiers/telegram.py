@@ -1,7 +1,7 @@
 """Telegram notifier with retry and rate limiting."""
 
-import time
 import logging
+import time
 
 import requests
 
@@ -16,11 +16,22 @@ class TelegramNotifier:
         self.chat_id = chat_id
         self.api_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
 
-    def send_alert(self, deal, score: int, tier: str, plus: list[str], minus: list[str],
-                   topic_id: int | None = None, emoji: str = "\U0001f525",
-                   size_warning: str = "", currency: str = "PLN") -> None:
+    def send_alert(
+        self,
+        deal,
+        score: int,
+        tier: str,
+        plus: list[str],
+        minus: list[str],
+        topic_id: int | None = None,
+        emoji: str = "\U0001f525",
+        size_warning: str = "",
+        currency: str = "PLN",
+    ) -> None:
         """Send individual deal alert (messages in Polish for end users)."""
-        price_str = f"{deal.price:,} {currency}".replace(',', ' ') if deal.price > 0 else "brak ceny"
+        price_str = (
+            f"{deal.price:,} {currency}".replace(",", " ") if deal.price > 0 else "brak ceny"
+        )
 
         msg = f"*{tier}* (score: {score})\n"
         msg += f"{emoji} *{deal.title}*\n"
@@ -39,8 +50,13 @@ class TelegramNotifier:
 
         self._send_message(msg, topic_id=topic_id)
 
-    def send_summary(self, remaining_alerts: list[dict], topic_id: int | None = None,
-                     emoji: str = "\U0001f525", currency: str = "PLN") -> None:
+    def send_summary(
+        self,
+        remaining_alerts: list[dict],
+        topic_id: int | None = None,
+        emoji: str = "\U0001f525",
+        currency: str = "PLN",
+    ) -> None:
         """Send summary message for overflow alerts (messages in Polish for end users)."""
         if not remaining_alerts:
             return
@@ -48,9 +64,11 @@ class TelegramNotifier:
         msg = f"{emoji} PODSUMOWANIE - {len(remaining_alerts)} dodatkowych ofert:\n\n"
 
         for i, alert in enumerate(remaining_alerts, 1):
-            deal = alert['deal']
-            score = alert['score']
-            price_str = f"{deal.price:,} {currency}".replace(',', ' ') if deal.price > 0 else "brak ceny"
+            deal = alert["deal"]
+            score = alert["score"]
+            price_str = (
+                f"{deal.price:,} {currency}".replace(",", " ") if deal.price > 0 else "brak ceny"
+            )
 
             msg += f"{i}. *{deal.title[:80]}*\n"
             msg += f"   \U0001f4b0 {price_str} | Score: {score}\n"
@@ -62,8 +80,9 @@ class TelegramNotifier:
 
         self._send_message(msg, topic_id=topic_id, disable_preview=True)
 
-    def _send_message(self, text: str, topic_id: int | None = None,
-                      disable_preview: bool = False) -> None:
+    def _send_message(
+        self, text: str, topic_id: int | None = None, disable_preview: bool = False
+    ) -> None:
         """Send message with retry and rate limiting."""
         payload = {
             "chat_id": self.chat_id,
@@ -82,8 +101,10 @@ class TelegramNotifier:
                     logger.info(f"Telegram: sent message ({len(text)} chars)")
                     return
                 elif resp.status_code == 429:
-                    retry_after = resp.json().get('parameters', {}).get('retry_after', 30)
-                    logger.warning(f"Telegram: rate limited, waiting {retry_after}s (attempt {attempt}/3)")
+                    retry_after = resp.json().get("parameters", {}).get("retry_after", 30)
+                    logger.warning(
+                        f"Telegram: rate limited, waiting {retry_after}s (attempt {attempt}/3)"
+                    )
                     if attempt < 3:
                         time.sleep(retry_after)
                         continue

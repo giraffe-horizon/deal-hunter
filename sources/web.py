@@ -1,12 +1,12 @@
 """Generic web scraper source — configurable via YAML CSS selectors."""
 
-import re
 import logging
+import re
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
-from .base import Source, Deal
+from .base import Deal, Source
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +39,9 @@ class WebSource(Source):
                 deals = self._scrape_site(site)
                 all_deals.extend(deals)
             except Exception as e:
-                logger.error(f"WebSource: failed to scrape {site.get('url', '?')}: {e}",
-                             exc_info=True)
+                logger.error(
+                    f"WebSource: failed to scrape {site.get('url', '?')}: {e}", exc_info=True
+                )
 
         return all_deals
 
@@ -123,21 +124,21 @@ class WebSource(Source):
             attr = parts[1].strip()
             el = container.select_one(css_sel) if css_sel else container
             if el:
-                return el.get(attr, "")
+                return str(el.get(attr, ""))
             return ""
 
         el = container.select_one(selector)
         if el:
-            return el.get_text(strip=True)
+            return str(el.get_text(strip=True))
         return ""
 
     @staticmethod
     def _parse_price(text: str) -> int | None:
         """Extract numeric price from text. Returns int or None."""
-        cleaned = text.replace('\xa0', '').replace(' ', '')
-        match = re.search(r'(\d[\d\s]*[\d]?)[,.]?\d{0,2}', cleaned)
+        cleaned = text.replace("\xa0", "").replace(" ", "")
+        match = re.search(r"(\d[\d\s]*[\d]?)[,.]?\d{0,2}", cleaned)
         if match:
-            digits = re.sub(r'\D', '', match.group(0).split(',')[0].split('.')[0])
+            digits = re.sub(r"\D", "", match.group(0).split(",")[0].split(".")[0])
             if digits:
                 return int(digits)
         return None

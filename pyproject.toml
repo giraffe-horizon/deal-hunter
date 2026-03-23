@@ -38,3 +38,20 @@ deal-hunter = "deal_hunter:main"
 Homepage = "https://github.com/giraffe-horizon/deal-hunter"
 Repository = "https://github.com/giraffe-horizon/deal-hunter"
 Issues = "https://github.com/giraffe-horizon/deal-hunter/issues"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true

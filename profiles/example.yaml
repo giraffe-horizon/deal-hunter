@@ -1,0 +1,49 @@
+# Example profile — template for creating your own profiles.
+# Copy this file and customize it: cp profiles/example.yaml profiles/my_product.yaml
+# See docs/creating-profiles.md for a detailed guide.
+#
+# This profile is disabled by default (enabled: false) so --all skips it.
+
+name: example
+emoji: "🔍"
+enabled: false
+
+sources:
+  pepper:
+    urls:
+      - "https://www.pepper.pl/search?q=headphones"
+  ceneo:
+    queries:
+      - "headphones ANC"
+
+budget:
+  min: 200
+  max: 800
+
+score_rules:
+  "noise cancelling": 30
+  sony: 40
+  bose: 35
+  sennheiser: 25
+  "r/\\bwh-?1000xm[45]\\b/": 50
+
+penalties:
+  wired: -50
+  gaming: -30
+  "for kids": -40
+
+excluded_words:
+  - replacement
+  - case only
+
+required_any: []
+
+score_threshold: 40
+score_threshold_alert: 80
+
+telegram:
+  topic_id: null
+  max_alerts: 5
+
+notion: null
+currency: PLN

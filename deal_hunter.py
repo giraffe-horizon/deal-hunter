@@ -12,7 +12,6 @@ import logging
 import os
 import re
 import sys
-import time
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -20,11 +19,11 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from sources import SOURCE_REGISTRY
 from filters import FILTER_REGISTRY
 from filters.base import BaseFilter
-from notifiers.telegram import TelegramNotifier
 from notifiers.notion import NotionNotifier
+from notifiers.telegram import TelegramNotifier
+from sources import SOURCE_REGISTRY
 from utils.validation import validate_profile
 
 # ──────────────── SETUP ────────────────
@@ -36,19 +35,31 @@ STATE_TTL_DAYS = 14
 
 load_dotenv(BASE_DIR / ".env")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(BASE_DIR / "deal_hunter.log", encoding="utf-8"),
-    ]
-)
+
+def _setup_logging() -> None:
+    """Configure logging once on the root logger. Child loggers just propagate."""
+    root = logging.getLogger()
+    if root.handlers:
+        return  # Already configured — avoid duplicate handlers
+    root.setLevel(logging.INFO)
+    fmt = logging.Formatter(
+        "[%(asctime)s] %(levelname)s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+    root.addHandler(sh)
+    fh = logging.FileHandler(BASE_DIR / "deal_hunter.log", encoding="utf-8")
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+
+
+_setup_logging()
 logger = logging.getLogger("deal_hunter")
 
 
 # ──────────────── STATE ────────────────
+
 
 def _state_path(profile_name: str) -> Path:
     STATE_DIR.mkdir(exist_ok=True)
@@ -61,7 +72,7 @@ def load_state(profile_name: str) -> dict:
     if not path.exists():
         return {"seen": {}, "prices": {}}
     try:
-        with open(path, 'r') as f:
+        with open(path) as f:
             state = json.load(f)
 
         # Backwards compat: old format was flat list
@@ -78,7 +89,7 @@ def load_state(profile_name: str) -> dict:
         state["seen"] = {k: v for k, v in state.get("seen", {}).items() if v > cutoff}
         if "prices" not in state:
             state["prices"] = {}
-        return state
+        return dict(state)
     except (json.JSONDecodeError, ValueError):
         logger.warning(f"State file corrupted for {profile_name}, resetting")
         return {"seen": {}, "prices": {}}
@@ -88,7 +99,7 @@ def save_state(profile_name: str, state: dict) -> None:
     """Save state to disk."""
     path = _state_path(profile_name)
     try:
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(state, f, indent=2)
     except Exception as e:
         logger.error(f"Error saving state for {profile_name}: {e}")
@@ -96,11 +107,12 @@ def save_state(profile_name: str, state: dict) -> None:
 
 # ──────────────── PRICE TRACKING ────────────────
 
+
 def _normalize_title(title: str) -> str:
     """Normalize title for dedup and price tracking: lowercase, strip, alphanumeric only."""
     text = title.lower().strip()
-    text = re.sub(r'[^\w\s]', '', text)
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"[^\w\s]", "", text)
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
@@ -146,19 +158,28 @@ def check_price_changes(deal, state: dict, profile_name: str) -> list[str]:
 
 # ──────────────── PROFILE ────────────────
 
+
 def load_profile(name: str) -> dict:
     """Load a YAML profile by name."""
     path = PROFILES_DIR / f"{name}.yaml"
     if not path.exists():
         logger.error(f"Profile not found: {path}")
         sys.exit(1)
-    with open(path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+    with open(path, encoding="utf-8") as f:
+        return dict(yaml.safe_load(f))
 
 
-def list_profiles() -> list[str]:
-    """List all available profile names."""
-    return [p.stem for p in PROFILES_DIR.glob("*.yaml")]
+def list_profiles(include_disabled: bool = True) -> list[str]:
+    """List available profile names. By default includes disabled profiles."""
+    names: list[str] = []
+    for p in PROFILES_DIR.glob("*.yaml"):
+        if not include_disabled:
+            with open(p, encoding="utf-8") as f:
+                prof = yaml.safe_load(f)
+            if isinstance(prof, dict) and not prof.get("enabled", True):
+                continue
+        names.append(p.stem)
+    return names
 
 
 def get_filter(profile: dict) -> BaseFilter:
@@ -170,6 +191,7 @@ def get_filter(profile: dict) -> BaseFilter:
 
 
 # ──────────────── FETCH ────────────────
+
 
 def fetch_all_deals(profile: dict) -> list:
     """Fetch deals from all configured sources."""
@@ -232,6 +254,7 @@ def deduplicate(deals: list) -> list:
 
 # ──────────────── RUN MODES ────────────────
 
+
 def run_profile(profile_name: str, verify: bool = False, validate_only: bool = False) -> None:
     """Run a single profile."""
     profile = load_profile(profile_name)
@@ -254,7 +277,7 @@ def run_profile(profile_name: str, verify: bool = False, validate_only: bool = F
         return
 
     emoji = profile.get("emoji", "\U0001f50d")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
     logger.info(f"Running profile: {profile_name} {emoji} (verify={verify})")
 
     # Fetch
@@ -316,12 +339,14 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
 
         if result.score >= threshold:
             alert_plus = list(result.plus) + price_plus
-            alerts.append({
-                "deal": deal,
-                "score": result.score,
-                "plus": alert_plus,
-                "minus": result.minus,
-            })
+            alerts.append(
+                {
+                    "deal": deal,
+                    "score": result.score,
+                    "plus": alert_plus,
+                    "minus": result.minus,
+                }
+            )
 
     state["seen"] = seen
     save_state(profile_name, state)
@@ -332,13 +357,14 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         return
 
     # Sort by score descending
-    alerts.sort(key=lambda x: x['score'], reverse=True)
+    alerts.sort(key=lambda x: x["score"], reverse=True)
 
     # Notion — save all
     if notion and notion_db:
         for a in alerts:
-            notion.save_deal(a['deal'], a['score'], a['plus'], notion_db,
-                             profile_name, profile=profile)
+            notion.save_deal(
+                a["deal"], a["score"], a["plus"], notion_db, profile_name, profile=profile
+            )
 
     # Telegram — top alerts individually, rest in summary
     if telegram:
@@ -346,27 +372,40 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         remaining = alerts[max_alerts:]
 
         for a in top_alerts:
-            tier = f"\U0001f525\U0001f525\U0001f525 GOR\u0104CA PERE\u0141KA" if a['score'] >= threshold_alert else f"\U0001f525 ZNALAZ\u0141EM OKAZJ\u0118"
+            tier = (
+                "\U0001f525\U0001f525\U0001f525 GOR\u0104CA PERE\u0141KA"
+                if a["score"] >= threshold_alert
+                else "\U0001f525 ZNALAZ\u0141EM OKAZJ\u0118"
+            )
             telegram.send_alert(
-                a['deal'], a['score'], tier, a['plus'], a['minus'],
-                topic_id=tg_topic, emoji=emoji, currency=currency
+                a["deal"],
+                a["score"],
+                tier,
+                a["plus"],
+                a["minus"],
+                topic_id=tg_topic,
+                emoji=emoji,
+                currency=currency,
             )
 
         if remaining:
-            telegram.send_summary(remaining, topic_id=tg_topic, emoji=emoji,
-                                  currency=currency)
+            telegram.send_summary(remaining, topic_id=tg_topic, emoji=emoji, currency=currency)
 
     # Console output
     for a in alerts:
-        d = a['deal']
-        tier = "\U0001f525\U0001f525\U0001f525 TOP DEAL" if a['score'] >= threshold_alert else "\U0001f525 DEAL"
-        price_str = f"{d.price:,} {currency}".replace(',', ' ') if d.price > 0 else "no price"
+        d = a["deal"]
+        tier = (
+            "\U0001f525\U0001f525\U0001f525 TOP DEAL"
+            if a["score"] >= threshold_alert
+            else "\U0001f525 DEAL"
+        )
+        price_str = f"{d.price:,} {currency}".replace(",", " ") if d.price > 0 else "no price"
         print(f"{emoji} {tier} (score: {a['score']})")
         print(f"  {d.title}")
         print(f"  Price: {price_str} | Source: {d.source}")
-        if a['plus']:
+        if a["plus"]:
             print(f"  \u2705 {', '.join(a['plus'][:6])}")
-        if a['minus']:
+        if a["minus"]:
             print(f"  \u26a0\ufe0f  {', '.join(a['minus'][:4])}")
         print(f"  LINK: {d.link}")
         print()
@@ -382,10 +421,12 @@ def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict) -> None:
     threshold_alert = profile.get("score_threshold_alert", 100)
     profile_name = profile.get("name", "unknown")
 
-    print(f"\n{'='*60}")
-    print(f"  {emoji} DEAL ANALYSIS \u2014 {profile_name.upper()} \u2014 {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"\n{'=' * 60}")
+    print(
+        f"  {emoji} DEAL ANALYSIS \u2014 {profile_name.upper()} \u2014 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    )
     print(f"  Found {len(deals)} deals")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     scored: list[tuple] = []
     rejected = 0
@@ -403,7 +444,7 @@ def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict) -> None:
     scored.sort(key=lambda x: x[1].score, reverse=True)
 
     for deal, result in scored:
-        price_str = f"{deal.price:,} {currency}".replace(',', ' ') if deal.price > 0 else "no price"
+        price_str = f"{deal.price:,} {currency}".replace(",", " ") if deal.price > 0 else "no price"
         temp_str = f" | temp: {deal.temperature}\u00b0" if deal.temperature else ""
 
         if result.score >= threshold_alert:
@@ -428,11 +469,17 @@ def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict) -> None:
 
 # ──────────────── CLI ────────────────
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Deal Hunter \u2014 multi-source deal monitor")
     parser.add_argument("--profile", "-p", type=str, help="Profile name to run")
     parser.add_argument("--all", "-a", action="store_true", help="Run all profiles")
-    parser.add_argument("--verify", "-v", action="store_true", help="Verify mode (show all deals with scores, no state)")
+    parser.add_argument(
+        "--verify",
+        "-v",
+        action="store_true",
+        help="Verify mode (show all deals with scores, no state)",
+    )
     parser.add_argument("--list", "-l", action="store_true", help="List available profiles")
     parser.add_argument("--validate", action="store_true", help="Validate profile without running")
     parser.add_argument("--version", action="version", version=f"Deal Hunter {__version__}")
@@ -458,7 +505,7 @@ def main() -> None:
         return
 
     if args.all:
-        for profile_name in list_profiles():
+        for profile_name in list_profiles(include_disabled=False):
             try:
                 run_profile(profile_name, verify=args.verify)
             except Exception as e:

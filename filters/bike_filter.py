@@ -1,7 +1,7 @@
 """Bike-specific filter — extends BaseFilter with size, color, tire, race logic."""
 
-import re
 import logging
+import re
 
 from .base import BaseFilter, ScoreResult
 
@@ -48,7 +48,7 @@ class BikeFilter(BaseFilter):
                 result.minus.append(f"-100 color {color}")
 
         # Tire width scoring
-        tire_match = re.search(r'(\d{2})\s*(?:mm|c)\b', text)
+        tire_match = re.search(r"(\d{2})\s*(?:mm|c)\b", text)
         if tire_match:
             tire_width = int(tire_match.group(1))
             if 38 <= tire_width <= 50:
@@ -73,10 +73,10 @@ class BikeFilter(BaseFilter):
     def _check_size(self, text: str) -> str:
         """Check if size fits. Returns 'good', 'wrong', or 'unknown'."""
         size_patterns = [
-            r'(?:rozm(?:iar)?|size|roz\.?|wielko\u015b\u0107)\s*:?\s*(xs|s|m|l|xl|xxl|2xl|\d{2})',
-            r'\b(4[89]|5[0-9]|6[0-4])\s*cm\b',
-            r'(?:^|[\s,/|(])(xl|xxl|2xl)(?:[\s,/|)]|$)',
-            r'(?:^|[\s,/|(])(5[4-9]|6[0-4])(?:[\s,/|)]|$)',
+            r"(?:rozm(?:iar)?|size|roz\.?|wielko\u015b\u0107)\s*:?\s*(xs|s|m|l|xl|xxl|2xl|\d{2})",
+            r"\b(4[89]|5[0-9]|6[0-4])\s*cm\b",
+            r"(?:^|[\s,/|(])(xl|xxl|2xl)(?:[\s,/|)]|$)",
+            r"(?:^|[\s,/|(])(5[4-9]|6[0-4])(?:[\s,/|)]|$)",
         ]
 
         found_sizes: set[str] = set()

@@ -24,13 +24,13 @@ MIN_REQUEST_INTERVAL = 2.0
 class Deal:
     """Normalized deal from any source."""
 
-    id: str            # unique: f"{source}:{native_id}"
+    id: str  # unique: f"{source}:{native_id}"
     title: str
-    price: int         # in PLN, 0 if unknown
+    price: int  # in PLN, 0 if unknown
     link: str
-    source: str        # "pepper", "ceneo", "proshop", "web"
+    source: str  # "pepper", "ceneo", "proshop", "web"
     description: str
-    temperature: int   # Pepper only, rest 0
+    temperature: int  # Pepper only, rest 0
     image_url: str
     published_at: str  # ISO datetime or ""
 

@@ -210,13 +210,40 @@ python deal_hunter.py --profile my_product --validate
 python deal_hunter.py --profile my_product --verify
 ```
 
+## Running Tests and Linting
+
+Before submitting a PR, make sure all checks pass locally:
+
+```bash
+source venv/bin/activate
+
+# Install test/lint dependencies
+pip install pytest ruff mypy types-requests types-beautifulsoup4 types-PyYAML
+
+# Run unit tests
+pytest tests/ -v
+
+# Linting (must pass clean)
+ruff check .
+ruff format --check .
+
+# Type checking
+mypy --ignore-missing-imports deal_hunter.py sources/ filters/ notifiers/ utils/
+
+# Validate profiles
+python deal_hunter.py --profile example --validate
+```
+
+CI runs all of the above automatically on every push and PR to `main`.
+
 ## Pull Request Process
 
 1. Fork the repo and create a feature branch
 2. Make your changes — follow the code style above
-3. Test manually with `--verify` and `--validate`
-4. Commit with a descriptive message: `feat:`, `fix:`, `docs:`, `chore:`
-5. Open a PR against `main`
+3. Run tests and linting (see above)
+4. Test manually with `--verify` and `--validate`
+5. Commit with a descriptive message: `feat:`, `fix:`, `docs:`, `chore:`
+6. Open a PR against `main`
 
 ## Reporting Issues
 

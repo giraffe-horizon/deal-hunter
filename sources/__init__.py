@@ -1,8 +1,8 @@
 """Source registry — deal fetching plugins."""
 
 from .base import Deal, Source
-from .pepper import PepperSource
 from .ceneo import CeneoSource
+from .pepper import PepperSource
 from .proshop import ProshopSource
 from .web import WebSource
 

@@ -1,14 +1,14 @@
 """Pepper.pl source — scrapes deals with Vue3 JSON + HTML fallback."""
 
 import json
-import re
 import logging
+import re
 from datetime import datetime, timedelta
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
-from .base import Source, Deal
+from .base import Deal, Source
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +43,9 @@ class PepperSource(Source):
 
     def _parse_deals(self, html: str, base_url: str = "https://www.pepper.pl") -> list[Deal]:
         """Parse deals from Pepper HTML."""
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
         deals: list[Deal] = []
-        articles = soup.find_all('article', class_=re.compile(r'thread'))
+        articles = soup.find_all("article", class_=re.compile(r"thread"))
 
         for art in articles:
             deal = self._parse_vue3(art) or self._parse_html(art, base_url)
@@ -55,45 +55,49 @@ class PepperSource(Source):
 
     def _parse_vue3(self, art) -> Deal | None:
         """Try to extract data from Vue3 data attribute."""
-        vue_div = art.find('div', class_='js-vue3')
-        if not vue_div or not vue_div.get('data-vue3'):
+        vue_div = art.find("div", class_="js-vue3")
+        if not vue_div or not vue_div.get("data-vue3"):
             return None
         try:
-            data = json.loads(vue_div['data-vue3'])
-            thread = data.get('props', {}).get('thread', {})
-            title = thread.get('title', '')
-            slug = thread.get('titleSlug', '')
-            tid = thread.get('threadId', '')
+            data = json.loads(vue_div["data-vue3"])
+            thread = data.get("props", {}).get("thread", {})
+            title = thread.get("title", "")
+            slug = thread.get("titleSlug", "")
+            tid = thread.get("threadId", "")
             link = f"https://www.pepper.pl/promocje/{slug}-{tid}" if slug and tid else ""
 
             # Filter expired deals
-            if thread.get('isExpired') or thread.get('status') in ('expired', 'wygas\u0142a', 'hidden'):
+            if thread.get("isExpired") or thread.get("status") in (
+                "expired",
+                "wygas\u0142a",
+                "hidden",
+            ):
                 return None
 
             price = 0
-            price_obj = thread.get('price')
+            price_obj = thread.get("price")
             if price_obj:
                 if isinstance(price_obj, dict):
-                    price = int(float(price_obj.get('amount', 0)))
+                    price = int(float(price_obj.get("amount", 0)))
                 else:
                     price = _extract_price(str(price_obj))
 
-            desc = thread.get('description', '')
-            temperature = thread.get('temperature', 0)
+            desc = thread.get("description", "")
+            temperature = thread.get("temperature", 0)
 
             # Image URL
             image_url = ""
-            image_data = thread.get('mainImage') or thread.get('image')
+            image_data = thread.get("mainImage") or thread.get("image")
             if isinstance(image_data, dict):
-                image_url = image_data.get('url', '') or image_data.get('path', '')
+                image_url = image_data.get("url", "") or image_data.get("path", "")
             elif isinstance(image_data, str):
                 image_url = image_data
 
             # Publication date
-            published_at = thread.get('publishedAt') or thread.get('createdAt') or ""
+            published_at = thread.get("publishedAt") or thread.get("createdAt") or ""
             if published_at:
                 try:
-                    pub_dt = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
+                    pub_dt = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
                     if datetime.now().astimezone() - pub_dt > timedelta(days=30):
                         return None
                 except Exception:
@@ -117,50 +121,50 @@ class PepperSource(Source):
 
     def _parse_html(self, art, base_url: str) -> Deal | None:
         """Fallback — parse deal from HTML tags."""
-        art_classes = ' '.join(art.get('class', []))
-        if re.search(r'thread--expired|thread--hide|expired', art_classes):
+        art_classes = " ".join(art.get("class", []))
+        if re.search(r"thread--expired|thread--hide|expired", art_classes):
             return None
 
-        title_tag = art.find('a', class_=re.compile(r'thread-title'))
+        title_tag = art.find("a", class_=re.compile(r"thread-title"))
         if not title_tag:
             return None
 
         title = title_tag.get_text().strip()
-        link = title_tag.get('href', '')
-        if link and not link.startswith('http'):
+        link = title_tag.get("href", "")
+        if link and not link.startswith("http"):
             link = urljoin(base_url, link)
 
         price = 0
-        price_tag = art.find('span', class_=re.compile(r'thread-price'))
+        price_tag = art.find("span", class_=re.compile(r"thread-price"))
         if price_tag:
             price = _extract_price(price_tag.get_text())
 
         desc = ""
-        desc_tag = art.find('div', class_=re.compile(r'description|excerpt'))
+        desc_tag = art.find("div", class_=re.compile(r"description|excerpt"))
         if desc_tag:
             desc = desc_tag.get_text().strip()
 
         temp = 0
-        temp_tag = art.find('span', class_=re.compile(r'vote-temp'))
+        temp_tag = art.find("span", class_=re.compile(r"vote-temp"))
         if temp_tag:
             try:
-                temp = int(re.sub(r'[^\d-]', '', temp_tag.get_text()) or 0)
+                temp = int(re.sub(r"[^\d-]", "", temp_tag.get_text()) or 0)
             except ValueError:
                 temp = 0
 
         # Image
         image_url = ""
-        img_tag = art.find('img')
+        img_tag = art.find("img")
         if img_tag:
-            image_url = img_tag.get('src', '') or img_tag.get('data-src', '')
+            image_url = img_tag.get("src", "") or img_tag.get("data-src", "")
 
         # Publication date
         published_at = ""
-        time_tag = art.find('time')
-        if time_tag and time_tag.get('datetime'):
-            raw_dt = time_tag['datetime']
+        time_tag = art.find("time")
+        if time_tag and time_tag.get("datetime"):
+            raw_dt = time_tag["datetime"]
             try:
-                pub_dt = datetime.fromisoformat(raw_dt.replace('Z', '+00:00'))
+                pub_dt = datetime.fromisoformat(raw_dt.replace("Z", "+00:00"))
                 if datetime.now().astimezone() - pub_dt > timedelta(days=30):
                     return None
                 published_at = raw_dt
@@ -183,10 +187,10 @@ class PepperSource(Source):
 
 def _extract_price(text: str) -> int:
     """Extract integer price from text."""
-    text = text.replace('\xa0', '').replace(' ', '')
-    m = re.search(r'([\d\s]+)[,.]?\d{0,2}', text.replace(' ', ''))
+    text = text.replace("\xa0", "").replace(" ", "")
+    m = re.search(r"([\d\s]+)[,.]?\d{0,2}", text.replace(" ", ""))
     if m:
-        digits = re.sub(r'\D', '', m.group(1))
+        digits = re.sub(r"\D", "", m.group(1))
         if digits:
             return int(digits)
     return 0

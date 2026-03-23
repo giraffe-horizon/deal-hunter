@@ -34,10 +34,14 @@ def validate_profile(profile: dict) -> list[str]:
         budget = profile["budget"]
         if "min" not in budget or "max" not in budget:
             errors.append("'budget' must have 'min' and 'max' keys")
-        elif not isinstance(budget["min"], (int, float)) or not isinstance(budget["max"], (int, float)):
+        elif not isinstance(budget["min"], (int, float)) or not isinstance(
+            budget["max"], (int, float)
+        ):
             errors.append("'budget.min' and 'budget.max' must be numbers")
         elif budget["min"] >= budget["max"]:
-            errors.append(f"'budget.min' ({budget['min']}) must be less than 'budget.max' ({budget['max']})")
+            errors.append(
+                f"'budget.min' ({budget['min']}) must be less than 'budget.max' ({budget['max']})"
+            )
 
     if not isinstance(profile["score_threshold"], (int, float)):
         errors.append("'score_threshold' must be a number")
@@ -48,8 +52,11 @@ def validate_profile(profile: dict) -> list[str]:
     # Sanity: score_threshold < score_threshold_alert
     threshold = profile.get("score_threshold")
     threshold_alert = profile.get("score_threshold_alert")
-    if (isinstance(threshold, (int, float)) and isinstance(threshold_alert, (int, float))
-            and threshold >= threshold_alert):
+    if (
+        isinstance(threshold, (int, float))
+        and isinstance(threshold_alert, (int, float))
+        and threshold >= threshold_alert
+    ):
         errors.append(
             f"'score_threshold' ({threshold}) must be less than "
             f"'score_threshold_alert' ({threshold_alert})"

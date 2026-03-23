@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linting tools
+        run: pip install ruff mypy types-requests types-beautifulsoup4 types-PyYAML
+
+      - name: Ruff check (linting)
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Mypy type check
+        run: mypy --ignore-missing-imports deal_hunter.py sources/ filters/ notifiers/ utils/
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create venv and install deps
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run tests
+        run: |
+          source venv/bin/activate
+          pytest tests/ -v
+
+      - name: Smoke test — version
+        run: |
+          source venv/bin/activate
+          python deal_hunter.py --version
+
+      - name: Smoke test — list profiles
+        run: |
+          source venv/bin/activate
+          python deal_hunter.py --list
+
+  validate-profiles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create venv and install deps
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Validate example profile
+        run: |
+          source venv/bin/activate
+          python deal_hunter.py --profile example --validate

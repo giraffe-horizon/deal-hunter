@@ -6,6 +6,6 @@ state/
 venv/
 .venv/
 
-# User profiles (only example is committed)
+# User profiles (not committed — create your own from docs)
 profiles/*.yaml
 !profiles/example.yaml

@@ -2,6 +2,7 @@
 
 **Universal multi-source deal monitor.** Define what you're looking for in a YAML profile — Deal Hunter scans multiple sources, scores every offer with a configurable scoring engine (with regex support), tracks price changes, and sends alerts to Telegram + optionally Notion.
 
+[![CI](https://github.com/giraffe-horizon/deal-hunter/actions/workflows/ci.yml/badge.svg)](https://github.com/giraffe-horizon/deal-hunter/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
@@ -248,6 +249,25 @@ Deal Hunter automatically tracks prices across runs. If a deal reappears with a 
 3. Access custom data via `self.profile.get("custom_data", {})`
 4. Register in `filters/__init__.py`: `FILTER_REGISTRY["my_filter.MyFilter"] = MyFilter`
 5. Set `custom_filter: "my_filter.MyFilter"` in your profile YAML
+
+## Running Tests Locally
+
+```bash
+source venv/bin/activate
+
+# Install test/lint dependencies
+pip install pytest ruff mypy types-requests types-beautifulsoup4 types-PyYAML
+
+# Run tests
+pytest tests/ -v
+
+# Linting
+ruff check .
+ruff format --check .
+
+# Type checking
+mypy --ignore-missing-imports deal_hunter.py sources/ filters/ notifiers/ utils/
+```
 
 ## Contributing
 

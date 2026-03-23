@@ -1,7 +1,7 @@
 """Base scoring engine — loads rules from YAML profile."""
 
-import re
 import logging
+import re
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
