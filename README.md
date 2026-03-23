@@ -38,9 +38,8 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env — add your Telegram bot token and chat ID
 
-# Create your first profile
-cp profiles/example.yaml profiles/my_product.yaml
-# Edit the profile to match what you're looking for
+# Create your first profile — see docs/creating-profiles.md for a guide
+# Create profiles/my_product.yaml with your search config
 
 # Test it (shows all deals with scores, no notifications sent)
 python deal_hunter.py --profile my_product --verify
@@ -68,8 +67,7 @@ deal-hunter/
 │   └── notion.py               Notion API (categories from profile)
 ├── utils/                      Utilities
 │   └── validation.py           YAML profile validation
-├── profiles/                   Product profiles (YAML, gitignored except example)
-│   └── example.yaml            Template with all available options
+├── profiles/                   Product profiles (YAML, gitignored)
 ├── docs/                       Documentation
 │   └── creating-profiles.md    Profile creation guide
 ├── state/                      Persistent state per profile (JSON, 14-day TTL)
@@ -117,9 +115,7 @@ python deal_hunter.py --version
 
 Each profile is a YAML file in `profiles/` that defines **what to search** and **how to score** results. One profile = one product type.
 
-User profiles are gitignored (except `profiles/example.yaml`). See [profiles/example.yaml](profiles/example.yaml) for all available options.
-
-> **Detailed guide:** [docs/creating-profiles.md](docs/creating-profiles.md)
+User profiles are gitignored. See [docs/creating-profiles.md](docs/creating-profiles.md) for how to create one.
 
 ### Minimal Profile
 

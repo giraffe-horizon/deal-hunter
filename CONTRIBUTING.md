@@ -20,9 +20,8 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your Telegram bot token and chat ID
 
-# Create a test profile
-cp profiles/example.yaml profiles/test.yaml
-# Edit profiles/test.yaml
+# Create a test profile (see docs/creating-profiles.md for template)
+# Create profiles/test.yaml with your search config
 
 # Verify everything works
 python deal_hunter.py --profile test --validate
@@ -201,11 +200,9 @@ custom_data:
 
 See [docs/creating-profiles.md](docs/creating-profiles.md) for a detailed guide and examples.
 
-Quick version:
+Quick version: create a new YAML file in `profiles/` using the template from the guide, then test:
 
 ```bash
-cp profiles/example.yaml profiles/my_product.yaml
-# Edit the file, then test:
 python deal_hunter.py --profile my_product --validate
 python deal_hunter.py --profile my_product --verify
 ```
@@ -230,8 +227,8 @@ ruff format --check .
 # Type checking
 mypy --ignore-missing-imports deal_hunter.py sources/ filters/ notifiers/ utils/
 
-# Validate profiles
-python deal_hunter.py --profile example --validate
+# Validate a profile
+python deal_hunter.py --profile my_product --validate
 ```
 
 CI runs all of the above automatically on every push and PR to `main`.

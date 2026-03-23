@@ -59,22 +59,3 @@ jobs:
           source venv/bin/activate
           python deal_hunter.py --list
 
-  validate-profiles:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Create venv and install deps
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install -r requirements.txt
-
-      - name: Validate example profile
-        run: |
-          source venv/bin/activate
-          python deal_hunter.py --profile example --validate

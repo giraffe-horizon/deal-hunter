@@ -27,8 +27,7 @@ filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race ke
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting
 notifiers/notion.py     Notion API (categories from profile, optional per profile)
 utils/validation.py     YAML profile validation (types, required fields, sanity checks)
-profiles/*.yaml         Product profiles (gitignored except example.yaml)
-profiles/example.yaml   Example profile documenting ALL available options
+profiles/*.yaml         Product profiles (gitignored, see docs/creating-profiles.md)
 docs/creating-profiles.md  Profile creation guide
 state/*.json            Persistent state per profile (what's been seen, 14-day TTL)
 ```
@@ -141,9 +140,9 @@ sources:
 
 ## Adding a New Profile
 
-**IMPORTANT:** User profiles are NOT in the repo (gitignored). Only `profiles/example.yaml` is committed.
+**IMPORTANT:** User profiles are NOT in the repo (gitignored).
 
-1. Create `profiles/name.yaml` — use `profiles/example.yaml` as a template
+1. Create `profiles/name.yaml` — see `docs/creating-profiles.md` for a template and guide
 2. Detailed guide: `docs/creating-profiles.md`
 3. If you need a custom filter -> create in `filters/`, register in `FILTER_REGISTRY`, set `custom_filter` in YAML
 

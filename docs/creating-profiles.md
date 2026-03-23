@@ -25,17 +25,44 @@ How it works:
 4. Offers above the threshold -> alert on Telegram (+ optionally Notion)
 5. State is saved locally -> the same offers won't alert again
 
-User profiles **are not committed to the repo** (`.gitignore`). Use `profiles/example.yaml` as a template.
+User profiles **are not committed to the repo** (`.gitignore`). Create your own from the minimal template below.
 
 ## Quick Start
 
+Create `profiles/my_product.yaml` with the following minimal template:
+
+```yaml
+name: my_product
+emoji: "🔍"
+
+sources:
+  pepper:
+    urls:
+      - "https://www.pepper.pl/search?q=your+search+query"
+
+budget:
+  min: 100
+  max: 500
+
+score_rules:
+  "desired keyword": 30
+
+penalties:
+  "unwanted keyword": -30
+
+score_threshold: 40
+score_threshold_alert: 70
+
+telegram:
+  topic_id: 0
+  max_alerts: 5
+
+notion: null
+```
+
+Then test it:
+
 ```bash
-# Copy the template
-cp profiles/example.yaml profiles/my_product.yaml
-
-# Edit it
-nano profiles/my_product.yaml
-
 # Test (--verify shows scoring without sending alerts)
 python deal_hunter.py --profile my_product --verify
 
