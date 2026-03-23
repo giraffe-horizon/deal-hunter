@@ -17,9 +17,9 @@ class TelegramNotifier:
 
     def send_alert(self, deal, score: int, tier: str, plus: list, minus: list,
                    topic_id: int | None = None, emoji: str = "🔥",
-                   size_warning: str = ""):
+                   size_warning: str = "", currency: str = "PLN"):
         """Send individual deal alert."""
-        price_str = f"{deal.price:,} PLN".replace(',', ' ') if deal.price > 0 else "brak ceny"
+        price_str = f"{deal.price:,} {currency}".replace(',', ' ') if deal.price > 0 else "brak ceny"
 
         msg = f"*{tier}* (score: {score})\n"
         msg += f"{emoji} *{deal.title}*\n"
@@ -39,7 +39,7 @@ class TelegramNotifier:
         self._send_message(msg, topic_id=topic_id)
 
     def send_summary(self, remaining_alerts: list, topic_id: int | None = None,
-                     emoji: str = "🔥"):
+                     emoji: str = "🔥", currency: str = "PLN"):
         """Send summary message for overflow alerts."""
         if not remaining_alerts:
             return
@@ -49,7 +49,7 @@ class TelegramNotifier:
         for i, alert in enumerate(remaining_alerts, 1):
             deal = alert['deal']
             score = alert['score']
-            price_str = f"{deal.price:,} PLN".replace(',', ' ') if deal.price > 0 else "brak ceny"
+            price_str = f"{deal.price:,} {currency}".replace(',', ' ') if deal.price > 0 else "brak ceny"
 
             msg += f"{i}. *{deal.title[:80]}*\n"
             msg += f"   💰 {price_str} | Score: {score}\n"

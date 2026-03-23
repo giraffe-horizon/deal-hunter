@@ -11,24 +11,6 @@ logger = logging.getLogger(__name__)
 NOTION_VERSION = "2025-09-03"
 NOTION_API_URL = "https://api.notion.com/v1/pages"
 
-# Category detection keywords
-CATEGORY_KEYWORDS = {
-    "rower górski": ["mtb", "mountain", "górski", "trail", "enduro", "hardtail",
-                     "fullsuspension", "full suspension", "29er", "27.5"],
-    "szosowy": ["szosowy", "road", "szosa", "endurance", "gravel road", "domane",
-                "roubaix", "defy", "synapse", "endurace", "emonda", "madone",
-                "tarmac", "venge", "propel", "tcr", "aeroad", "ultimat"],
-    "gravel": ["gravel", "grail", "checkpoint", "diverge", "topstone", "grizl",
-               "revolt", "silex", "aspero", "all-road", "allroad", "adventure"],
-    "elektryczny": ["elektryczny", "electric", "e-bike", "ebike", "silnik",
-                    "wspomaganie", "bosch", "shimano steps", "brose"],
-    "miejski": ["miejski", "city", "urban", "commuter", "holenderski", "cargo", "cruiser"],
-    "akcesoria": ["kask", "helm", "buty", "spodnie", "kurtka", "rękawiczki",
-                  "licznik", "komputer", "światło", "lampa", "sakwa", "bidon",
-                  "pedały", "siodło", "siodełko", "kierownica", "hamulec",
-                  "przerzutka", "opona", "dętka", "zapięcie", "stojak"],
-}
-
 
 class NotionNotifier:
     """Saves deals to a Notion database."""
@@ -48,7 +30,7 @@ class NotionNotifier:
             return None
 
     def save_deal(self, deal, score: int, plus: list, database_id: str,
-                  profile_name: str = ""):
+                  profile_name: str = "", profile: dict | None = None):
         """Save a deal to Notion. Errors are logged but don't crash."""
         if not self.api_key:
             logger.warning("Notion: no API key, skipping")
@@ -57,7 +39,7 @@ class NotionNotifier:
         if not database_id:
             return
 
-        category = self._detect_category(deal)
+        category = self._detect_category(deal, profile=profile, profile_name=profile_name)
         today = datetime.now().strftime("%Y-%m-%d")
         notes = ", ".join(plus[:3]) if plus else ""
 
@@ -128,10 +110,19 @@ class NotionNotifier:
             logger.error(f"Notion: exception saving '{deal.title[:60]}': {e}")
 
     @staticmethod
-    def _detect_category(deal) -> str:
-        """Detect product category from title and description."""
+    def _detect_category(deal, profile: dict | None = None,
+                         profile_name: str = "") -> str:
+        """Detect product category from title and description using profile categories."""
+        categories = {}
+        if profile:
+            categories = profile.get("notion", {}).get("categories", {}) if isinstance(profile.get("notion"), dict) else {}
+
+        # If no categories defined in profile, use profile_name as category
+        if not categories:
+            return profile_name if profile_name else "inne"
+
         text = (deal.title + " " + deal.description).lower()
-        for category, keywords in CATEGORY_KEYWORDS.items():
-            if any(kw in text for kw in keywords):
+        for category, keywords in categories.items():
+            if any(kw.lower() in text for kw in keywords):
                 return category
-        return "inne"
+        return profile_name if profile_name else "inne"

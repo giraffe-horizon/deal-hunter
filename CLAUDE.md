@@ -2,7 +2,7 @@
 
 ## Projekt
 
-**Deal Hunter** — uniwersalny, multi-source monitor okazji. Skanuje różne źródła (Pepper.pl, Ceneo.pl, Proshop.pl), ocenia oferty scoring engine'em z reguł YAML, i wysyła alerty na Telegram + Notion.
+**Deal Hunter** — uniwersalny, multi-source monitor okazji. Skanuje różne źródła (Pepper.pl, Ceneo.pl, Proshop.pl, dowolne strony via generic web scraper), ocenia oferty scoring engine'em z reguł YAML (z obsługą regex), śledzi zmiany cen, i wysyła alerty na Telegram + Notion.
 
 ## Stack technologiczny
 
@@ -21,10 +21,12 @@ sources/base.py         Klasa bazowa Source + dataclass Deal (wspólny format)
 sources/pepper.py       Scraper Pepper.pl (Vue3 JSON + HTML fallback)
 sources/ceneo.py        Scraper Ceneo.pl (wyniki wyszukiwania)
 sources/proshop.py      Scraper Proshop.pl (wyniki wyszukiwania)
-filters/base.py         Bazowy scoring engine (score_rules, penalties, budget, temperature)
+sources/web.py          Generic web scraper (konfigurowalny CSS selectors z YAML)
+filters/base.py         Bazowy scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Rozszerzony scorer dla rowerów (rozmiary, kolory, opony, race keywords)
 notifiers/telegram.py   Telegram Bot API z retry + rate limiting
-notifiers/notion.py     Notion API (opcjonalne per profil)
+notifiers/notion.py     Notion API (kategorie z profilu, opcjonalne per profil)
+utils/validation.py     Walidacja profili YAML (typy, wymagane pola, sanity checks)
 profiles/*.yaml         Profile produktów (gitignored poza example.yaml)
 profiles/example.yaml   Przykładowy profil z opisem WSZYSTKICH opcji
 docs/creating-profiles.md  Dokumentacja tworzenia profili
@@ -69,6 +71,10 @@ Flow:
 5. Budget → w budżecie +5, za tanio -20, za drogo -30
 6. Temperatura (Pepper) → gorąca ≥100° +10, ciepła ≥50° +5, zimna <-10° -10
 
+**Regex w score_rules/penalties/excluded_words/required_any:**
+Keyword zaczynający się od `r/` i kończący na `/` jest traktowany jako regex (re.IGNORECASE).
+Przykład: `"r/\\b(xl|58|59)\\b/": 10` — matchuje całe słowa xl, 58, 59.
+
 Custom filtry (np. `BikeFilter`) dziedziczą po `BaseFilter` i override'ują `score_deal()` z dodatkową logiką.
 
 ### Profil YAML
@@ -82,8 +88,9 @@ Każdy profil (`profiles/*.yaml`) definiuje:
 - `custom_filter` — nazwa klasy filtra np. `"bike_filter.BikeFilter"` (opcjonalne)
 - `custom_data` — dowolne dane dla custom filtra (np. rozmiary per markę)
 - `score_threshold`, `score_threshold_alert` — progi
+- `currency` — waluta (domyślnie "PLN")
 - `telegram` — `{topic_id, max_alerts}`
-- `notion` — `{database_id}` lub `null`
+- `notion` — `{database_id, categories}` lub `null` (categories mapują nazwy kategorii na listy keywords)
 
 ### Rejestracja pluginów
 - Źródła: `sources/__init__.py` → `SOURCE_REGISTRY = {"pepper": PepperSource, ...}`
@@ -97,6 +104,7 @@ python deal_hunter.py --profile bikes --verify   # test bez zapisu stanu
 python deal_hunter.py --profile nas_hdd           # normalny run
 python deal_hunter.py --all                        # wszystkie profile
 python deal_hunter.py --list                       # lista profili
+python deal_hunter.py --profile bikes --validate  # walidacja profilu bez uruchamiania
 ```
 
 ## Zmienne środowiskowe
@@ -115,6 +123,21 @@ NOTION_API_KEY_PATH=~/.config/notion/api_key
 3. Użyj `self._fetch_page(url)` i `self._rate_limit()` z klasy bazowej
 4. Zarejestruj w `sources/__init__.py`: `SOURCE_REGISTRY["nowe_zrodlo"] = NoweZrodloSource`
 5. Dodaj konfigurację źródła do profili YAML
+
+**Alternatywnie:** użyj generic web scraper (`sources/web.py`) — nie wymaga kodu, konfiguracja CSS selectors w YAML:
+```yaml
+sources:
+  web:
+    sites:
+      - url: "https://example.com/deals"
+        base_url: "https://example.com"
+        selectors:
+          container: "div.product"
+          title: "h2.name"
+          price: "span.price"
+          link: "a@href"        # @attr syntax — wyciąga atrybut HTML
+          image: "img@src"
+```
 
 ## Dodawanie nowego profilu
 
@@ -140,6 +163,21 @@ NOTION_API_KEY_PATH=~/.config/notion/api_key
 - **Rate limiting:** każdy source ma min 2s między requestami, Telegram 1.5s + retry na 429
 - **State:** per-profil JSON w `state/`, TTL 14 dni, cross-source deduplikacja po title+price
 - **Secrets:** NIGDY w kodzie — `.env` + `python-dotenv`, `.gitignore` chroni `.env`
+
+## Śledzenie cen (Price Tracking)
+
+Deal Hunter automatycznie śledzi ceny znanych ofert. Stan zapisywany w `state/<profil>_state.json` pod kluczem `"prices"`.
+- Jeśli oferta pojawi się ponownie z niższą ceną (spadek >10% lub >50 PLN) → dodatkowy plus w alercie
+- Wzrost ceny → logowany, ale nie dodaje minus
+- Nie wymaga konfiguracji — działa out of the box
+
+## Walidacja profili
+
+`utils/validation.py` → `validate_profile(profile) -> list[str]`
+
+Sprawdza: wymagane pola, typy danych, sanity (budget.min < budget.max, score_threshold < score_threshold_alert).
+
+CLI: `python deal_hunter.py --profile bikes --validate`
 
 ## Testy
 

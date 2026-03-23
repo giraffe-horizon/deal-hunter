@@ -14,6 +14,10 @@ name: example
 # Emoji wyświetlany w alertach Telegram
 emoji: "🎯"
 
+# --- Waluta (opcjonalne, domyślnie PLN) ---
+# Używana w alertach Telegram i na konsoli
+currency: PLN
+
 # --- Źródła do skanowania ---
 # Możesz użyć jednego lub wielu źródeł jednocześnie.
 # Każde źródło ma własną konfigurację.
@@ -40,6 +44,19 @@ sources:
     queries:
       - "nazwa produktu"
 
+  # Generic web scraper — dowolna strona z produktami
+  # Definiujesz selektory CSS, Deal Hunter wyciąga dane
+  # web:
+  #   sites:
+  #     - url: "https://example.com/deals"
+  #       base_url: "https://example.com"
+  #       selectors:
+  #         container: "div.product-card"      # kontener pojedynczego produktu
+  #         title: "h2.product-name"           # tytuł — tekst elementu
+  #         price: "span.price"                # cena — tekst z liczbą
+  #         link: "a.product-link@href"        # link — @attr wyciąga atrybut
+  #         image: "img.product-img@src"       # obrazek — @attr wyciąga src
+
 # --- Budżet (PLN) ---
 # Oferty w zakresie budżetu dostają bonus +5 pkt.
 # Poniżej min → kara -20, powyżej max → kara -30.
@@ -51,6 +68,10 @@ budget:
 # Słowo kluczowe znalezione w tytule lub opisie oferty → dodaje punkty.
 # Im więcej punktów, tym ważniejszy keyword.
 # Wielkość liter nie ma znaczenia.
+#
+# Obsługuje regex z składnią r/wzorzec/:
+#   "r/\\b(model1|model2)\\b/": 30   ← matchuje całe słowa
+#   "r/\\d{2}\\s*mm/": 10             ← matchuje np. "32 mm", "28mm"
 score_rules:
   # Nazwa produktu / modelu → dużo punktów
   "model premium": 50
@@ -61,9 +82,12 @@ score_rules:
   # Mniej ważne cechy → mało punktów
   "miły bonus": 10
   nowy: 10
+  # Przykład regex — matchuje warianty rozmiaru
+  # "r/\\b(xl|xxl|58|60)\\b/": 10
 
 # --- Kary (negatywne punkty) ---
 # Słowo kluczowe → odejmuje punkty. Wartości powinny być ujemne.
+# Obsługuje regex tak samo jak score_rules.
 penalties:
   # Niechciane warianty
   "zły model": -40
@@ -75,6 +99,7 @@ penalties:
 # --- Wymagane słowa (opcjonalne) ---
 # Minimum JEDNO z tych słów musi wystąpić w ofercie.
 # Jeśli żadne nie matchuje → oferta odrzucona (hard reject).
+# Obsługuje regex: "r/\\bwymagane\\b/"
 # Przydatne gdy szukasz konkretnej pojemności, rozmiaru itp.
 required_any:
   - "wymagane_slowo1"
@@ -82,6 +107,7 @@ required_any:
 
 # --- Wykluczone słowa (opcjonalne) ---
 # Jeśli KTÓREKOLWIEK z tych słów wystąpi → oferta odrzucona (hard reject).
+# Obsługuje regex: "r/\\bspam\\w*/".
 # Przydatne do odsiewania niechcianych kategorii.
 excluded_words:
   - "spam"
@@ -123,6 +149,18 @@ telegram:
 # Ustaw null aby wyłączyć Notion.
 # Aby włączyć → podaj database_id bazy Notion do której trafiają oferty.
 # Wymaga skonfigurowania NOTION_API_KEY_PATH w .env
+#
+# categories — mapowanie kategorii na słowa kluczowe (opcjonalne).
+# Jeśli nie podano → nazwa profilu jest używana jako kategoria.
 notion: null
 # notion:
 #   database_id: "twoj-notion-database-id"
+#   categories:
+#     "elektronika": ["laptop", "telefon", "tablet", "smartwatch"]
+#     "audio": ["słuchawki", "głośnik", "soundbar", "dac"]
+#     "akcesoria": ["etui", "ładowarka", "kabel", "adapter"]
+
+# --- Śledzenie cen (automatyczne) ---
+# Deal Hunter automatycznie śledzi zmiany cen. Jeśli oferta pojawi się ponownie
+# z niższą ceną (spadek >10% lub >50 PLN), alert zawiera informację o spadku.
+# Nie wymaga konfiguracji — działa out of the box.

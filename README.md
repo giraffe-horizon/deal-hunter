@@ -1,6 +1,6 @@
 # Deal Hunter 🔍
 
-Uniwersalny, multi-source monitor okazji. Definiujesz profil produktu w YAML — Deal Hunter skanuje źródła, ocenia oferty scoring engine'em, i wysyła alerty na Telegram + opcjonalnie Notion.
+Uniwersalny, multi-source monitor okazji. Definiujesz profil produktu w YAML — Deal Hunter skanuje źródła (w tym dowolne strony via generic web scraper), ocenia oferty scoring engine'em (z obsługą regex), śledzi zmiany cen, i wysyła alerty na Telegram + opcjonalnie Notion.
 
 ## Architektura
 
@@ -13,11 +13,13 @@ deal-hunter/
 │   ├── ceneo.py                Ceneo.pl — porównywarka cen
 │   └── proshop.py              Proshop.pl — scraper sklepowy
 ├── filters/                    Scoring engines
-│   ├── base.py                 Bazowy scorer (ładuje reguły z YAML)
+│   ├── base.py                 Bazowy scorer (reguły z YAML + regex)
 │   └── bike_filter.py          Rozszerzony scorer: rozmiary, kolory, opony
 ├── notifiers/                  Backendy powiadomień
 │   ├── telegram.py             Telegram Bot API (retry + rate limiting)
-│   └── notion.py               Notion API (opcjonalne per profil)
+│   └── notion.py               Notion API (kategorie z profilu)
+├── utils/                      Narzędzia
+│   └── validation.py           Walidacja profili YAML
 ├── profiles/                   Profile produktów (YAML, gitignored poza example)
 │   └── example.yaml            📋 Template z opisem wszystkich opcji
 ├── docs/                       Dokumentacja
@@ -55,6 +57,9 @@ python deal_hunter.py --profile nas_hdd
 
 # Tryb weryfikacji — pokazuje WSZYSTKIE oferty z scoring, bez zapisywania stanu
 python deal_hunter.py --profile bikes --verify
+
+# Walidacja profilu bez uruchamiania
+python deal_hunter.py --profile bikes --validate
 
 # Uruchom wszystkie profile naraz
 python deal_hunter.py --all
@@ -144,6 +149,7 @@ notion: null
 | **Pepper.pl** | Agregator okazji | `urls` — lista URLi do skanowania |
 | **Ceneo.pl** | Porównywarka cen | `queries` — lista zapytań wyszukiwania |
 | **Proshop.pl** | Sklep online | `queries` — lista zapytań wyszukiwania |
+| **Web** (generic) | Dowolna strona | `sites` — lista stron z CSS selectors |
 
 Każde źródło ma wbudowany rate limiting (min 2s między requestami), retry z exponential backoff, i graceful degradation (jedno źródło padnie → reszta działa).
 
@@ -164,6 +170,44 @@ Bazowy scoring engine (`filters/base.py`):
 6. **Temperatura** (Pepper) → gorąca +10, ciepła +5, zimna -10
 
 Custom filtry (np. `BikeFilter`) rozszerzają bazowy scorer o dodatkową logikę (rozmiary per marka, kolory, szerokość opon, race keywords).
+
+### Regex w score_rules
+
+Keywords mogą być wyrażeniami regularnymi z składnią `r/wzorzec/`:
+
+```yaml
+score_rules:
+  "r/\\b(xl|58|59|60)\\b/": 10   # matchuje całe słowa
+  "r/\\d{2}\\s*mm/": 5            # matchuje np. "32 mm"
+```
+
+Regex działa w: `score_rules`, `penalties`, `excluded_words`, `required_any`.
+
+### Śledzenie cen
+
+Deal Hunter automatycznie śledzi zmiany cen. Jeśli oferta pojawi się ponownie z niższą ceną (spadek >10% lub >50 PLN), alert zawiera informację o spadku ceny. Nie wymaga konfiguracji.
+
+### Notion — kategorie z profilu
+
+Kategorie produktów w Notion są konfigurowane w profilu YAML:
+
+```yaml
+notion:
+  database_id: "your-db-id"
+  categories:
+    "elektronika": ["laptop", "telefon", "tablet"]
+    "audio": ["słuchawki", "głośnik"]
+```
+
+Jeśli nie podano kategorii → nazwa profilu jest używana jako kategoria.
+
+### Waluta
+
+Opcjonalne pole `currency` w profilu (domyślnie `PLN`) — używane w alertach:
+
+```yaml
+currency: EUR
+```
 
 ### Tiery alertów
 
@@ -194,6 +238,17 @@ Custom filtry (np. `BikeFilter`) rozszerzają bazowy scorer o dodatkową logikę
 | `TELEGRAM_BOT_TOKEN` | Token bota Telegram | ✅ |
 | `TELEGRAM_CHAT_ID` | ID czatu/grupy Telegram | ✅ |
 | `NOTION_API_KEY_PATH` | Ścieżka do pliku z kluczem Notion API | ❌ (tylko jeśli profil używa Notion) |
+
+## Walidacja profili
+
+Przed uruchomieniem możesz zwalidować profil:
+
+```bash
+python deal_hunter.py --profile bikes --validate
+python deal_hunter.py --all --validate  # waliduj wszystkie
+```
+
+Sprawdza: wymagane pola, typy danych, sanity checks (budget.min < budget.max, score_threshold < score_threshold_alert).
 
 ## Dokumentacja
 

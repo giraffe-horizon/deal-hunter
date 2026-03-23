@@ -30,6 +30,19 @@ class BaseFilter:
         self.required_any: list = profile.get("required_any", [])
         self.excluded_words: list = profile.get("excluded_words", [])
 
+    @staticmethod
+    def _match_keyword(keyword: str, text: str) -> bool:
+        """Match keyword against text. Supports regex with r/pattern/ syntax."""
+        keyword_str = str(keyword)
+        if keyword_str.startswith("r/") and keyword_str.endswith("/"):
+            pattern = keyword_str[2:-1]
+            try:
+                return bool(re.search(pattern, text, re.IGNORECASE))
+            except re.error as e:
+                logger.warning(f"Invalid regex pattern '{pattern}': {e}")
+                return False
+        return keyword_str.lower() in text
+
     def score_deal(self, deal) -> ScoreResult:
         """Score a deal. Returns ScoreResult with score, reasons, and rejection status."""
         text = (deal.title + " " + deal.description).lower()
@@ -37,27 +50,27 @@ class BaseFilter:
 
         # Check excluded words first (hard reject)
         for word in self.excluded_words:
-            if word.lower() in text:
+            if self._match_keyword(word, text):
                 result.rejected = True
                 result.reject_reason = f"excluded word: {word}"
                 return result
 
         # Check required_any (at least one must match)
         if self.required_any:
-            if not any(req.lower() in text for req in self.required_any):
+            if not any(self._match_keyword(req, text) for req in self.required_any):
                 result.rejected = True
                 result.reject_reason = "none of required_any matched"
                 return result
 
         # Positive score rules
         for keyword, points in self.score_rules.items():
-            if keyword.lower() in text:
+            if self._match_keyword(keyword, text):
                 result.score += points
                 result.plus.append(f"+{points} {keyword}")
 
         # Penalties
         for keyword, penalty in self.penalties.items():
-            if keyword.lower() in text:
+            if self._match_keyword(keyword, text):
                 result.score += penalty  # penalty is negative
                 result.minus.append(f"{penalty} {keyword}")
 
