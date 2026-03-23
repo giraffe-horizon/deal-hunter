@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ScoreResult:
+    """Result of scoring a deal."""
+
     score: int
     plus: list[str] = field(default_factory=list)
     minus: list[str] = field(default_factory=list)
@@ -19,7 +21,7 @@ class ScoreResult:
 class BaseFilter:
     """Generic scoring engine that loads rules from YAML profile config."""
 
-    def __init__(self, profile: dict):
+    def __init__(self, profile: dict) -> None:
         self.profile = profile
         self.score_rules: dict = profile.get("score_rules", {})
         self.penalties: dict = profile.get("penalties", {})
@@ -79,29 +81,29 @@ class BaseFilter:
         if price > 0:
             if price < self.budget_min:
                 result.score -= 20
-                result.minus.append(f"-20 za tanio ({price} PLN)")
+                result.minus.append(f"-20 too cheap ({price} PLN)")
             elif price > self.budget_max:
                 result.score -= 30
-                result.minus.append(f"-30 za drogo ({price} PLN)")
+                result.minus.append(f"-30 too expensive ({price} PLN)")
             else:
                 result.score += 5
-                result.plus.append(f"+5 w budżecie ({price} PLN)")
+                result.plus.append(f"+5 in budget ({price} PLN)")
 
         # Temperature bonus (Pepper social proof)
         temp = deal.temperature
         if temp >= 100:
             result.score += 10
-            result.plus.append(f"+10 gorąca oferta ({temp}°)")
+            result.plus.append(f"+10 hot deal ({temp}\u00b0)")
         elif temp >= 50:
             result.score += 5
-            result.plus.append(f"+5 ciepła oferta ({temp}°)")
+            result.plus.append(f"+5 warm deal ({temp}\u00b0)")
         elif temp < -10:
             result.score -= 10
-            result.minus.append(f"-10 zimna oferta ({temp}°)")
+            result.minus.append(f"-10 cold deal ({temp}\u00b0)")
 
         # No publication date + cold = suspicious
         if not deal.published_at and temp < 0:
             result.score -= 15
-            result.minus.append(f"-15 brak daty + zimna oferta ({temp}°)")
+            result.minus.append(f"-15 no date + cold deal ({temp}\u00b0)")
 
         return result

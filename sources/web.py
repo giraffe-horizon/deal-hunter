@@ -1,4 +1,4 @@
-"""Generic web scraper source — configurable via YAML selectors."""
+"""Generic web scraper source — configurable via YAML CSS selectors."""
 
 import re
 import logging
@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 class WebSource(Source):
     """Generic web scraper that uses CSS selectors from profile config.
 
-    Config format in profile YAML:
+    Config format in profile YAML::
+
         sources:
           web:
             sites:
@@ -30,8 +31,8 @@ class WebSource(Source):
 
     def fetch_deals(self, config: dict) -> list[Deal]:
         """Fetch deals from all configured sites."""
-        sites = config.get("sites", [])
-        all_deals = []
+        sites: list[dict] = config.get("sites", [])
+        all_deals: list[Deal] = []
 
         for site in sites:
             try:
@@ -45,13 +46,13 @@ class WebSource(Source):
 
     def _scrape_site(self, site: dict) -> list[Deal]:
         """Scrape a single site using configured selectors."""
-        url = site.get("url", "")
+        url: str = site.get("url", "")
         if not url:
             logger.warning("WebSource: site has no URL, skipping")
             return []
 
-        selectors = site.get("selectors", {})
-        base_url = site.get("base_url", url)
+        selectors: dict = site.get("selectors", {})
+        base_url: str = site.get("base_url", url)
 
         html = self._fetch_page(url)
         if not html:
@@ -67,7 +68,7 @@ class WebSource(Source):
         containers = soup.select(container_sel)
         logger.info(f"WebSource: found {len(containers)} containers on {url}")
 
-        deals = []
+        deals: list[Deal] = []
         for i, container in enumerate(containers):
             try:
                 title = self._extract(container, selectors.get("title", ""))
@@ -107,10 +108,10 @@ class WebSource(Source):
 
     @staticmethod
     def _extract(container, selector: str) -> str:
-        """Extract text or attribute from a container using selector.
+        """Extract text or attribute from a container using a selector.
 
-        Supports @attr syntax: "a@href" finds <a> then gets href attribute.
-        Without @attr: gets text content.
+        Supports @attr syntax: ``a@href`` finds ``<a>`` then gets the href attribute.
+        Without @attr: returns text content.
         """
         if not selector:
             return ""
@@ -133,9 +134,7 @@ class WebSource(Source):
     @staticmethod
     def _parse_price(text: str) -> int | None:
         """Extract numeric price from text. Returns int or None."""
-        # Remove spaces, non-breaking spaces
         cleaned = text.replace('\xa0', '').replace(' ', '')
-        # Match number with optional decimal (comma or dot)
         match = re.search(r'(\d[\d\s]*[\d]?)[,.]?\d{0,2}', cleaned)
         if match:
             digits = re.sub(r'\D', '', match.group(0).split(',')[0].split('.')[0])

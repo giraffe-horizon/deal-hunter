@@ -3,6 +3,7 @@
 import re
 import logging
 from urllib.parse import quote_plus
+
 from bs4 import BeautifulSoup
 
 from .base import Source, Deal
@@ -19,17 +20,16 @@ class CeneoSource(Source):
     def fetch_deals(self, config: dict) -> list[Deal]:
         """Fetch deals from Ceneo search.
 
-        Config keys:
-            queries: list[str] — search queries
-            category: str (optional) — category path segment
+        Args:
+            config: Profile source config with 'queries' and optional 'category' keys.
         """
-        queries = config.get("queries", [])
+        queries: list[str] = config.get("queries", [])
         if not queries:
             logger.warning("Ceneo: no queries configured")
             return []
 
-        all_deals = []
-        category = config.get("category", "")
+        all_deals: list[Deal] = []
+        category: str = config.get("category", "")
 
         for query in queries:
             encoded = quote_plus(query)
@@ -51,15 +51,13 @@ class CeneoSource(Source):
     def _parse_results(self, html: str, query: str) -> list[Deal]:
         """Parse Ceneo search results page."""
         soup = BeautifulSoup(html, 'html.parser')
-        deals = []
+        deals: list[Deal] = []
 
         # Ceneo product listing items
         products = soup.find_all('div', class_=re.compile(r'cat-prod-row|product-row'))
         if not products:
-            # Try alternative selectors
             products = soup.find_all('li', class_=re.compile(r'cat-prod'))
         if not products:
-            # Try go-to selector for newer layout
             products = soup.select('.category-list-body .cat-prod-row')
 
         for prod in products:
@@ -111,7 +109,6 @@ class CeneoSource(Source):
             # Product ID from data attribute or href
             native_id = prod.get('data-pid', '') or prod.get('data-productid', '')
             if not native_id and href:
-                # Extract from URL like /12345
                 m = re.search(r'/(\d+)', href)
                 native_id = m.group(1) if m else title[:50]
             if not native_id:
@@ -183,7 +180,7 @@ class CeneoSource(Source):
 
     @staticmethod
     def _extract_price(text: str) -> int:
-        """Extract price in PLN from text."""
+        """Extract integer price from text."""
         text = text.replace('\xa0', '').replace(' ', '').replace(',', '.')
         m = re.search(r'(\d[\d\s]*(?:[.,]\d{1,2})?)', text)
         if m:

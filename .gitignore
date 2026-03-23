@@ -6,6 +6,6 @@ state/
 venv/
 .venv/
 
-# Profile użytkownika (poza example)
+# User profiles (only example is committed)
 profiles/*.yaml
 !profiles/example.yaml

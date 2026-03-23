@@ -1,260 +1,258 @@
-# Deal Hunter 🔍
+# Deal Hunter
 
-Uniwersalny, multi-source monitor okazji. Definiujesz profil produktu w YAML — Deal Hunter skanuje źródła (w tym dowolne strony via generic web scraper), ocenia oferty scoring engine'em (z obsługą regex), śledzi zmiany cen, i wysyła alerty na Telegram + opcjonalnie Notion.
+**Universal multi-source deal monitor.** Define what you're looking for in a YAML profile — Deal Hunter scans multiple sources, scores every offer with a configurable scoring engine (with regex support), tracks price changes, and sends alerts to Telegram + optionally Notion.
 
-## Architektura
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-```
-deal-hunter/
-├── deal_hunter.py              Główny orchestrator (CLI)
-├── sources/                    Pluginy źródeł (każde źródło = osobna klasa)
-│   ├── base.py                 Klasa bazowa Source + dataclass Deal
-│   ├── pepper.py               Pepper.pl — scraper Vue3 + HTML fallback
-│   ├── ceneo.py                Ceneo.pl — porównywarka cen
-│   └── proshop.py              Proshop.pl — scraper sklepowy
-├── filters/                    Scoring engines
-│   ├── base.py                 Bazowy scorer (reguły z YAML + regex)
-│   └── bike_filter.py          Rozszerzony scorer: rozmiary, kolory, opony
-├── notifiers/                  Backendy powiadomień
-│   ├── telegram.py             Telegram Bot API (retry + rate limiting)
-│   └── notion.py               Notion API (kategorie z profilu)
-├── utils/                      Narzędzia
-│   └── validation.py           Walidacja profili YAML
-├── profiles/                   Profile produktów (YAML, gitignored poza example)
-│   └── example.yaml            📋 Template z opisem wszystkich opcji
-├── docs/                       Dokumentacja
-│   └── creating-profiles.md    📖 Przewodnik tworzenia profili
-├── state/                      Persistent state per profil (JSON, TTL 14 dni)
-├── .env                        Tokeny i klucze (nie commitowane)
-├── .env.example                Szablon zmiennych środowiskowych
-├── requirements.txt            Zależności Pythona
-└── LICENSE                     MIT
-```
+---
 
-## Szybki start
+## Features
+
+- **Multi-source scanning** — Pepper.pl, Ceneo.pl, Proshop.pl, and any website via configurable CSS selectors
+- **Smart scoring engine** — keyword rules, penalties, budget checks, regex patterns, temperature bonuses
+- **Custom filters** — extend the base scorer with domain-specific logic (e.g., bike sizes, tire widths)
+- **Price tracking** — automatic price drop detection across runs
+- **Telegram alerts** — tiered notifications with rate limiting and retry
+- **Notion integration** — save deals to a Notion database with categories
+- **YAML profiles** — one profile per product type, fully declarative
+- **Profile validation** — catch config errors before running
+- **Graceful degradation** — one source fails, the rest keep working
+- **Cross-source dedup** — fuzzy title+price matching prevents duplicate alerts
+
+## Quick Start
 
 ```bash
-# Klonuj
+# Clone
 git clone https://github.com/giraffe-horizon/deal-hunter.git
 cd deal-hunter
 
-# Środowisko
+# Setup environment
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Konfiguracja
+# Configure
 cp .env.example .env
-# Edytuj .env — wpisz tokeny Telegram i ścieżkę do klucza Notion
+# Edit .env — add your Telegram bot token and chat ID
+
+# Create your first profile
+cp profiles/example.yaml profiles/my_product.yaml
+# Edit the profile to match what you're looking for
+
+# Test it (shows all deals with scores, no notifications sent)
+python deal_hunter.py --profile my_product --verify
+
+# Run for real
+python deal_hunter.py --profile my_product
 ```
 
-## Użycie
+## Architecture
+
+```
+deal-hunter/
+├── deal_hunter.py              Main orchestrator (CLI entry point)
+├── sources/                    Source plugins (one class per source)
+│   ├── base.py                 Base Source class + Deal dataclass
+│   ├── pepper.py               Pepper.pl — Vue3 JSON + HTML fallback
+│   ├── ceneo.py                Ceneo.pl — price comparison scraper
+│   ├── proshop.py              Proshop.pl — store scraper
+│   └── web.py                  Generic web scraper (CSS selectors)
+├── filters/                    Scoring engines
+│   ├── base.py                 Base scorer (keywords, regex, budget, temperature)
+│   └── bike_filter.py          Extended scorer: sizes, colors, tires
+├── notifiers/                  Notification backends
+│   ├── telegram.py             Telegram Bot API (retry + rate limiting)
+│   └── notion.py               Notion API (categories from profile)
+├── utils/                      Utilities
+│   └── validation.py           YAML profile validation
+├── profiles/                   Product profiles (YAML, gitignored except example)
+│   └── example.yaml            Template with all available options
+├── docs/                       Documentation
+│   └── creating-profiles.md    Profile creation guide
+├── state/                      Persistent state per profile (JSON, 14-day TTL)
+├── .env                        Secrets (not committed)
+├── .env.example                Environment variable template
+├── requirements.txt            Python dependencies
+├── pyproject.toml              Project metadata
+├── CONTRIBUTING.md             Contribution guide
+└── LICENSE                     MIT
+```
+
+## Usage
 
 ```bash
-# Uruchom profil
-python deal_hunter.py --profile bikes
-python deal_hunter.py --profile nas_hdd
+# Run a single profile
+python deal_hunter.py --profile my_product
 
-# Tryb weryfikacji — pokazuje WSZYSTKIE oferty z scoring, bez zapisywania stanu
-python deal_hunter.py --profile bikes --verify
+# Verify mode — shows ALL deals with scoring breakdown, no state changes
+python deal_hunter.py --profile my_product --verify
 
-# Walidacja profilu bez uruchamiania
-python deal_hunter.py --profile bikes --validate
+# Validate profile config without running
+python deal_hunter.py --profile my_product --validate
 
-# Uruchom wszystkie profile naraz
+# Run all profiles
 python deal_hunter.py --all
 
-# Lista dostępnych profili
+# List available profiles
 python deal_hunter.py --list
+
+# Show version
+python deal_hunter.py --version
 ```
 
-## Profile
-
-Katalog `profiles/` nie jest commitowany do repo (poza `profiles/example.yaml`). Każdy użytkownik tworzy własne profile lokalnie.
-
-Przykładowy profil z opisem wszystkich opcji: [`profiles/example.yaml`](profiles/example.yaml)
-
-## Tworzenie nowego profilu
-
-> 📖 **Szczegółowy przewodnik:** [docs/creating-profiles.md](docs/creating-profiles.md)
-
-Skopiuj template i dostosuj:
+### Cron Setup
 
 ```bash
-cp profiles/example.yaml profiles/moj_profil.yaml
+# Every 30 minutes
+*/30 * * * * cd ~/Projects/deal-hunter && venv/bin/python deal_hunter.py --profile my_product >> deal_hunter.log 2>&1
+
+# Or run all profiles at once
+*/30 * * * * cd ~/Projects/deal-hunter && venv/bin/python deal_hunter.py --all >> deal_hunter.log 2>&1
 ```
 
-Struktura `profiles/nazwa.yaml`:
+## Profiles
+
+Each profile is a YAML file in `profiles/` that defines **what to search** and **how to score** results. One profile = one product type.
+
+User profiles are gitignored (except `profiles/example.yaml`). See [profiles/example.yaml](profiles/example.yaml) for all available options.
+
+> **Detailed guide:** [docs/creating-profiles.md](docs/creating-profiles.md)
+
+### Minimal Profile
 
 ```yaml
-name: nazwa
-emoji: "🎯"
+name: headphones
+emoji: "🎧"
 
-# Źródła do skanowania
 sources:
   pepper:
     urls:
-      - "https://www.pepper.pl/search?q=twoje+zapytanie"
+      - "https://www.pepper.pl/search?q=headphones+anc"
   ceneo:
     queries:
-      - "twoje zapytanie"
-  proshop:
-    queries:
-      - "twoje zapytanie"
+      - "wireless headphones ANC"
 
-# Zakres cenowy (PLN)
 budget:
-  min: 100
-  max: 500
+  min: 200
+  max: 600
 
-# Słowa kluczowe → punkty (pozytywne)
 score_rules:
-  keyword1: 40
-  keyword2: 25
+  "noise cancelling": 30
+  sony: 40
+  bose: 35
 
-# Kary (negatywne)
 penalties:
-  bad_keyword: -30
+  wired: -50
+  gaming: -30
 
-# Min. jedno z tych słów musi wystąpić (opcjonalne)
-required_any:
-  - "wymagane_slowo"
+score_threshold: 40
+score_threshold_alert: 70
 
-# Auto-odrzuć jeśli wystąpi (opcjonalne)
-excluded_words:
-  - "odrzuć_to"
-
-# Progi scoring
-score_threshold: 50        # min. score dla alertu
-score_threshold_alert: 80  # score dla "gorącej perełki"
-
-# Custom filtr (opcjonalne) — nazwa klasy z filters/
-# custom_filter: bike_filter.BikeFilter
-
-# Powiadomienia
 telegram:
   topic_id: 31
   max_alerts: 5
 
-# Notion (null = brak)
 notion: null
-# notion:
-#   database_id: "your-notion-db-id"
 ```
 
-## Źródła
+## Sources
 
-| Źródło | Typ | Konfiguracja w profilu |
-|--------|-----|----------------------|
-| **Pepper.pl** | Agregator okazji | `urls` — lista URLi do skanowania |
-| **Ceneo.pl** | Porównywarka cen | `queries` — lista zapytań wyszukiwania |
-| **Proshop.pl** | Sklep online | `queries` — lista zapytań wyszukiwania |
-| **Web** (generic) | Dowolna strona | `sites` — lista stron z CSS selectors |
+| Source | Type | Config |
+|--------|------|--------|
+| **Pepper.pl** | Deal aggregator | `urls` — list of URLs to scrape |
+| **Ceneo.pl** | Price comparison | `queries` — list of search queries |
+| **Proshop.pl** | Online store | `queries` — list of search queries |
+| **Web** (generic) | Any website | `sites` — list of sites with CSS selectors |
 
-Każde źródło ma wbudowany rate limiting (min 2s między requestami), retry z exponential backoff, i graceful degradation (jedno źródło padnie → reszta działa).
+All sources have built-in rate limiting (min 2s between requests), retry with exponential backoff, and graceful degradation.
 
-### Dodawanie nowego źródła
+### Generic Web Scraper
 
-1. Stwórz `sources/nazwa.py` — klasa dziedzicząca po `Source`
-2. Zaimplementuj `fetch_deals(config) → list[Deal]`
-3. Zarejestruj w `sources/__init__.py`
+Scrape any website without writing code — just define CSS selectors in your profile:
 
-## Scoring
+```yaml
+sources:
+  web:
+    sites:
+      - url: "https://example.com/deals"
+        base_url: "https://example.com"
+        selectors:
+          container: "div.product-card"
+          title: "h2.product-name"
+          price: "span.price"
+          link: "a.product-link@href"    # @attr syntax extracts HTML attribute
+          image: "img.product-img@src"
+```
 
-Bazowy scoring engine (`filters/base.py`):
-1. **Excluded words** → hard reject
-2. **Required any** → min. 1 musi matchować, inaczej reject
-3. **Score rules** → keyword w title+description = +punkty
-4. **Penalties** → keyword = -punkty
-5. **Budget** → w budżecie +5, za tanio -20, za drogo -30
-6. **Temperatura** (Pepper) → gorąca +10, ciepła +5, zimna -10
+## Scoring System
 
-Custom filtry (np. `BikeFilter`) rozszerzają bazowy scorer o dodatkową logikę (rozmiary per marka, kolory, szerokość opon, race keywords).
+The scoring engine processes each deal in order:
 
-### Regex w score_rules
+| Step | Rule | Effect |
+|------|------|--------|
+| 1 | **Excluded words** | Hard reject if any match |
+| 2 | **Required any** | Hard reject if none match |
+| 3 | **Score rules** | `+points` per keyword match in title+description |
+| 4 | **Penalties** | `-points` per keyword match |
+| 5 | **Budget** | In range: +5 / Too cheap: -20 / Too expensive: -30 |
+| 6 | **Temperature** | Hot (≥100°): +10 / Warm (≥50°): +5 / Cold (<-10°): -10 |
 
-Keywords mogą być wyrażeniami regularnymi z składnią `r/wzorzec/`:
+### Regex Support
+
+Keywords can be regex patterns using `r/pattern/` syntax:
 
 ```yaml
 score_rules:
-  "r/\\b(xl|58|59|60)\\b/": 10   # matchuje całe słowa
-  "r/\\d{2}\\s*mm/": 5            # matchuje np. "32 mm"
+  "r/\\b(xl|58|59|60)\\b/": 10    # matches whole words
+  "r/\\d{2}\\s*mm/": 5             # matches e.g. "32 mm", "28mm"
 ```
 
-Regex działa w: `score_rules`, `penalties`, `excluded_words`, `required_any`.
+Regex works in: `score_rules`, `penalties`, `excluded_words`, `required_any`.
 
-### Śledzenie cen
-
-Deal Hunter automatycznie śledzi zmiany cen. Jeśli oferta pojawi się ponownie z niższą ceną (spadek >10% lub >50 PLN), alert zawiera informację o spadku ceny. Nie wymaga konfiguracji.
-
-### Notion — kategorie z profilu
-
-Kategorie produktów w Notion są konfigurowane w profilu YAML:
-
-```yaml
-notion:
-  database_id: "your-db-id"
-  categories:
-    "elektronika": ["laptop", "telefon", "tablet"]
-    "audio": ["słuchawki", "głośnik"]
-```
-
-Jeśli nie podano kategorii → nazwa profilu jest używana jako kategoria.
-
-### Waluta
-
-Opcjonalne pole `currency` w profilu (domyślnie `PLN`) — używane w alertach:
-
-```yaml
-currency: EUR
-```
-
-### Tiery alertów
+### Alert Tiers
 
 | Score | Tier | Emoji |
 |-------|------|-------|
-| ≥ `score_threshold_alert` | GORĄCA PEREŁKA | 🔥🔥🔥 |
-| ≥ `score_threshold` | OKAZJA | 🔥 |
-| ≥ 20 | MOŻE | 🤔 |
-| < 20 | NIE PASUJE | ❌ |
+| ≥ `score_threshold_alert` | TOP DEAL | 🔥🔥🔥 |
+| ≥ `score_threshold` | DEAL | 🔥 |
+| ≥ 20 | MAYBE | 🤔 |
+| < 20 | NO MATCH | ❌ |
 
-## Cron
+### Price Tracking
 
-```bash
-# Rowery — co 30 min
-*/30 * * * * cd ~/Projects/deal-hunter && venv/bin/python deal_hunter.py --profile bikes >> deal_hunter.log 2>&1
+Deal Hunter automatically tracks prices across runs. If a deal reappears with a lower price (>10% drop or >50 PLN), the alert includes the price drop info. No configuration needed.
 
-# HDD NAS — co 30 min
-*/30 * * * * cd ~/Projects/deal-hunter && venv/bin/python deal_hunter.py --profile nas_hdd >> deal_hunter.log 2>&1
+## Environment Variables
 
-# Albo wszystko naraz
-*/30 * * * * cd ~/Projects/deal-hunter && venv/bin/python deal_hunter.py --all >> deal_hunter.log 2>&1
-```
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token | Yes |
+| `TELEGRAM_CHAT_ID` | Telegram chat/group ID | Yes |
+| `NOTION_API_KEY_PATH` | Path to Notion API key file | No (only if using Notion) |
 
-## Zmienne środowiskowe
+## Adding a New Source
 
-| Zmienna | Opis | Wymagana |
-|---------|------|----------|
-| `TELEGRAM_BOT_TOKEN` | Token bota Telegram | ✅ |
-| `TELEGRAM_CHAT_ID` | ID czatu/grupy Telegram | ✅ |
-| `NOTION_API_KEY_PATH` | Ścieżka do pliku z kluczem Notion API | ❌ (tylko jeśli profil używa Notion) |
+1. Create `sources/my_source.py` — class inheriting from `Source`
+2. Implement `fetch_deals(config) -> list[Deal]`
+3. Use `self._fetch_page(url)` and `self._rate_limit()` from the base class
+4. Register in `sources/__init__.py`: `SOURCE_REGISTRY["my_source"] = MySource`
 
-## Walidacja profili
+**Or** use the generic web scraper — no code needed, just CSS selectors in YAML.
 
-Przed uruchomieniem możesz zwalidować profil:
+## Adding a Custom Filter
 
-```bash
-python deal_hunter.py --profile bikes --validate
-python deal_hunter.py --all --validate  # waliduj wszystkie
-```
+1. Create `filters/my_filter.py` — class inheriting from `BaseFilter`
+2. Override `score_deal(deal) -> ScoreResult` — **always call `super().score_deal(deal)` first**
+3. Access custom data via `self.profile.get("custom_data", {})`
+4. Register in `filters/__init__.py`: `FILTER_REGISTRY["my_filter.MyFilter"] = MyFilter`
+5. Set `custom_filter: "my_filter.MyFilter"` in your profile YAML
 
-Sprawdza: wymagane pola, typy danych, sanity checks (budget.min < budget.max, score_threshold < score_threshold_alert).
+## Contributing
 
-## Dokumentacja
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and how to add sources/filters.
 
-- [Tworzenie profili](docs/creating-profiles.md) — szczegółowy przewodnik po konfiguracji profili YAML
-- [Przykładowy profil](profiles/example.yaml) — template z opisem wszystkich opcji
+## License
 
-## Licencja
-
-MIT — patrz [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).

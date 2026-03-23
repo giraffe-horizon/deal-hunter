@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""
-Deal Hunter — universal multi-source deal monitor.
+"""Deal Hunter — universal multi-source deal monitor.
+
 Profiles define products, sources, scoring rules, and notification targets.
 """
+
+__version__ = "1.0.0"
 
 import argparse
 import json
@@ -62,7 +64,7 @@ def load_state(profile_name: str) -> dict:
         with open(path, 'r') as f:
             state = json.load(f)
 
-        # Backwards compat: old format was flat dict of id -> timestamp
+        # Backwards compat: old format was flat list
         if isinstance(state, list):
             return {"seen": {item: datetime.now().isoformat() for item in state}, "prices": {}}
         if "seen" not in state:
@@ -82,8 +84,8 @@ def load_state(profile_name: str) -> dict:
         return {"seen": {}, "prices": {}}
 
 
-def save_state(profile_name: str, state: dict):
-    """Save state."""
+def save_state(profile_name: str, state: dict) -> None:
+    """Save state to disk."""
     path = _state_path(profile_name)
     try:
         with open(path, 'w') as f:
@@ -133,11 +135,11 @@ def check_price_changes(deal, state: dict, profile_name: str) -> list[str]:
         drop_pct = (drop_abs / last_price) * 100 if last_price > 0 else 0
 
         if drop_pct > 10 or drop_abs > 50:
-            reason = f"+{drop_abs} PLN spadek ceny! ({last_price} → {deal.price})"
+            reason = f"price drop {drop_abs} PLN ({last_price} -> {deal.price})"
             logger.info(f"Price drop detected for '{deal.title[:60]}': {reason}")
             return [reason]
     else:
-        logger.info(f"Price increased for '{deal.title[:60]}': {last_price} → {deal.price}")
+        logger.info(f"Price increased for '{deal.title[:60]}': {last_price} -> {deal.price}")
 
     return []
 
@@ -194,9 +196,9 @@ def fetch_all_deals(profile: dict) -> list:
 
 def deduplicate(deals: list) -> list:
     """Deduplicate deals by ID, then by normalized title+price with fuzzy matching."""
-    seen_ids = set()
-    unique = []
-    seen_keys = []  # list of (normalized_title[:60], price) for fuzzy matching
+    seen_ids: set[str] = set()
+    unique: list = []
+    seen_keys: list[tuple[str, int]] = []
 
     for d in deals:
         if d.id in seen_ids:
@@ -230,7 +232,7 @@ def deduplicate(deals: list) -> list:
 
 # ──────────────── RUN MODES ────────────────
 
-def run_profile(profile_name: str, verify: bool = False, validate_only: bool = False):
+def run_profile(profile_name: str, verify: bool = False, validate_only: bool = False) -> None:
     """Run a single profile."""
     profile = load_profile(profile_name)
 
@@ -240,7 +242,7 @@ def run_profile(profile_name: str, verify: bool = False, validate_only: bool = F
         for err in errors:
             logger.error(f"Profile '{profile_name}' validation: {err}")
         if validate_only:
-            print(f"❌ Profile '{profile_name}' has {len(errors)} error(s):")
+            print(f"\u274c Profile '{profile_name}' has {len(errors)} error(s):")
             for err in errors:
                 print(f"  - {err}")
             return
@@ -248,10 +250,10 @@ def run_profile(profile_name: str, verify: bool = False, validate_only: bool = F
         return
 
     if validate_only:
-        print(f"✅ Profile '{profile_name}' is valid")
+        print(f"\u2705 Profile '{profile_name}' is valid")
         return
 
-    emoji = profile.get("emoji", "🔍")
+    emoji = profile.get("emoji", "\U0001f50d")
     logger.info(f"{'='*60}")
     logger.info(f"Running profile: {profile_name} {emoji} (verify={verify})")
 
@@ -271,12 +273,12 @@ def run_profile(profile_name: str, verify: bool = False, validate_only: bool = F
     _run_normal(unique_deals, deal_filter, profile, profile_name)
 
 
-def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_name: str):
-    """Normal mode — find new deals, notify."""
+def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_name: str) -> None:
+    """Normal mode — find new deals, score, and notify."""
     state = load_state(profile_name)
     seen = state.get("seen", {})
     now = datetime.now().isoformat()
-    emoji = profile.get("emoji", "🔍")
+    emoji = profile.get("emoji", "\U0001f50d")
     currency = profile.get("currency", "PLN")
     threshold = profile.get("score_threshold", 50)
     threshold_alert = profile.get("score_threshold_alert", 100)
@@ -295,7 +297,7 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
     notion_key_path = os.environ.get("NOTION_API_KEY_PATH", "~/.config/notion/api_key")
     notion = NotionNotifier(notion_key_path) if notion_db else None
 
-    alerts = []
+    alerts: list[dict] = []
 
     for deal in deals:
         if deal.id in seen:
@@ -325,7 +327,7 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
     save_state(profile_name, state)
 
     if not alerts:
-        print(f"{emoji} Brak nowych okazji dla profilu {profile_name}.")
+        print(f"{emoji} No new deals for profile {profile_name}.")
         logger.info(f"No new alerts for {profile_name}")
         return
 
@@ -344,7 +346,7 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         remaining = alerts[max_alerts:]
 
         for a in top_alerts:
-            tier = f"🔥🔥🔥 GORĄCA PEREŁKA" if a['score'] >= threshold_alert else f"🔥 ZNALAZŁEM OKAZJĘ"
+            tier = f"\U0001f525\U0001f525\U0001f525 GOR\u0104CA PERE\u0141KA" if a['score'] >= threshold_alert else f"\U0001f525 ZNALAZ\u0141EM OKAZJ\u0118"
             telegram.send_alert(
                 a['deal'], a['score'], tier, a['plus'], a['minus'],
                 topic_id=tg_topic, emoji=emoji, currency=currency
@@ -357,35 +359,35 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
     # Console output
     for a in alerts:
         d = a['deal']
-        tier = "🔥🔥🔥 PEREŁKA" if a['score'] >= threshold_alert else "🔥 OKAZJA"
-        price_str = f"{d.price:,} {currency}".replace(',', ' ') if d.price > 0 else "brak ceny"
+        tier = "\U0001f525\U0001f525\U0001f525 TOP DEAL" if a['score'] >= threshold_alert else "\U0001f525 DEAL"
+        price_str = f"{d.price:,} {currency}".replace(',', ' ') if d.price > 0 else "no price"
         print(f"{emoji} {tier} (score: {a['score']})")
         print(f"  {d.title}")
-        print(f"  Cena: {price_str} | Źródło: {d.source}")
+        print(f"  Price: {price_str} | Source: {d.source}")
         if a['plus']:
-            print(f"  ✅ {', '.join(a['plus'][:6])}")
+            print(f"  \u2705 {', '.join(a['plus'][:6])}")
         if a['minus']:
-            print(f"  ⚠️  {', '.join(a['minus'][:4])}")
+            print(f"  \u26a0\ufe0f  {', '.join(a['minus'][:4])}")
         print(f"  LINK: {d.link}")
         print()
 
     logger.info(f"Profile {profile_name}: {len(alerts)} alerts")
 
 
-def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict):
+def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict) -> None:
     """Verify mode — analyze all deals without state tracking."""
-    emoji = profile.get("emoji", "🔍")
+    emoji = profile.get("emoji", "\U0001f50d")
     currency = profile.get("currency", "PLN")
     threshold = profile.get("score_threshold", 50)
     threshold_alert = profile.get("score_threshold_alert", 100)
     profile_name = profile.get("name", "unknown")
 
     print(f"\n{'='*60}")
-    print(f"  {emoji} ANALIZA OFERT — {profile_name.upper()} — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    print(f"  Znaleziono {len(deals)} ofert")
+    print(f"  {emoji} DEAL ANALYSIS \u2014 {profile_name.upper()} \u2014 {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"  Found {len(deals)} deals")
     print(f"{'='*60}\n")
 
-    scored = []
+    scored: list[tuple] = []
     rejected = 0
 
     for deal in deals:
@@ -396,43 +398,44 @@ def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict):
         scored.append((deal, result))
 
     if rejected:
-        print(f"  (Odrzucono {rejected} ofert)\n")
+        print(f"  ({rejected} deals rejected)\n")
 
     scored.sort(key=lambda x: x[1].score, reverse=True)
 
     for deal, result in scored:
-        price_str = f"{deal.price:,} {currency}".replace(',', ' ') if deal.price > 0 else "brak ceny"
-        temp_str = f" | temp: {deal.temperature}°" if deal.temperature else ""
+        price_str = f"{deal.price:,} {currency}".replace(',', ' ') if deal.price > 0 else "no price"
+        temp_str = f" | temp: {deal.temperature}\u00b0" if deal.temperature else ""
 
         if result.score >= threshold_alert:
-            status = "🔥🔥🔥 PEREŁKA"
+            status = "\U0001f525\U0001f525\U0001f525 TOP DEAL"
         elif result.score >= threshold:
-            status = "🔥 POTENCJAŁ"
+            status = "\U0001f525 POTENTIAL"
         elif result.score >= 20:
-            status = "🤔 MOŻE"
+            status = "\U0001f914 MAYBE"
         else:
-            status = "❌ NIE PASUJE"
+            status = "\u274c NO MATCH"
 
         print(f"[{status}] Score: {result.score}")
         print(f"  {deal.title}")
-        print(f"  Cena: {price_str}{temp_str} | Źródło: {deal.source}")
+        print(f"  Price: {price_str}{temp_str} | Source: {deal.source}")
         if result.plus:
-            print(f"  ✅ {', '.join(result.plus[:6])}")
+            print(f"  \u2705 {', '.join(result.plus[:6])}")
         if result.minus:
-            print(f"  ⚠️  {', '.join(result.minus[:4])}")
+            print(f"  \u26a0\ufe0f  {', '.join(result.minus[:4])}")
         print(f"  {deal.link}")
         print()
 
 
 # ──────────────── CLI ────────────────
 
-def main():
-    parser = argparse.ArgumentParser(description="Deal Hunter — multi-source deal monitor")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Deal Hunter \u2014 multi-source deal monitor")
     parser.add_argument("--profile", "-p", type=str, help="Profile name to run")
     parser.add_argument("--all", "-a", action="store_true", help="Run all profiles")
-    parser.add_argument("--verify", "-v", action="store_true", help="Verify mode (show all, no state)")
+    parser.add_argument("--verify", "-v", action="store_true", help="Verify mode (show all deals with scores, no state)")
     parser.add_argument("--list", "-l", action="store_true", help="List available profiles")
     parser.add_argument("--validate", action="store_true", help="Validate profile without running")
+    parser.add_argument("--version", action="version", version=f"Deal Hunter {__version__}")
 
     args = parser.parse_args()
 
@@ -441,7 +444,7 @@ def main():
         print("Available profiles:")
         for p in profiles:
             prof = load_profile(p)
-            print(f"  {prof.get('emoji', '🔍')} {p}")
+            print(f"  {prof.get('emoji', '\U0001f50d')} {p}")
         return
 
     if args.validate:

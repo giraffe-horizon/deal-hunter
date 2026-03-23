@@ -3,6 +3,7 @@
 import re
 import logging
 from urllib.parse import quote_plus
+
 from bs4 import BeautifulSoup
 
 from .base import Source, Deal
@@ -19,17 +20,16 @@ class ProshopSource(Source):
     def fetch_deals(self, config: dict) -> list[Deal]:
         """Fetch deals from Proshop search.
 
-        Config keys:
-            queries: list[str] — search queries
-            category: str (optional) — category URL path
+        Args:
+            config: Profile source config with 'queries' and optional 'category' keys.
         """
-        queries = config.get("queries", [])
+        queries: list[str] = config.get("queries", [])
         if not queries:
             logger.warning("Proshop: no queries configured")
             return []
 
-        all_deals = []
-        category = config.get("category", "")
+        all_deals: list[Deal] = []
+        category: str = config.get("category", "")
 
         for query in queries:
             encoded = quote_plus(query)
@@ -51,7 +51,7 @@ class ProshopSource(Source):
     def _parse_results(self, html: str, query: str) -> list[Deal]:
         """Parse Proshop search results page."""
         soup = BeautifulSoup(html, 'html.parser')
-        deals = []
+        deals: list[Deal] = []
 
         # Try different product listing selectors
         products = soup.find_all('div', id=re.compile(r'product_\d+'))
@@ -80,7 +80,6 @@ class ProshopSource(Source):
                         title_tag = link_inner
 
             if not title_tag:
-                # Try any anchor with text
                 for a in prod.find_all('a', href=True):
                     text = a.get_text().strip()
                     if len(text) > 10:
@@ -138,7 +137,7 @@ class ProshopSource(Source):
 
     @staticmethod
     def _extract_price(text: str) -> int:
-        """Extract price in PLN from text."""
+        """Extract integer price from text."""
         text = text.replace('\xa0', '').replace(' ', '').replace(',', '.')
         m = re.search(r'(\d[\d\s]*(?:[.,]\d{1,2})?)', text)
         if m:

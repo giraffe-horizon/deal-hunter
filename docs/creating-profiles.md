@@ -1,204 +1,219 @@
-# Tworzenie profili — Przewodnik
+# Creating Profiles — Guide
 
-## Spis treści
+## Table of Contents
 
-1. [Wprowadzenie](#wprowadzenie)
-2. [Szybki start](#szybki-start)
-3. [Struktura pliku YAML](#struktura-pliku-yaml)
-4. [Źródła danych](#źródła-danych)
-5. [System scoringu](#system-scoringu)
-6. [Custom filtry](#custom-filtry)
-7. [Powiadomienia](#powiadomienia)
-8. [Przykłady](#przykłady)
-9. [FAQ i porady](#faq-i-porady)
+1. [Introduction](#introduction)
+2. [Quick Start](#quick-start)
+3. [YAML File Structure](#yaml-file-structure)
+4. [Data Sources](#data-sources)
+5. [Scoring System](#scoring-system)
+6. [Custom Filters](#custom-filters)
+7. [Notifications](#notifications)
+8. [Examples](#examples)
+9. [FAQ and Tips](#faq-and-tips)
 
 ---
 
-## Wprowadzenie
+## Introduction
 
-Profil to plik YAML w katalogu `profiles/`, który definiuje **co szukasz** i **jak oceniać oferty**. Jeden profil = jeden typ produktu (np. rowery, dyski, słuchawki).
+A profile is a YAML file in the `profiles/` directory that defines **what you're searching for** and **how to evaluate offers**. One profile = one product type (e.g., bikes, hard drives, headphones).
 
-Jak to działa:
-1. Deal Hunter ładuje profil
-2. Skanuje zdefiniowane źródła (Pepper, Ceneo, Proshop)
-3. Każda znaleziona oferta przechodzi przez scoring engine
-4. Oferty powyżej progu → alert na Telegram (+ opcjonalnie Notion)
-5. State zapisywany lokalnie → te same oferty nie alertują ponownie
+How it works:
+1. Deal Hunter loads the profile
+2. Scans the configured sources (Pepper, Ceneo, Proshop, web)
+3. Each found offer goes through the scoring engine
+4. Offers above the threshold -> alert on Telegram (+ optionally Notion)
+5. State is saved locally -> the same offers won't alert again
 
-Profile użytkownika **nie są commitowane do repo** (`.gitignore`). Wzoruj się na `profiles/example.yaml`.
+User profiles **are not committed to the repo** (`.gitignore`). Use `profiles/example.yaml` as a template.
 
-## Szybki start
+## Quick Start
 
 ```bash
-# Skopiuj template
-cp profiles/example.yaml profiles/moj_profil.yaml
+# Copy the template
+cp profiles/example.yaml profiles/my_product.yaml
 
-# Edytuj
-nano profiles/moj_profil.yaml
+# Edit it
+nano profiles/my_product.yaml
 
-# Przetestuj (--verify pokazuje scoring bez wysyłania alertów)
-python deal_hunter.py --profile moj_profil --verify
+# Test (--verify shows scoring without sending alerts)
+python deal_hunter.py --profile my_product --verify
 
-# Uruchom normalnie
-python deal_hunter.py --profile moj_profil
+# Run normally
+python deal_hunter.py --profile my_product
 ```
 
-## Struktura pliku YAML
+## YAML File Structure
 
-### Pola podstawowe
+### Required Fields
 
-| Pole | Typ | Wymagane | Opis |
-|------|-----|----------|------|
-| `name` | string | ✅ | Nazwa profilu (używana w `--profile nazwa`) |
-| `emoji` | string | ✅ | Emoji w alertach Telegram |
-| `sources` | dict | ✅ | Konfiguracja źródeł (min. jedno) |
-| `budget` | dict | ✅ | Zakres cenowy `{min, max}` w PLN |
-| `score_rules` | dict | ✅ | Słowa kluczowe → punkty (pozytywne) |
-| `penalties` | dict | ✅ | Słowa kluczowe → kary (ujemne) |
-| `score_threshold` | int | ✅ | Min. score aby wysłać alert |
-| `score_threshold_alert` | int | ✅ | Score dla "gorącej perełki" 🔥🔥🔥 |
-| `telegram` | dict | ✅ | Konfiguracja Telegram |
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Profile name (used in `--profile name`) |
+| `emoji` | string | Emoji shown in Telegram alerts |
+| `sources` | dict | Source configuration (at least one) |
+| `budget` | dict | Price range `{min, max}` in PLN |
+| `score_rules` | dict | Keywords -> positive points |
+| `penalties` | dict | Keywords -> negative points |
+| `score_threshold` | int | Minimum score to trigger an alert |
+| `score_threshold_alert` | int | Score for "top deal" tier 🔥🔥🔥 |
+| `telegram` | dict | Telegram notification config |
 
-### Pola opcjonalne
+### Optional Fields
 
-| Pole | Typ | Domyślnie | Opis |
-|------|-----|-----------|------|
-| `required_any` | list | `[]` | Min. jedno słowo musi matchować (hard reject) |
-| `excluded_words` | list | `[]` | Którekolwiek słowo → hard reject |
-| `custom_filter` | string | `null` | Nazwa klasy custom filtra |
-| `custom_data` | dict | `{}` | Dowolne dane dla custom filtra |
-| `notion` | dict/null | `null` | Konfiguracja Notion (`null` = wyłączone) |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `required_any` | list | `[]` | At least one word must match (hard reject) |
+| `excluded_words` | list | `[]` | Any word matches -> hard reject |
+| `custom_filter` | string | `null` | Custom filter class name |
+| `custom_data` | dict | `{}` | Arbitrary data for custom filter |
+| `currency` | string | `PLN` | Currency code for alerts |
+| `notion` | dict/null | `null` | Notion config (`null` = disabled) |
 
-### Budżet
+### Budget
 
 ```yaml
 budget:
-  min: 400   # poniżej → kara -20 pkt
-  max: 900   # powyżej → kara -30 pkt
-             # w zakresie → bonus +5 pkt
+  min: 400   # below -> -20 point penalty
+  max: 900   # above -> -30 point penalty
+             # in range -> +5 point bonus
 ```
 
-Budżet wpływa na scoring:
-- **W zakresie**: +5 punktów
-- **Za tanio** (poniżej min): -20 punktów (prawdopodobnie inny/gorszy produkt)
-- **Za drogo** (powyżej max): -30 punktów
+Budget affects scoring:
+- **In range**: +5 points
+- **Too cheap** (below min): -20 points (likely a different/inferior product)
+- **Too expensive** (above max): -30 points
 
 ---
 
-## Źródła danych
+## Data Sources
 
-Dostępne trzy źródła. Możesz użyć jednego, dwóch lub wszystkich trzech.
+Four sources are available. You can use one, two, or all of them.
 
 ### Pepper.pl
 
-Agregator okazji i promocji. Użytkownicy wrzucają deale, społeczność głosuje (temperatura).
+Deal aggregator where users post deals and the community votes (temperature).
 
 ```yaml
 sources:
   pepper:
     urls:
-      - "https://www.pepper.pl/search?q=twoje+zapytanie"
-      - "https://www.pepper.pl/grupa/nazwa-kategorii"
+      - "https://www.pepper.pl/search?q=your+search+query"
+      - "https://www.pepper.pl/grupa/category-name"
 ```
 
-**Konfiguracja:** Lista URLi — mogą to być strony wyszukiwania lub kategorii Pepper.
+**Config:** List of URLs — can be search pages or category pages.
 
-**Zalety:**
-- Temperatura oferty (społeczny dowód jakości)
-- Szerokie pokrycie — różne sklepy w jednym miejscu
+**Advantages:**
+- Deal temperature (community-driven quality signal)
+- Broad coverage — many stores in one place
 
-**Porady:**
-- Dodaj kilka wariantów zapytań (synonimy, nazwy modeli)
-- Możesz dodać kolejne strony wyników: `?page=2`, `?page=3`
-- Nie przesadzaj z liczbą URLi — rate limiting chroni przed banem
+**Tips:**
+- Add multiple query variants (synonyms, model names)
+- You can add pagination: `?page=2`, `?page=3`
+- Don't overdo it — rate limiting protects against bans
 
 ### Ceneo.pl
 
-Porównywarka cen — zbiera oferty z wielu sklepów.
+Price comparison engine — aggregates prices from many stores.
 
 ```yaml
 sources:
   ceneo:
     queries:
-      - "nazwa produktu"
-      - "marka model"
+      - "product name"
+      - "brand model"
 ```
 
-**Konfiguracja:** Lista zapytań tekstowych.
+**Config:** List of text search queries.
 
-**Zalety:**
-- Ceny z wielu sklepów
-- Dobra do konkretnych produktów (znana marka + model)
+**Advantages:**
+- Prices from many stores
+- Great for specific products (known brand + model)
 
 ### Proshop.pl
 
-Sklep internetowy z elektroniką.
+Online electronics store.
 
 ```yaml
 sources:
   proshop:
     queries:
-      - "nazwa produktu"
+      - "product name"
 ```
 
-**Konfiguracja:** Lista zapytań tekstowych.
+**Config:** List of text search queries.
 
-**Zalety:**
-- Dobre ceny na elektronikę i komponenty
-- Stabilny layout (rzadko się zmienia)
+### Generic Web Scraper
 
-### Rate limiting
+Scrape any website using CSS selectors — no code needed.
 
-Wszystkie źródła mają wbudowane zabezpieczenia:
-- Min. 2 sekundy między requestami
-- Retry z exponential backoff przy błędach
-- Graceful degradation — jedno źródło padnie → reszta działa
+```yaml
+sources:
+  web:
+    sites:
+      - url: "https://example.com/deals"
+        base_url: "https://example.com"
+        selectors:
+          container: "div.product-card"
+          title: "h2.product-name"
+          price: "span.price"
+          link: "a.product-link@href"    # @attr extracts HTML attribute
+          image: "img.product-img@src"
+```
+
+### Rate Limiting
+
+All sources have built-in protections:
+- Min 2 seconds between requests
+- Retry with exponential backoff on errors
+- Graceful degradation — one source fails -> the rest keep working
 
 ---
 
-## System scoringu
+## Scoring System
 
-### Jak działa
+### How It Works
 
-Scoring engine przetwarza każdą ofertę w następującej kolejności:
+The scoring engine processes each offer in this order:
 
-1. **Excluded words** → jeśli znalezione → hard reject (oferta odrzucona)
-2. **Required any** → jeśli żadne nie matchuje → hard reject
-3. **Score rules** → keyword w tytule/opisie → dodaje punkty
-4. **Penalties** → keyword w tytule/opisie → odejmuje punkty
-5. **Budget** → bonus/kara za cenę
-6. **Temperatura** (tylko Pepper) → bonus/kara za społeczny dowód
+1. **Excluded words** -> if found -> hard reject (offer discarded)
+2. **Required any** -> if none match -> hard reject
+3. **Score rules** -> keyword in title/description -> add points
+4. **Penalties** -> keyword in title/description -> subtract points
+5. **Budget** -> bonus/penalty based on price
+6. **Temperature** (Pepper only) -> bonus/penalty based on community votes
 
-### Score rules
+### Score Rules
 
 ```yaml
 score_rules:
-  "dokładna fraza": 50     # wysoki priorytet
-  keyword: 25               # średni
-  miły_bonus: 10             # niski
+  "exact phrase": 50     # high priority
+  keyword: 25             # medium
+  nice_bonus: 10          # low
 ```
 
-Matching jest **case-insensitive** i szuka substring w połączonym tytule + opisie oferty.
+Matching is **case-insensitive** and searches for substrings in the combined title + description.
 
-**Porady na dobry scoring:**
+**Tips for good scoring:**
 
-- **50+ punktów** — model/produkt którego szukasz dokładnie
-- **25-40 punktów** — pożądane cechy (materiał, technologia)
-- **10-20 punktów** — miłe dodatki
-- **5-10 punktów** — drobne bonusy (stan nowy, gwarancja)
+- **50+ points** — the exact model/product you're looking for
+- **25-40 points** — desired features (material, technology)
+- **10-20 points** — nice-to-have extras
+- **5-10 points** — minor bonuses (new condition, warranty)
 
 ### Penalties
 
 ```yaml
 penalties:
-  niechciany_model: -40
-  inna_kategoria: -50
-  używany: -25
+  unwanted_model: -40
+  different_category: -50
+  used: -25
 ```
 
-Wartości **muszą być ujemne**. Im bardziej niechciane słowo, tym większa kara.
+Values **must be negative**. The more unwanted the keyword, the larger the penalty.
 
-### Required any
+### Required Any
 
 ```yaml
 required_any:
@@ -206,149 +221,175 @@ required_any:
   - "12 tb"
 ```
 
-Minimum **jedno** słowo z listy musi wystąpić. Inaczej oferta odrzucona. Przydatne gdy szukasz konkretnej specyfikacji (pojemność, rozmiar).
+At least **one** word from the list must appear. Otherwise the offer is rejected. Useful when searching for a specific spec (capacity, size).
 
-### Excluded words
+### Excluded Words
 
 ```yaml
 excluded_words:
   - "spam"
-  - "zupelnie_inny_produkt"
+  - "completely_different_product"
 ```
 
-Jeśli **którekolwiek** słowo z listy wystąpi → oferta natychmiast odrzucona. Używaj do odsiewania oczywistych pomyłek.
+If **any** word from the list appears -> offer immediately rejected. Use to filter out obvious false positives.
 
-### Progi
+### Regex Support
+
+Keywords can be regular expressions using `r/pattern/` syntax:
 
 ```yaml
-score_threshold: 50        # min. score dla alertu
-score_threshold_alert: 80  # score dla "gorącej perełki"
+score_rules:
+  "r/\\b(xl|xxl|58|60)\\b/": 10   # matches whole words
+  "r/\\d{2}\\s*mm/": 5             # matches e.g. "32 mm", "28mm"
 ```
 
-**Tiery alertów:**
+Regex works in: `score_rules`, `penalties`, `excluded_words`, `required_any`.
+
+### Thresholds
+
+```yaml
+score_threshold: 50        # minimum score for an alert
+score_threshold_alert: 80  # score for "top deal" tier
+```
+
+**Alert tiers:**
 
 | Score | Tier | Emoji |
 |-------|------|-------|
-| ≥ `score_threshold_alert` | GORĄCA PEREŁKA | 🔥🔥🔥 |
-| ≥ `score_threshold` | OKAZJA | 🔥 |
-| ≥ 20 | MOŻE | 🤔 |
-| < 20 | NIE PASUJE | ❌ |
+| >= `score_threshold_alert` | TOP DEAL | 🔥🔥🔥 |
+| >= `score_threshold` | DEAL | 🔥 |
+| >= 20 | MAYBE | 🤔 |
+| < 20 | NO MATCH | ❌ |
 
-### Bonus za temperaturę (Pepper)
+### Temperature Bonus (Pepper)
 
-Oferty z Pepper mają temperaturę (głosy społeczności):
-- **≥ 100°** → +10 pkt (gorąca oferta, wiele osób potwierdza)
-- **≥ 50°** → +5 pkt
-- **< -10°** → -10 pkt (zimna, prawdopodobnie słaba oferta)
+Pepper deals have a temperature score (community votes):
+- **>= 100°** -> +10 points (hot deal, many people confirm)
+- **>= 50°** -> +5 points
+- **< -10°** -> -10 points (cold, probably a weak offer)
 
-### Porady na dobry scoring
+### Scoring Tips
 
-1. **Zacznij od `--verify`** — zobaczysz scoring dla wszystkich ofert
-2. **Iteruj** — dostosuj punkty na podstawie wyników verify
-3. **Unikaj zbyt niskiego threshold** — dostaniesz za dużo szumu
-4. **Unikaj zbyt wysokiego threshold** — przegapisz dobre oferty
-5. **Penalties ważniejsze niż się wydaje** — dobre penalties odsiewają śmieci skuteczniej niż dobre score_rules
+1. **Start with `--verify`** — see scoring for all offers
+2. **Iterate** — adjust points based on verify results
+3. **Avoid too low threshold** — you'll get too much noise
+4. **Avoid too high threshold** — you'll miss good deals
+5. **Penalties matter more than you think** — good penalties filter out junk more effectively than good score_rules
 
 ---
 
-## Custom filtry
+## Custom Filters
 
-### Kiedy potrzebne
+### When Needed
 
-Bazowy scoring engine wystarczy w większości przypadków. Custom filtr potrzebujesz gdy:
-- Logika jest **zbyt skomplikowana** dla prostych keyword → punkty (np. rozmiary per marka roweru)
-- Potrzebujesz **parsować dane** z oferty (np. wyciągnąć rozmiar z tekstu)
-- Chcesz **dodatkowe reguły** zależne od kontekstu (np. kolor + rozmiar + typ)
+The base scoring engine is enough for most cases. You need a custom filter when:
+- Logic is **too complex** for simple keyword -> points (e.g., sizes per bike brand)
+- You need to **parse data** from the offer (e.g., extract size from text)
+- You want **additional rules** that depend on context (e.g., color + size + type)
 
-### Jak podpiąć
+### How to Set Up
 
-1. Stwórz plik w `filters/`, np. `filters/moj_filter.py`
-2. Klasa dziedziczy po `BaseFilter`:
+1. Create a file in `filters/`, e.g., `filters/my_filter.py`
+2. Class inherits from `BaseFilter`:
 
 ```python
 from filters.base import BaseFilter, ScoreResult
 
-class MojFilter(BaseFilter):
+class MyFilter(BaseFilter):
     def score_deal(self, deal) -> ScoreResult:
-        # Najpierw bazowy scoring (ZAWSZE wywołaj super!)
+        # Base scoring first (ALWAYS call super!)
         result = super().score_deal(deal)
         if result.rejected:
             return result
 
-        # Twoja dodatkowa logika
+        # Your additional logic
         custom = self.profile.get("custom_data", {})
         # ...
         return result
 ```
 
-3. Zarejestruj w `filters/__init__.py`:
+3. Register in `filters/__init__.py`:
 ```python
-FILTER_REGISTRY["moj_filter.MojFilter"] = MojFilter
+FILTER_REGISTRY["my_filter.MyFilter"] = MyFilter
 ```
 
-4. W profilu YAML:
+4. In profile YAML:
 ```yaml
-custom_filter: "moj_filter.MojFilter"
+custom_filter: "my_filter.MyFilter"
 custom_data:
-  klucz: wartość
+  key: value
 ```
 
-### Custom data
+### Custom Data
 
-`custom_data` to dowolny dict przekazywany do filtra. Struktura zależy od Twojego filtra.
+`custom_data` is an arbitrary dict passed to the filter. Structure depends on your filter.
 
 ```yaml
 custom_data:
   preferred_sizes: ["L", "XL"]
   excluded_colors:
-    - "biały"
-    - "żółty"
+    - "white"
+    - "yellow"
 ```
 
-Dostęp w filtrze: `self.profile.get("custom_data", {})`.
+Access in filter: `self.profile.get("custom_data", {})`.
 
 ---
 
-## Powiadomienia
+## Notifications
 
 ### Telegram
 
 ```yaml
 telegram:
-  topic_id: 31    # ID wątku w grupie (opcjonalne, 0 = brak wątku)
-  max_alerts: 5   # Max alertów na jedno uruchomienie
+  topic_id: 31    # Thread ID in Telegram group (optional, 0 = no thread)
+  max_alerts: 5   # Max alerts per run
 ```
 
-**topic_id** — jeśli Twoja grupa Telegram ma włączone wątki (topics), podaj ID wątku. Znajdziesz go w URL: `t.me/c/GRUPAID/TOPICID`. Jeśli grupa nie ma wątków → ustaw `0` lub pomiń.
+**topic_id** — if your Telegram group has threads (topics) enabled, provide the thread ID. Find it in the URL: `t.me/c/GROUPID/TOPICID`. If the group doesn't have threads -> set `0` or omit.
 
-**max_alerts** — chroni przed zalewem wiadomości gdy jest dużo wyników. Najpierw wysyłane oferty z najwyższym score.
+**max_alerts** — protects against message floods when there are many results. Highest-scoring offers are sent first.
 
-Wymagane zmienne w `.env`:
+Required variables in `.env`:
 ```
-TELEGRAM_BOT_TOKEN=twoj_token
-TELEGRAM_CHAT_ID=id_czatu_lub_grupy
+TELEGRAM_BOT_TOKEN=your_token
+TELEGRAM_CHAT_ID=chat_or_group_id
 ```
 
 ### Notion
 
 ```yaml
-# Wyłączone:
+# Disabled:
 notion: null
 
-# Włączone:
+# Enabled:
 notion:
-  database_id: "twoj-notion-database-id"
+  database_id: "your-notion-database-id"
 ```
 
-Oferty trafiają do bazy Notion jako nowe strony. Wymaga:
-- Skonfigurowanego `NOTION_API_KEY_PATH` w `.env`
-- Bazy Notion z odpowiednimi properties
+Deals are saved to Notion as new pages. Requires:
+- `NOTION_API_KEY_PATH` configured in `.env`
+- A Notion database with matching properties
+
+### Notion Categories
+
+Categories can be configured per profile:
+
+```yaml
+notion:
+  database_id: "your-db-id"
+  categories:
+    "electronics": ["laptop", "phone", "tablet"]
+    "audio": ["headphones", "speaker", "soundbar"]
+```
+
+If no categories are defined, the profile name is used as the category.
 
 ---
 
-## Przykłady
+## Examples
 
-### Prosty profil — Słuchawki bezprzewodowe
+### Simple Profile — Wireless Headphones
 
 ```yaml
 name: headphones
@@ -357,10 +398,10 @@ emoji: "🎧"
 sources:
   pepper:
     urls:
-      - "https://www.pepper.pl/search?q=słuchawki+bezprzewodowe+anc"
+      - "https://www.pepper.pl/search?q=headphones+wireless+anc"
   ceneo:
     queries:
-      - "słuchawki bezprzewodowe ANC"
+      - "wireless headphones ANC"
 
 budget:
   min: 200
@@ -371,21 +412,14 @@ score_rules:
   "noise cancelling": 30
   sony: 40
   "wh-1000xm": 50
-  "wf-1000xm": 45
   bose: 35
   sennheiser: 30
-  "momentum": 35
   ldac: 20
   multipoint: 15
-  bluetooth: 5
-  aptx: 10
 
 penalties:
-  przewodowe: -50
-  gamingowe: -30
-  nauszne: -20       # jeśli szukasz dokanałowych
-  tws: -10           # jeśli szukasz nausznych
-  chiński: -20
+  wired: -50
+  gaming: -30
 
 score_threshold: 40
 score_threshold_alert: 70
@@ -397,7 +431,7 @@ telegram:
 notion: null
 ```
 
-### Średni profil — Dysk NAS 12TB
+### Medium Profile — NAS HDD 12TB
 
 ```yaml
 name: nas_hdd
@@ -406,11 +440,11 @@ emoji: "💾"
 sources:
   pepper:
     urls:
-      - "https://www.pepper.pl/search?q=dysk+12tb+nas"
+      - "https://www.pepper.pl/search?q=hdd+12tb+nas"
       - "https://www.pepper.pl/search?q=ironwolf+12tb"
   ceneo:
     queries:
-      - "dysk HDD 12TB NAS"
+      - "HDD 12TB NAS"
       - "Seagate IronWolf 12TB"
       - "WD Red Plus 12TB"
   proshop:
@@ -432,15 +466,13 @@ score_rules:
   nas: 25
   7200rpm: 15
   helium: 20
-  12tb: 20
-  nowy: 10
 
 penalties:
   smr: -50
   refurbished: -30
-  używany: -25
+  used: -25
   ssd: -60
-  zewnętrzny: -40
+  external: -40
 
 required_any:
   - "12tb"
@@ -456,7 +488,7 @@ telegram:
 notion: null
 ```
 
-### Zaawansowany profil — Rowery z custom filtrem
+### Advanced Profile — Bikes with Custom Filter
 
 ```yaml
 name: bikes
@@ -467,7 +499,6 @@ sources:
     urls:
       - "https://www.pepper.pl/grupa/rowery"
       - "https://www.pepper.pl/search?q=rower+endurance"
-      - "https://www.pepper.pl/search?q=rower+szosowy+carbon"
 
 budget:
   min: 10000
@@ -476,7 +507,6 @@ budget:
 score_rules:
   carbon: 35
   di2: 40
-  axs: 40
   endurance: 50
   gravel: 25
   domane: 45
@@ -489,16 +519,14 @@ penalties:
   tcr: -50
   tarmac: -50
   aeroad: -60
-  madone: -50
-  allez: -40
 
 score_threshold: 70
 score_threshold_alert: 120
 
-# Custom filtr — rozszerza bazowy scoring o logikę rozmiarów i kolorów
+# Custom filter — extends base scoring with size and color logic
 custom_filter: "bike_filter.BikeFilter"
 
-# Dane dla custom filtra
+# Data for the custom filter
 custom_data:
   brand_sizes:
     trek: ["l", "60", "61"]
@@ -506,8 +534,8 @@ custom_data:
     giant: ["xl", "ml"]
   generic_good_sizes: ["l", "xl", "xxl", "58", "59", "60", "61", "62"]
   excluded_colors:
-    - "biały"
-    - "żółty"
+    - "white"
+    - "yellow"
     - "neon"
   race_keywords:
     - "aero"
@@ -519,65 +547,65 @@ telegram:
   max_alerts: 5
 
 notion:
-  database_id: "twoj-notion-database-id"
+  database_id: "your-notion-database-id"
 ```
 
 ---
 
-## FAQ i porady
+## FAQ and Tips
 
-### Jak znaleźć `topic_id` na Telegramie?
+### How do I find the `topic_id` on Telegram?
 
-Otwórz wątek w grupie Telegram (w przeglądarce lub klikając link). URL wygląda tak:
-`https://t.me/c/1234567890/31` — ostatnia liczba (31) to `topic_id`.
+Open a thread in your Telegram group (in a browser or by clicking the link). The URL looks like:
+`https://t.me/c/1234567890/31` — the last number (31) is the `topic_id`.
 
-### Ile źródeł powinienem użyć?
+### How many sources should I use?
 
-Zależy od produktu:
-- **Okazje/promocje** → Pepper (społeczność filtruje za Ciebie)
-- **Porównywanie cen** → Ceneo (wiele sklepów)
-- **Konkretny sklep** → Proshop
-- **Najlepsze pokrycie** → wszystkie trzy
+Depends on the product:
+- **Deals/promotions** -> Pepper (community filters for you)
+- **Price comparison** -> Ceneo (many stores)
+- **Specific store** -> Proshop
+- **Best coverage** -> all three
 
-### Dlaczego oferta ma niski score mimo że jest dobra?
+### Why does a good offer have a low score?
 
-Sprawdź `--verify`:
+Check `--verify`:
 ```bash
-python deal_hunter.py --profile moj_profil --verify
+python deal_hunter.py --profile my_product --verify
 ```
 
-Częste przyczyny:
-- Brak keywordu w `score_rules` (dodaj go)
-- Penalty niezamierzenie matchuje (np. "blue" w nazwie niebieskiego modelu)
-- Oferta poza budżetem
-- `required_any` nie matchuje (sprawdź pisownię/warianty)
+Common causes:
+- Missing keyword in `score_rules` (add it)
+- A penalty unintentionally matches (e.g., "blue" in a blue model name)
+- Offer is outside budget
+- `required_any` doesn't match (check spelling/variants)
 
-### Jak ustawić dobre progi?
+### How to set good thresholds?
 
-1. Uruchom `--verify` i zobacz rozkład score'ów
-2. `score_threshold` ustaw tak aby odciąć szum (dolne ~30% ofert)
-3. `score_threshold_alert` ustaw na top ~10% — to będą Twoje "gorące perełki"
-4. Lepiej zacząć od niższych progów i podnieść niż przegapić dobrą ofertę
+1. Run `--verify` and look at score distribution
+2. Set `score_threshold` to cut off noise (bottom ~30% of offers)
+3. Set `score_threshold_alert` to top ~10% — these will be your "top deals"
+4. Better to start with lower thresholds and raise them than to miss a good deal
 
-### Czy mogę mieć profil bez penalties?
+### Can I have a profile without penalties?
 
-Tak — `penalties` może być pusty (`penalties: {}`), ale tracisz ważne narzędzie do odsiewania śmieci. Zalecam dodać choćby kilka oczywistych wykluczeń.
+Yes — `penalties` can be empty (`penalties: {}`), but you lose an important tool for filtering junk. Recommended to add at least a few obvious exclusions.
 
-### Jak testować profil bez wysyłania alertów?
+### How to test a profile without sending alerts?
 
-Użyj flagi `--verify`:
+Use the `--verify` flag:
 ```bash
-python deal_hunter.py --profile moj_profil --verify
+python deal_hunter.py --profile my_product --verify
 ```
 
-Wyświetla WSZYSTKIE znalezione oferty z pełnym breakdownem scoringu, bez zapisywania stanu i bez wysyłania powiadomień.
+Shows ALL found offers with full scoring breakdown, without saving state or sending notifications.
 
-### Mogę użyć wielu URLi Pepper?
+### Can I use multiple Pepper URLs?
 
-Tak, im więcej tym lepsze pokrycie. Ale pamiętaj o rate limitingu — nie przesadzaj (10-15 URLi to sensowny maks).
+Yes, more URLs = better coverage. But keep rate limiting in mind — 10-15 URLs is a reasonable maximum.
 
-### Jak działa deduplikacja?
+### How does deduplication work?
 
-Deal Hunter zapisuje state per profil w `state/`. Każda oferta identyfikowana przez `{source}:{native_id}`. State ma TTL 14 dni — po tym czasie oferta może ponownie zalerować (prawdopodobnie już nieaktualna).
+Deal Hunter saves state per profile in `state/`. Each offer is identified by `{source}:{native_id}`. State has a 14-day TTL — after that, an offer can alert again (likely already inactive).
 
-Dodatkowo jest cross-source deduplikacja po `title + price` — ta sama oferta z Pepper i Ceneo nie zaleruje dwa razy.
+Additionally, there's cross-source dedup by `title + price` with fuzzy matching — the same offer from Pepper and Ceneo won't alert twice.

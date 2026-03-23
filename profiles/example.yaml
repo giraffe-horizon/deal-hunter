@@ -1,166 +1,166 @@
 # ============================================================================
-# Deal Hunter — Przykładowy profil produktu
+# Deal Hunter — Example Product Profile
 # ============================================================================
-# Ten plik pokazuje WSZYSTKIE dostępne opcje konfiguracji profilu.
-# Skopiuj go i dostosuj do swoich potrzeb:
-#   cp profiles/example.yaml profiles/moj_profil.yaml
+# This file shows ALL available configuration options.
+# Copy it and customize for your needs:
+#   cp profiles/example.yaml profiles/my_product.yaml
 #
-# Szczegółowa dokumentacja: docs/creating-profiles.md
+# Detailed documentation: docs/creating-profiles.md
 # ============================================================================
 
-# --- Nazwa i identyfikacja ---
-# Nazwa profilu (używana w CLI: --profile nazwa)
+# --- Name and identification ---
+# Profile name (used in CLI: --profile name)
 name: example
-# Emoji wyświetlany w alertach Telegram
+# Emoji displayed in Telegram alerts
 emoji: "🎯"
 
-# --- Waluta (opcjonalne, domyślnie PLN) ---
-# Używana w alertach Telegram i na konsoli
+# --- Currency (optional, default PLN) ---
+# Used in Telegram alerts and console output
 currency: PLN
 
-# --- Źródła do skanowania ---
-# Możesz użyć jednego lub wielu źródeł jednocześnie.
-# Każde źródło ma własną konfigurację.
+# --- Sources to scan ---
+# You can use one or many sources simultaneously.
+# Each source has its own configuration.
 sources:
-  # Pepper.pl — agregator okazji/promocji
-  # Konfiguracja: lista URLi do skanowania (strony kategorii lub wyniki wyszukiwania)
+  # Pepper.pl — deal/promotion aggregator
+  # Config: list of URLs to scrape (category pages or search results)
   pepper:
     urls:
-      - "https://www.pepper.pl/search?q=twoje+zapytanie"
-      - "https://www.pepper.pl/grupa/kategoria"
-      # Możesz dodać wiele stron, np. kolejne strony wyników:
-      # - "https://www.pepper.pl/grupa/kategoria?page=2"
+      - "https://www.pepper.pl/search?q=your+search+query"
+      - "https://www.pepper.pl/grupa/category"
+      # You can add multiple pages, e.g. pagination:
+      # - "https://www.pepper.pl/grupa/category?page=2"
 
-  # Ceneo.pl — porównywarka cen
-  # Konfiguracja: lista zapytań wyszukiwania (tekst)
+  # Ceneo.pl — price comparison engine
+  # Config: list of text search queries
   ceneo:
     queries:
-      - "nazwa produktu"
-      - "alternatywna fraza"
+      - "product name"
+      - "alternative phrase"
 
-  # Proshop.pl — sklep online
-  # Konfiguracja: lista zapytań wyszukiwania (tekst)
+  # Proshop.pl — online store
+  # Config: list of text search queries
   proshop:
     queries:
-      - "nazwa produktu"
+      - "product name"
 
-  # Generic web scraper — dowolna strona z produktami
-  # Definiujesz selektory CSS, Deal Hunter wyciąga dane
+  # Generic web scraper — any website with products
+  # Define CSS selectors and Deal Hunter extracts the data
   # web:
   #   sites:
   #     - url: "https://example.com/deals"
   #       base_url: "https://example.com"
   #       selectors:
-  #         container: "div.product-card"      # kontener pojedynczego produktu
-  #         title: "h2.product-name"           # tytuł — tekst elementu
-  #         price: "span.price"                # cena — tekst z liczbą
-  #         link: "a.product-link@href"        # link — @attr wyciąga atrybut
-  #         image: "img.product-img@src"       # obrazek — @attr wyciąga src
+  #         container: "div.product-card"      # container for a single product
+  #         title: "h2.product-name"           # title — element text
+  #         price: "span.price"                # price — text with number
+  #         link: "a.product-link@href"        # link — @attr extracts HTML attribute
+  #         image: "img.product-img@src"       # image — @attr extracts src
 
-# --- Budżet (PLN) ---
-# Oferty w zakresie budżetu dostają bonus +5 pkt.
-# Poniżej min → kara -20, powyżej max → kara -30.
+# --- Budget (PLN) ---
+# Offers in budget range get a +5 point bonus.
+# Below min -> -20 penalty, above max -> -30 penalty.
 budget:
   min: 100
   max: 500
 
-# --- Reguły scoringu (pozytywne punkty) ---
-# Słowo kluczowe znalezione w tytule lub opisie oferty → dodaje punkty.
-# Im więcej punktów, tym ważniejszy keyword.
-# Wielkość liter nie ma znaczenia.
+# --- Scoring rules (positive points) ---
+# Keyword found in title or description -> adds points.
+# Higher points = more important keyword.
+# Case-insensitive matching.
 #
-# Obsługuje regex z składnią r/wzorzec/:
-#   "r/\\b(model1|model2)\\b/": 30   ← matchuje całe słowa
-#   "r/\\d{2}\\s*mm/": 10             ← matchuje np. "32 mm", "28mm"
+# Supports regex with r/pattern/ syntax:
+#   "r/\\b(model1|model2)\\b/": 30   <- matches whole words
+#   "r/\\d{2}\\s*mm/": 10             <- matches e.g. "32 mm", "28mm"
 score_rules:
-  # Nazwa produktu / modelu → dużo punktów
-  "model premium": 50
-  "model standard": 30
-  # Pożądane cechy → średnio punktów
-  "cecha1": 25
-  "cecha2": 20
-  # Mniej ważne cechy → mało punktów
-  "miły bonus": 10
-  nowy: 10
-  # Przykład regex — matchuje warianty rozmiaru
+  # Product/model name -> high points
+  "premium model": 50
+  "standard model": 30
+  # Desired features -> medium points
+  "feature1": 25
+  "feature2": 20
+  # Less important features -> low points
+  "nice bonus": 10
+  new: 10
+  # Regex example — matches size variants
   # "r/\\b(xl|xxl|58|60)\\b/": 10
 
-# --- Kary (negatywne punkty) ---
-# Słowo kluczowe → odejmuje punkty. Wartości powinny być ujemne.
-# Obsługuje regex tak samo jak score_rules.
+# --- Penalties (negative points) ---
+# Keyword -> subtracts points. Values should be negative.
+# Supports regex just like score_rules.
 penalties:
-  # Niechciane warianty
-  "zły model": -40
-  używany: -25
+  # Unwanted variants
+  "bad model": -40
+  used: -25
   refurbished: -30
-  # Zupełnie inne produkty (pomyłki wyszukiwania)
-  "inny produkt": -50
+  # Completely different products (search false positives)
+  "different product": -50
 
-# --- Wymagane słowa (opcjonalne) ---
-# Minimum JEDNO z tych słów musi wystąpić w ofercie.
-# Jeśli żadne nie matchuje → oferta odrzucona (hard reject).
-# Obsługuje regex: "r/\\bwymagane\\b/"
-# Przydatne gdy szukasz konkretnej pojemności, rozmiaru itp.
+# --- Required words (optional) ---
+# At least ONE of these words must appear in the offer.
+# If none match -> offer rejected (hard reject).
+# Supports regex: "r/\\brequired\\b/"
+# Useful when searching for a specific capacity, size, etc.
 required_any:
-  - "wymagane_slowo1"
-  - "wymagane_slowo2"
+  - "required_word1"
+  - "required_word2"
 
-# --- Wykluczone słowa (opcjonalne) ---
-# Jeśli KTÓREKOLWIEK z tych słów wystąpi → oferta odrzucona (hard reject).
-# Obsługuje regex: "r/\\bspam\\w*/".
-# Przydatne do odsiewania niechcianych kategorii.
+# --- Excluded words (optional) ---
+# If ANY of these words appears -> offer rejected (hard reject).
+# Supports regex: "r/\\bspam\\w*/".
+# Useful for filtering out unwanted categories.
 excluded_words:
   - "spam"
-  - "niechciana_kategoria"
+  - "unwanted_category"
 
-# --- Progi scoringu ---
-# Minimalny score aby oferta pojawiła się jako alert
+# --- Scoring thresholds ---
+# Minimum score for the offer to appear as an alert
 score_threshold: 50
-# Score od którego oferta jest oznaczona jako "gorąca perełka" 🔥🔥🔥
+# Score at which the offer is marked as "top deal" 🔥🔥🔥
 score_threshold_alert: 80
 
-# --- Custom filtr (opcjonalne) ---
-# Jeśli bazowy scoring nie wystarcza, możesz podpiąć własny filtr.
-# Filtr musi dziedziczyć po BaseFilter i być zarejestrowany w filters/__init__.py.
-# Format: "nazwa_pliku.NazwaKlasy" (plik w katalogu filters/)
+# --- Custom filter (optional) ---
+# If the base scoring isn't enough, you can attach a custom filter.
+# The filter must inherit from BaseFilter and be registered in filters/__init__.py.
+# Format: "filename.ClassName" (file in the filters/ directory)
 # custom_filter: "bike_filter.BikeFilter"
 
-# --- Custom data (opcjonalne) ---
-# Dowolne dane przekazywane do custom filtra przez self.profile["custom_data"].
-# Struktura zależy od Twojego filtra — to jest tylko przykład.
+# --- Custom data (optional) ---
+# Arbitrary data passed to the custom filter via self.profile["custom_data"].
+# Structure depends on your filter — this is just an example.
 # custom_data:
 #   preferred_sizes: ["L", "XL"]
 #   excluded_colors:
-#     - "biały"
-#     - "żółty"
+#     - "white"
+#     - "yellow"
 #   extra_config:
 #     strict_mode: true
 
-# --- Powiadomienia Telegram ---
-# topic_id — ID wątku w grupie Telegram (jeśli grupa ma wątki/tematy).
-#   Znajdziesz go w URL wątku: t.me/c/GRUPAID/TOPICID
-# max_alerts — max liczba alertów wysyłanych w jednym uruchomieniu.
-#   Chroni przed zalewem wiadomości gdy jest dużo wyników.
+# --- Telegram notifications ---
+# topic_id — thread ID in a Telegram group (if the group has threads/topics).
+#   Find it in the thread URL: t.me/c/GROUPID/TOPICID
+# max_alerts — max number of alerts sent per run.
+#   Protects against message floods when there are many results.
 telegram:
   topic_id: 31
   max_alerts: 5
 
-# --- Powiadomienia Notion (opcjonalne) ---
-# Ustaw null aby wyłączyć Notion.
-# Aby włączyć → podaj database_id bazy Notion do której trafiają oferty.
-# Wymaga skonfigurowania NOTION_API_KEY_PATH w .env
+# --- Notion notifications (optional) ---
+# Set to null to disable Notion.
+# To enable -> provide the database_id of your Notion database.
+# Requires NOTION_API_KEY_PATH configured in .env
 #
-# categories — mapowanie kategorii na słowa kluczowe (opcjonalne).
-# Jeśli nie podano → nazwa profilu jest używana jako kategoria.
+# categories — maps category names to keywords (optional).
+# If not provided -> profile name is used as the category.
 notion: null
 # notion:
-#   database_id: "twoj-notion-database-id"
+#   database_id: "your-notion-database-id"
 #   categories:
-#     "elektronika": ["laptop", "telefon", "tablet", "smartwatch"]
-#     "audio": ["słuchawki", "głośnik", "soundbar", "dac"]
-#     "akcesoria": ["etui", "ładowarka", "kabel", "adapter"]
+#     "electronics": ["laptop", "phone", "tablet", "smartwatch"]
+#     "audio": ["headphones", "speaker", "soundbar", "dac"]
+#     "accessories": ["case", "charger", "cable", "adapter"]
 
-# --- Śledzenie cen (automatyczne) ---
-# Deal Hunter automatycznie śledzi zmiany cen. Jeśli oferta pojawi się ponownie
-# z niższą ceną (spadek >10% lub >50 PLN), alert zawiera informację o spadku.
-# Nie wymaga konfiguracji — działa out of the box.
+# --- Price tracking (automatic) ---
+# Deal Hunter automatically tracks price changes. If an offer reappears
+# with a lower price (>10% drop or >50 PLN), the alert includes price drop info.
+# No configuration needed — works out of the box.

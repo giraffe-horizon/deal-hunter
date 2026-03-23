@@ -1,10 +1,11 @@
-"""Pepper.pl source — migrated from bike_monitor.py with full Vue3 + HTML fallback."""
+"""Pepper.pl source — scrapes deals with Vue3 JSON + HTML fallback."""
 
 import json
 import re
 import logging
 from datetime import datetime, timedelta
 from urllib.parse import urljoin
+
 from bs4 import BeautifulSoup
 
 from .base import Source, Deal
@@ -20,15 +21,15 @@ class PepperSource(Source):
     def fetch_deals(self, config: dict) -> list[Deal]:
         """Fetch deals from configured Pepper URLs.
 
-        Config keys:
-            urls: list[str] — Pepper URLs to scrape
+        Args:
+            config: Profile source config with 'urls' key.
         """
-        urls = config.get("urls", [])
+        urls: list[str] = config.get("urls", [])
         if not urls:
             logger.warning("Pepper: no URLs configured")
             return []
 
-        all_deals = []
+        all_deals: list[Deal] = []
         for url in urls:
             html = self._fetch_page(url)
             if html:
@@ -43,7 +44,7 @@ class PepperSource(Source):
     def _parse_deals(self, html: str, base_url: str = "https://www.pepper.pl") -> list[Deal]:
         """Parse deals from Pepper HTML."""
         soup = BeautifulSoup(html, 'html.parser')
-        deals = []
+        deals: list[Deal] = []
         articles = soup.find_all('article', class_=re.compile(r'thread'))
 
         for art in articles:
@@ -66,7 +67,7 @@ class PepperSource(Source):
             link = f"https://www.pepper.pl/promocje/{slug}-{tid}" if slug and tid else ""
 
             # Filter expired deals
-            if thread.get('isExpired') or thread.get('status') in ('expired', 'wygasła', 'hidden'):
+            if thread.get('isExpired') or thread.get('status') in ('expired', 'wygas\u0142a', 'hidden'):
                 return None
 
             price = 0
@@ -115,7 +116,7 @@ class PepperSource(Source):
             return None
 
     def _parse_html(self, art, base_url: str) -> Deal | None:
-        """Fallback — parse from HTML tags."""
+        """Fallback — parse deal from HTML tags."""
         art_classes = ' '.join(art.get('class', []))
         if re.search(r'thread--expired|thread--hide|expired', art_classes):
             return None
@@ -181,7 +182,7 @@ class PepperSource(Source):
 
 
 def _extract_price(text: str) -> int:
-    """Extract price from text."""
+    """Extract integer price from text."""
     text = text.replace('\xa0', '').replace(' ', '')
     m = re.search(r'([\d\s]+)[,.]?\d{0,2}', text.replace(' ', ''))
     if m:

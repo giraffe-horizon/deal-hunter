@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deal-hunter"
+version = "1.0.0"
+description = "Universal multi-source deal monitor with YAML profiles, scoring engine, and Telegram/Notion alerts"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.12"
+authors = [
+    {name = "giraffe-horizon"},
+]
+keywords = ["deals", "monitor", "scraper", "telegram", "price-tracker"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+
+dependencies = [
+    "requests",
+    "beautifulsoup4",
+    "pyyaml",
+    "python-dotenv",
+]
+
+[project.scripts]
+deal-hunter = "deal_hunter:main"
+
+[project.urls]
+Homepage = "https://github.com/giraffe-horizon/deal-hunter"
+Repository = "https://github.com/giraffe-horizon/deal-hunter"
+Issues = "https://github.com/giraffe-horizon/deal-hunter/issues"

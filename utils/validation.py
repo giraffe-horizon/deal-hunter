@@ -9,15 +9,14 @@ REQUIRED_FIELDS = ["name", "sources", "budget", "score_threshold", "telegram"]
 
 def validate_profile(profile: dict) -> list[str]:
     """Validate a profile dict. Returns list of error strings (empty = valid)."""
-    errors = []
+    errors: list[str] = []
 
     # Required fields
-    for field in REQUIRED_FIELDS:
-        if field not in profile:
-            errors.append(f"Missing required field: '{field}'")
+    for field_name in REQUIRED_FIELDS:
+        if field_name not in profile:
+            errors.append(f"Missing required field: '{field_name}'")
 
     if errors:
-        # If required fields missing, skip deeper checks
         return errors
 
     # Type checks

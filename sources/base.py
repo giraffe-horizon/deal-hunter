@@ -1,9 +1,10 @@
 """Base classes for deal sources."""
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-import time
 import logging
+import time
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -21,11 +22,13 @@ MIN_REQUEST_INTERVAL = 2.0
 
 @dataclass
 class Deal:
+    """Normalized deal from any source."""
+
     id: str            # unique: f"{source}:{native_id}"
     title: str
     price: int         # in PLN, 0 if unknown
     link: str
-    source: str        # "pepper", "ceneo", "proshop"
+    source: str        # "pepper", "ceneo", "proshop", "web"
     description: str
     temperature: int   # Pepper only, rest 0
     image_url: str
@@ -35,10 +38,10 @@ class Deal:
 class Source(ABC):
     """Base class for deal sources with rate limiting and retry."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._last_request_time = 0.0
 
-    def _rate_limit(self):
+    def _rate_limit(self) -> None:
         """Enforce minimum interval between requests."""
         elapsed = time.time() - self._last_request_time
         if elapsed < MIN_REQUEST_INTERVAL:

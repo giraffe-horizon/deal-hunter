@@ -1,10 +1,11 @@
 """Notion notifier — saves deals to Notion database."""
 
-import re
 import os
+import re
 import logging
-import requests
 from datetime import datetime
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ NOTION_API_URL = "https://api.notion.com/v1/pages"
 class NotionNotifier:
     """Saves deals to a Notion database."""
 
-    def __init__(self, api_key_path: str):
+    def __init__(self, api_key_path: str) -> None:
         self.api_key = self._load_key(api_key_path)
 
     @staticmethod
@@ -29,8 +30,8 @@ class NotionNotifier:
             logger.error(f"Notion: cannot read key from {expanded}: {e}")
             return None
 
-    def save_deal(self, deal, score: int, plus: list, database_id: str,
-                  profile_name: str = "", profile: dict | None = None):
+    def save_deal(self, deal, score: int, plus: list[str], database_id: str,
+                  profile_name: str = "", profile: dict | None = None) -> None:
         """Save a deal to Notion. Errors are logged but don't crash."""
         if not self.api_key:
             logger.warning("Notion: no API key, skipping")
@@ -43,7 +44,6 @@ class NotionNotifier:
         today = datetime.now().strftime("%Y-%m-%d")
         notes = ", ".join(plus[:3]) if plus else ""
 
-        # Source name mapping
         source_names = {
             "pepper": "Pepper.pl",
             "ceneo": "Ceneo.pl",
@@ -51,14 +51,15 @@ class NotionNotifier:
         }
         source_display = source_names.get(deal.source, deal.source)
 
-        properties = {
+        # Property names match the Notion database schema (Polish column names)
+        properties: dict = {
             "Nazwa": {
                 "title": [{"text": {"content": deal.title[:2000]}}]
             },
             "Status": {
-                "select": {"name": "🔥 Aktywna"}
+                "select": {"name": "\U0001f525 Aktywna"}
             },
-            "Źródło": {
+            "\u0179r\u00f3d\u0142o": {
                 "select": {"name": source_display}
             },
             "Kategoria": {
@@ -113,16 +114,16 @@ class NotionNotifier:
     def _detect_category(deal, profile: dict | None = None,
                          profile_name: str = "") -> str:
         """Detect product category from title and description using profile categories."""
-        categories = {}
+        categories: dict = {}
         if profile:
-            categories = profile.get("notion", {}).get("categories", {}) if isinstance(profile.get("notion"), dict) else {}
+            notion_cfg = profile.get("notion")
+            categories = notion_cfg.get("categories", {}) if isinstance(notion_cfg, dict) else {}
 
-        # If no categories defined in profile, use profile_name as category
         if not categories:
-            return profile_name if profile_name else "inne"
+            return profile_name if profile_name else "other"
 
         text = (deal.title + " " + deal.description).lower()
         for category, keywords in categories.items():
             if any(kw.lower() in text for kw in keywords):
                 return category
-        return profile_name if profile_name else "inne"
+        return profile_name if profile_name else "other"
