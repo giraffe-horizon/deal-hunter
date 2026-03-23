@@ -39,7 +39,13 @@ class TelegramNotifier:
 
         msg = f"<b>{safe_tier}</b> (score: {score})\n"
         msg += f"{emoji} <b>{safe_title}</b>\n"
-        msg += f"\U0001f4b0 Cena: <b>{html.escape(price_str)}</b>\n\n"
+
+        if deal.regular_price > 0 and deal.price > 0:
+            regular_str = f"{deal.regular_price:,} {currency}".replace(",", " ")
+            discount = round((deal.regular_price - deal.price) / deal.regular_price * 100)
+            msg += f"\U0001f4b0 Cena: <b>{html.escape(price_str)}</b> <s>{html.escape(regular_str)}</s> (-{discount}%)\n\n"
+        else:
+            msg += f"\U0001f4b0 Cena: <b>{html.escape(price_str)}</b>\n\n"
 
         plus_with_warning = list(plus)
         if size_warning:

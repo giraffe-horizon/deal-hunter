@@ -129,6 +129,14 @@ class CeneoSource(Source):
             if not title or not link:
                 return None
 
+            # Regular/old price (strikethrough)
+            regular_price = 0
+            old_price_tag = prod.find(class_=re.compile(
+                r"price-old|price-format--old|old-price|text-line-through"
+            ))
+            if old_price_tag:
+                regular_price = self._extract_price(old_price_tag.get_text())
+
             return Deal(
                 id=f"ceneo:{native_id}",
                 title=title,
@@ -139,6 +147,7 @@ class CeneoSource(Source):
                 temperature=0,
                 image_url=image_url,
                 published_at="",
+                regular_price=regular_price,
             )
         except Exception as e:
             logger.debug(f"Ceneo parse error: {e}")
@@ -179,6 +188,14 @@ class CeneoSource(Source):
             if not title:
                 return None
 
+            # Regular/old price (strikethrough)
+            regular_price = 0
+            old_price_tag = card.find(class_=re.compile(
+                r"price-old|price-format--old|old-price|text-line-through"
+            ))
+            if old_price_tag:
+                regular_price = self._extract_price(old_price_tag.get_text())
+
             return Deal(
                 id=f"ceneo:{native_id}",
                 title=title,
@@ -189,6 +206,7 @@ class CeneoSource(Source):
                 temperature=0,
                 image_url=image_url,
                 published_at="",
+                regular_price=regular_price,
             )
         except Exception as e:
             logger.debug(f"Ceneo card parse error: {e}")

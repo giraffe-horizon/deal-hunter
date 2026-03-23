@@ -82,6 +82,26 @@ class PepperSource(Source):
                 else:
                     price = _extract_price(str(price_obj))
 
+            # Regular/next best price
+            regular_price = 0
+            for key in ("nextBestPrice", "regularPrice", "originalPrice"):
+                rp = thread.get(key)
+                if rp:
+                    if isinstance(rp, dict):
+                        regular_price = int(float(rp.get("amount", 0)))
+                    else:
+                        regular_price = _extract_price(str(rp))
+                    if regular_price > 0:
+                        break
+            if regular_price == 0:
+                merchant = thread.get("merchant")
+                if isinstance(merchant, dict) and merchant.get("price"):
+                    mp = merchant["price"]
+                    if isinstance(mp, dict):
+                        regular_price = int(float(mp.get("amount", 0)))
+                    else:
+                        regular_price = _extract_price(str(mp))
+
             desc = thread.get("description", "")
             temperature = thread.get("temperature", 0)
 
@@ -114,6 +134,7 @@ class PepperSource(Source):
                 temperature=temperature,
                 image_url=image_url,
                 published_at=published_at if published_at else "",
+                regular_price=regular_price,
             )
         except Exception as e:
             logger.debug(f"Pepper Vue3 parse error: {e}")
@@ -138,6 +159,14 @@ class PepperSource(Source):
         price_tag = art.find("span", class_=re.compile(r"thread-price"))
         if price_tag:
             price = _extract_price(price_tag.get_text())
+
+        # Regular price from strikethrough/muted text
+        regular_price = 0
+        old_price_tag = art.find(
+            "span", class_=re.compile(r"mute--text|text--lineThrough|overflow--fade")
+        )
+        if old_price_tag:
+            regular_price = _extract_price(old_price_tag.get_text())
 
         desc = ""
         desc_tag = art.find("div", class_=re.compile(r"description|excerpt"))
@@ -182,6 +211,7 @@ class PepperSource(Source):
             temperature=temp,
             image_url=image_url,
             published_at=published_at,
+            regular_price=regular_price,
         )
 
 

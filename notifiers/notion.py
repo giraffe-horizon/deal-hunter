@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 NOTION_VERSION = "2025-09-03"
 NOTION_API_URL = "https://api.notion.com/v1/pages"
+NOTION_DB_QUERY_URL = "https://api.notion.com/v1/databases"
 
 
 class NotionNotifier:
@@ -47,6 +48,11 @@ class NotionNotifier:
         if not database_id:
             return
 
+        # Deduplication: check if deal with same Link already exists
+        if deal.link and self._deal_exists(database_id, deal.link):
+            logger.info(f"Notion: skipping duplicate '{deal.title[:60]}'")
+            return
+
         category = self._detect_category(deal, profile=profile, profile_name=profile_name)
         today = datetime.now().strftime("%Y-%m-%d")
         notes = ", ".join(plus[:3]) if plus else ""
@@ -75,13 +81,22 @@ class NotionNotifier:
         if deal.link:
             properties["Link"] = {"url": deal.link}
 
-        # Detect discount
-        text = (deal.title + " " + deal.description).lower()
-        discount_match = re.search(r"(-?\d+)\s*%", text)
-        if discount_match:
-            properties["Rabat"] = {
-                "rich_text": [{"text": {"content": f"{discount_match.group(1)}%"}}]
-            }
+        # Regular price and computed discount
+        if deal.regular_price > 0:
+            properties["Cena regularna"] = {"number": deal.regular_price}
+            if deal.price > 0:
+                discount = round((deal.regular_price - deal.price) / deal.regular_price * 100)
+                properties["Rabat"] = {
+                    "rich_text": [{"text": {"content": f"-{discount}%"}}]
+                }
+        else:
+            # Fallback: detect discount from text
+            text = (deal.title + " " + deal.description).lower()
+            discount_match = re.search(r"(-?\d+)\s*%", text)
+            if discount_match:
+                properties["Rabat"] = {
+                    "rich_text": [{"text": {"content": f"{discount_match.group(1)}%"}}]
+                }
 
         payload = {
             "parent": {"database_id": database_id},
@@ -104,6 +119,32 @@ class NotionNotifier:
                 )
         except Exception as e:
             logger.error(f"Notion: exception saving '{deal.title[:60]}': {e}")
+
+    def _deal_exists(self, database_id: str, link: str) -> bool:
+        """Check if a deal with the same Link URL already exists in Notion."""
+        url = f"{NOTION_DB_QUERY_URL}/{database_id}/query"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Notion-Version": NOTION_VERSION,
+        }
+        payload = {
+            "filter": {
+                "property": "Link",
+                "url": {"equals": link},
+            },
+            "page_size": 1,
+        }
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=15)
+            if resp.status_code == 200:
+                results = resp.json().get("results", [])
+                return len(results) > 0
+            else:
+                logger.warning(f"Notion: dedup query failed HTTP {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"Notion: dedup query exception: {e}")
+        return False
 
     @staticmethod
     def _detect_category(deal, profile: dict | None = None, profile_name: str = "") -> str:
