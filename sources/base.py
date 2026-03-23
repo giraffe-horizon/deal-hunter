@@ -33,6 +33,7 @@ class Deal:
     temperature: int  # Pepper only, rest 0
     image_url: str
     published_at: str  # ISO datetime or ""
+    regular_price: int = 0  # original/regular price before discount
 
 
 class Source(ABC):
