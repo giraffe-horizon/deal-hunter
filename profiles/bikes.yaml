@@ -1,0 +1,215 @@
+name: bikes
+emoji: "🚲"
+
+sources:
+  pepper:
+    urls:
+      - "https://www.pepper.pl/grupa/rowery"
+      - "https://www.pepper.pl/grupa/rowery?page=2"
+      - "https://www.pepper.pl/grupa/rowery?page=3"
+      - "https://www.pepper.pl/search?q=rower+endurance"
+      - "https://www.pepper.pl/search?q=rower+szosowy+carbon"
+      - "https://www.pepper.pl/search?q=canyon+endurace"
+      - "https://www.pepper.pl/search?q=giant+defy"
+      - "https://www.pepper.pl/search?q=trek+domane"
+      - "https://www.pepper.pl/search?q=rower+di2+axs"
+
+budget:
+  min: 10000
+  max: 15000
+
+score_rules:
+  # === RAMA KARBONOWA — must-have ===
+  carbon: 35
+  karbon: 35
+  karbonowa: 35
+  węglowa: 35
+
+  # === ELEKTRONIKA BEZPRZEWODOWA — priorytet #1 ===
+  di2: 40
+  axs: 40
+  etap: 40
+  e-tap: 40
+  elektroniczn: 30
+  wireless: 30
+  bezprzewodow: 30
+
+  # === ENDURANCE — to jest target ===
+  endurance: 50
+
+  # === GRAVEL — dobry ale mniej niż endurance ===
+  gravel: 25
+  all-road: 20
+  allroad: 20
+
+  # Touring/adventure
+  touring: 10
+  adventure: 15
+  comfort: 15
+
+  # === TECHNOLOGIE KOMFORTU ===
+  isospeed: 30
+  "future shock": 30
+  "future-shock": 30
+  d-fuse: 25
+  vcls: 20
+  kingpin: 20
+  microtravel: 20
+  zertz: 15
+  save: 15
+  "leaf spring": 15
+  flexstay: 15
+  compliance: 15
+  "vibration damp": 15
+
+  # Mocowania
+  bikepacking: 10
+  "rack mount": 5
+  fender: 5
+
+  # === GRUPY NAPĘDOWE ===
+  dura-ace: 25
+  "dura ace": 25
+  ultegra: 20
+  force: 20
+  red: 5
+  rival: 15
+  chorus: 15
+  record: 15
+  "super record": 25
+  "105": 5
+  grx: 15
+
+  # === HAMULCE TARCZOWE ===
+  disc: 15
+  tarczow: 15
+  hydrauliczn: 15
+
+  # Opony
+  tubeless: 10
+
+  # === MODELE ENDURANCE — NAJWYŻSZY PRIORYTET ===
+  domane: 45
+  roubaix: 45
+  endurace: 45
+  defy: 40
+  synapse: 40
+  roadmachine: 40
+  paralane: 35
+  infinito: 35
+  "scultura endurance": 35
+
+  # === MODELE GRAVEL ===
+  grail: 25
+  checkpoint: 25
+  diverge: 25
+  topstone: 20
+  grizl: 20
+  revolt: 20
+  silex: 20
+  aspero: 20
+  crosshill: 20
+  atlas: 15
+  warbird: 20
+  terra: 15
+
+  # === MODELE OK ===
+  addict: 5
+  speedster: 10
+  ux: 15
+
+penalties:
+  # Modele wyścigowe/aero
+  tcr: -50
+  propel: -60
+  tarmac: -50
+  venge: -60
+  allez: -40
+  ultimate: -30
+  aeroad: -60
+  madone: -50
+  emonda: -40
+  "orca aero": -50
+  "supersix evo": -50
+  systemsix: -60
+  "addict rc": -50
+  foil: -60
+  teammachine: -50
+  timemachine: -60
+  reacto: -60
+  noah: -50
+  fenix: -10
+  oltre: -40
+  specialissima: -40
+  filante: -40
+  "zero slr": -40
+  helium: -30
+  revelator: -15
+
+score_threshold: 70
+score_threshold_alert: 120
+
+custom_filter: "bike_filter.BikeFilter"
+
+custom_data:
+  brand_sizes:
+    trek: ["l", "60", "61"]
+    specialized: ["58", "61", "xl"]
+    canyon: ["xl", "2xl"]
+    giant: ["xl", "ml"]
+    scott: ["xl", "58", "61"]
+    cannondale: ["58", "61", "xl"]
+    bmc: ["58", "61", "xl"]
+    ridley: ["l", "xl"]
+    focus: ["xl", "l"]
+    cervelo: ["58", "61", "xl"]
+    felt: ["58", "61"]
+    orbea: ["60", "61", "xl"]
+    bianchi: ["59", "61", "xl"]
+    merida: ["xl", "59", "l"]
+    cube: ["62", "xl"]
+    wilier: ["xl", "l"]
+    colnago: ["58s", "60s", "xl"]
+    pinarello: ["59", "60", "62"]
+    lapierre: ["xl", "l", "59"]
+    rose: ["xl", "60", "62"]
+    "3t": ["xl", "l"]
+
+  generic_good_sizes: ["l", "xl", "xxl", "2xl", "58", "59", "60", "61", "62"]
+
+  excluded_colors:
+    - "biały"
+    - "white"
+    - "srebrny"
+    - "silver"
+    - "szary"
+    - "grey"
+    - "gray"
+    - "neon"
+    - "żółty"
+    - "yellow"
+    - "pomarańczowy"
+    - "orange"
+    - "jaskrawy"
+    - "fluorescencyjny"
+    - "pink"
+    - "różowy"
+
+  race_keywords:
+    - "aero"
+    - "race"
+    - "wyścig"
+    - "sprint"
+    - "crit"
+    - "criterium"
+    - "stiffness"
+    - "sztywn"
+    - "agresywn"
+    - "low stack"
+
+telegram:
+  topic_id: 31
+  max_alerts: 5
+
+notion:
+  database_id: "5bbbab00-a2ac-4d5a-946e-7597a14e6622"

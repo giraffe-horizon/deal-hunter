@@ -1,0 +1,74 @@
+name: nas_hdd
+emoji: "💾"
+
+sources:
+  pepper:
+    urls:
+      - "https://www.pepper.pl/search?q=dysk+12tb+nas"
+      - "https://www.pepper.pl/search?q=ironwolf+12tb"
+      - "https://www.pepper.pl/search?q=hdd+12tb"
+      - "https://www.pepper.pl/search?q=ultrastar+12tb"
+  ceneo:
+    queries:
+      - "dysk HDD 12TB NAS"
+      - "Seagate IronWolf 12TB"
+      - "WD Red Plus 12TB"
+  proshop:
+    queries:
+      - "HDD 12TB NAS"
+      - "IronWolf 12TB"
+
+budget:
+  min: 400
+  max: 900
+
+score_rules:
+  ironwolf: 45
+  "ironwolf pro": 55
+  exos: 50
+  ultrastar: 50
+  "red plus": 40
+  "red pro": 45
+  cmr: 30
+  nas: 25
+  7200rpm: 15
+  helium: 20
+  12tb: 20
+  "12 tb": 20
+  "gwarancja 5": 15
+  "gwarancja 3": 10
+  nowy: 10
+
+penalties:
+  smr: -50
+  refurbished: -30
+  odnowiony: -30
+  używany: -25
+  oem: -10
+  barracuda: -20
+  blue: -15
+  "toshiba p300": -20
+  8tb: -40
+  4tb: -40
+  2tb: -40
+  ssd: -60
+  nvme: -60
+  pendrive: -50
+  "m.2": -50
+  zewnętrzny: -40
+  przenośny: -40
+
+required_any:
+  - "12tb"
+  - "12 tb"
+  - "12000"
+  - "12 000"
+
+score_threshold: 50
+score_threshold_alert: 80
+
+telegram:
+  topic_id: 31
+  max_alerts: 5
+
+notion: null
