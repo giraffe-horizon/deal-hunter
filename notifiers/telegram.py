@@ -1,5 +1,6 @@
 """Telegram notifier with retry and rate limiting."""
 
+import html
 import logging
 import time
 
@@ -33,20 +34,27 @@ class TelegramNotifier:
             f"{deal.price:,} {currency}".replace(",", " ") if deal.price > 0 else "brak ceny"
         )
 
-        msg = f"*{tier}* (score: {score})\n"
-        msg += f"{emoji} *{deal.title}*\n"
-        msg += f"\U0001f4b0 Cena: *{price_str}*\n\n"
+        safe_title = html.escape(deal.title)
+        safe_tier = html.escape(tier)
+
+        msg = f"<b>{safe_tier}</b> (score: {score})\n"
+        msg += f"{emoji} <b>{safe_title}</b>\n"
+        msg += f"\U0001f4b0 Cena: <b>{html.escape(price_str)}</b>\n\n"
 
         plus_with_warning = list(plus)
         if size_warning:
             plus_with_warning.append(size_warning)
 
         if plus_with_warning:
-            msg += f"\u2705 {', '.join(plus_with_warning[:6])}\n"
+            safe_plus = [html.escape(p) for p in plus_with_warning[:6]]
+            msg += f"\u2705 {', '.join(safe_plus)}\n"
         if minus:
-            msg += f"\u26a0\ufe0f {', '.join(minus[:4])}\n"
+            safe_minus = [html.escape(m) for m in minus[:4]]
+            msg += f"\u26a0\ufe0f {', '.join(safe_minus)}\n"
 
-        msg += f"\n\U0001f517 [LINK DO OKAZJI]({deal.link}) | \u0179r\u00f3d\u0142o: {deal.source}"
+        safe_link = html.escape(deal.link)
+        safe_source = html.escape(deal.source)
+        msg += f'\n\U0001f517 <a href="{safe_link}">LINK DO OKAZJI</a> | \u0179r\u00f3d\u0142o: {safe_source}'
 
         self._send_message(msg, topic_id=topic_id)
 
@@ -70,9 +78,12 @@ class TelegramNotifier:
                 f"{deal.price:,} {currency}".replace(",", " ") if deal.price > 0 else "brak ceny"
             )
 
-            msg += f"{i}. *{deal.title[:80]}*\n"
-            msg += f"   \U0001f4b0 {price_str} | Score: {score}\n"
-            msg += f"   \U0001f517 [Link]({deal.link}) | {deal.source}\n\n"
+            safe_title = html.escape(deal.title[:80])
+            safe_link = html.escape(deal.link)
+            safe_source = html.escape(deal.source)
+            msg += f"{i}. <b>{safe_title}</b>\n"
+            msg += f"   \U0001f4b0 {html.escape(price_str)} | Score: {score}\n"
+            msg += f'   \U0001f517 <a href="{safe_link}">Link</a> | {safe_source}\n\n'
 
             if len(msg) > 3500:
                 msg += f"... i {len(remaining_alerts) - i} wi\u0119cej ofert"
@@ -87,7 +98,7 @@ class TelegramNotifier:
         payload = {
             "chat_id": self.chat_id,
             "text": text,
-            "parse_mode": "Markdown",
+            "parse_mode": "HTML",
             "disable_web_page_preview": disable_preview,
         }
         if topic_id:

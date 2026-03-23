@@ -54,13 +54,16 @@ class ProshopSource(Source):
         deals: list[Deal] = []
 
         # Try different product listing selectors
-        products = soup.find_all("div", id=re.compile(r"product_\d+"))
+        products = soup.select(
+            "[data-product-id], .product-list__item, #products .product, "
+            ".product-list .product-item"
+        )
+        if not products:
+            products = soup.find_all("div", id=re.compile(r"product_\d+"))
         if not products:
             products = soup.find_all("li", class_=re.compile(r"product"))
         if not products:
-            products = soup.select(
-                "#products .product, .product-list .product-item, [data-product-id]"
-            )
+            products = soup.find_all("div", class_=re.compile(r"product"))
 
         for prod in products:
             deal = self._parse_product(prod, query)
@@ -95,9 +98,14 @@ class ProshopSource(Source):
             href = title_tag.get("href", "")
             link = href if href.startswith("http") else f"{self.BASE_URL}{href}" if href else ""
 
-            # Price
+            # Price — Proshop uses 'site-currency-lg', 'site-currency-attention', etc.
             price = 0
-            price_tag = prod.find(class_=re.compile(r"site-currency-lg|product-price|price"))
+            price_tag = prod.find(class_=re.compile(
+                r"site-currency-lg|site-currency-attention|site-currency-sm|"
+                r"product-price|price-value"
+            ))
+            if not price_tag:
+                price_tag = prod.find(class_=re.compile(r"price|currency"))
             if not price_tag:
                 price_tag = prod.find("span", class_=re.compile(r"price"))
             if price_tag:

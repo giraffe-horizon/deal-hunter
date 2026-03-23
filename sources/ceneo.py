@@ -53,8 +53,12 @@ class CeneoSource(Source):
         soup = BeautifulSoup(html, "html.parser")
         deals: list[Deal] = []
 
-        # Ceneo product listing items
-        products = soup.find_all("div", class_=re.compile(r"cat-prod-row|product-row"))
+        # Ceneo product listing items — try multiple selectors
+        products = soup.select(
+            ".cat-prod-row, .cat-prod-row__content, [data-pid], .product-row"
+        )
+        if not products:
+            products = soup.find_all("div", class_=re.compile(r"cat-prod-row|product-row"))
         if not products:
             products = soup.find_all("li", class_=re.compile(r"cat-prod"))
         if not products:
@@ -92,11 +96,17 @@ class CeneoSource(Source):
             href = title_tag.get("href", "")
             link = href if href.startswith("http") else f"{self.BASE_URL}{href}" if href else ""
 
-            # Price
+            # Price — Ceneo uses 'price-format nowrap', 'box-vert__price', etc.
             price = 0
-            price_tag = prod.find("span", class_=re.compile(r"price|value"))
+            price_tag = prod.find(class_=re.compile(
+                r"price-format|box-vert__price|product-price|price-value"
+            ))
+            if not price_tag:
+                price_tag = prod.find("span", class_=re.compile(r"price|value"))
             if not price_tag:
                 price_tag = prod.find("div", class_=re.compile(r"price"))
+            if not price_tag:
+                price_tag = prod.find(class_=re.compile(r"price"))
             if price_tag:
                 price = self._extract_price(price_tag.get_text())
 
@@ -147,7 +157,11 @@ class CeneoSource(Source):
             link = href if href.startswith("http") else f"{self.BASE_URL}{href}" if href else ""
 
             price = 0
-            price_el = card.find(class_=re.compile(r"price|value"))
+            price_el = card.find(class_=re.compile(
+                r"price-format|box-vert__price|product-price|price-value"
+            ))
+            if not price_el:
+                price_el = card.find(class_=re.compile(r"price|value"))
             if price_el:
                 price = self._extract_price(price_el.get_text())
 
