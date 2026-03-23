@@ -54,9 +54,7 @@ class CeneoSource(Source):
         deals: list[Deal] = []
 
         # Ceneo product listing items — try multiple selectors
-        products = soup.select(
-            ".cat-prod-row, .cat-prod-row__content, [data-pid], .product-row"
-        )
+        products = soup.select(".cat-prod-row, .cat-prod-row__content, [data-pid], .product-row")
         if not products:
             products = soup.find_all("div", class_=re.compile(r"cat-prod-row|product-row"))
         if not products:
@@ -98,9 +96,9 @@ class CeneoSource(Source):
 
             # Price — Ceneo uses 'price-format nowrap', 'box-vert__price', etc.
             price = 0
-            price_tag = prod.find(class_=re.compile(
-                r"price-format|box-vert__price|product-price|price-value"
-            ))
+            price_tag = prod.find(
+                class_=re.compile(r"price-format|box-vert__price|product-price|price-value")
+            )
             if not price_tag:
                 price_tag = prod.find("span", class_=re.compile(r"price|value"))
             if not price_tag:
@@ -131,9 +129,9 @@ class CeneoSource(Source):
 
             # Regular/old price (strikethrough)
             regular_price = 0
-            old_price_tag = prod.find(class_=re.compile(
-                r"price-old|price-format--old|old-price|text-line-through"
-            ))
+            old_price_tag = prod.find(
+                class_=re.compile(r"price-old|price-format--old|old-price|text-line-through")
+            )
             if old_price_tag:
                 regular_price = self._extract_price(old_price_tag.get_text())
 
@@ -166,9 +164,9 @@ class CeneoSource(Source):
             link = href if href.startswith("http") else f"{self.BASE_URL}{href}" if href else ""
 
             price = 0
-            price_el = card.find(class_=re.compile(
-                r"price-format|box-vert__price|product-price|price-value"
-            ))
+            price_el = card.find(
+                class_=re.compile(r"price-format|box-vert__price|product-price|price-value")
+            )
             if not price_el:
                 price_el = card.find(class_=re.compile(r"price|value"))
             if price_el:
@@ -190,9 +188,9 @@ class CeneoSource(Source):
 
             # Regular/old price (strikethrough)
             regular_price = 0
-            old_price_tag = card.find(class_=re.compile(
-                r"price-old|price-format--old|old-price|text-line-through"
-            ))
+            old_price_tag = card.find(
+                class_=re.compile(r"price-old|price-format--old|old-price|text-line-through")
+            )
             if old_price_tag:
                 regular_price = self._extract_price(old_price_tag.get_text())
 

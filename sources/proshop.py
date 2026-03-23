@@ -100,10 +100,12 @@ class ProshopSource(Source):
 
             # Price — Proshop uses 'site-currency-lg', 'site-currency-attention', etc.
             price = 0
-            price_tag = prod.find(class_=re.compile(
-                r"site-currency-lg|site-currency-attention|site-currency-sm|"
-                r"product-price|price-value"
-            ))
+            price_tag = prod.find(
+                class_=re.compile(
+                    r"site-currency-lg|site-currency-attention|site-currency-sm|"
+                    r"product-price|price-value"
+                )
+            )
             if not price_tag:
                 price_tag = prod.find(class_=re.compile(r"price|currency"))
             if not price_tag:

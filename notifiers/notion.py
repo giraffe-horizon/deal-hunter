@@ -86,9 +86,7 @@ class NotionNotifier:
             properties["Cena regularna"] = {"number": deal.regular_price}
             if deal.price > 0:
                 discount = round((deal.regular_price - deal.price) / deal.regular_price * 100)
-                properties["Rabat"] = {
-                    "rich_text": [{"text": {"content": f"-{discount}%"}}]
-                }
+                properties["Rabat"] = {"rich_text": [{"text": {"content": f"-{discount}%"}}]}
         else:
             # Fallback: detect discount from text
             text = (deal.title + " " + deal.description).lower()
