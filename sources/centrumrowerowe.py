@@ -213,7 +213,7 @@ class CentrumroweroweSource(Source):
             price = 0
             price_tag = prod.find(class_=re.compile(r"price"))
             if price_tag:
-                price = self._extract_price(price_tag.get_text())
+                price = self.extract_price(price_tag.get_text())
 
             image_url = ""
             img = prod.find("img")
@@ -239,14 +239,3 @@ class CentrumroweroweSource(Source):
             logger.debug(f"Centrumrowerowe HTML parse error: {e}")
             return None
 
-    @staticmethod
-    def _extract_price(text: str) -> int:
-        text = text.replace("\xa0", "").replace(" ", "").replace(",", ".")
-        m = re.search(r"(\d[\d\s]*(?:[.,]\d{1,2})?)", text)
-        if m:
-            digits = re.sub(r"[^\d.]", "", m.group(1))
-            try:
-                return int(float(digits))
-            except ValueError:
-                pass
-        return 0

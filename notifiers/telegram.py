@@ -118,7 +118,10 @@ class TelegramNotifier:
                     logger.info(f"Telegram: sent message ({len(text)} chars)")
                     return
                 elif resp.status_code == 429:
-                    retry_after = resp.json().get("parameters", {}).get("retry_after", 30)
+                    try:
+                        retry_after = resp.json().get("parameters", {}).get("retry_after", 30)
+                    except (ValueError, KeyError):
+                        retry_after = 30
                     logger.warning(
                         f"Telegram: rate limited, waiting {retry_after}s (attempt {attempt}/3)"
                     )

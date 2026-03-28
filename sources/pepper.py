@@ -80,7 +80,7 @@ class PepperSource(Source):
                 if isinstance(price_obj, dict):
                     price = int(float(price_obj.get("amount", 0)))
                 else:
-                    price = _extract_price(str(price_obj))
+                    price = Source.extract_price(str(price_obj))
 
             # Regular/next best price
             regular_price = 0
@@ -90,7 +90,7 @@ class PepperSource(Source):
                     if isinstance(rp, dict):
                         regular_price = int(float(rp.get("amount", 0)))
                     else:
-                        regular_price = _extract_price(str(rp))
+                        regular_price = Source.extract_price(str(rp))
                     if regular_price > 0:
                         break
             if regular_price == 0:
@@ -100,7 +100,7 @@ class PepperSource(Source):
                     if isinstance(mp, dict):
                         regular_price = int(float(mp.get("amount", 0)))
                     else:
-                        regular_price = _extract_price(str(mp))
+                        regular_price = Source.extract_price(str(mp))
 
             desc = thread.get("description", "")
             temperature = thread.get("temperature", 0)
@@ -158,7 +158,7 @@ class PepperSource(Source):
         price = 0
         price_tag = art.find("span", class_=re.compile(r"thread-price"))
         if price_tag:
-            price = _extract_price(price_tag.get_text())
+            price = Source.extract_price(price_tag.get_text())
 
         # Regular price from strikethrough/muted text
         regular_price = 0
@@ -166,7 +166,7 @@ class PepperSource(Source):
             "span", class_=re.compile(r"mute--text|text--lineThrough|overflow--fade")
         )
         if old_price_tag:
-            regular_price = _extract_price(old_price_tag.get_text())
+            regular_price = Source.extract_price(old_price_tag.get_text())
 
         desc = ""
         desc_tag = art.find("div", class_=re.compile(r"description|excerpt"))
@@ -215,12 +215,3 @@ class PepperSource(Source):
         )
 
 
-def _extract_price(text: str) -> int:
-    """Extract integer price from text."""
-    text = text.replace("\xa0", "").replace(" ", "")
-    m = re.search(r"([\d\s]+)[,.]?\d{0,2}", text.replace(" ", ""))
-    if m:
-        digits = re.sub(r"\D", "", m.group(1))
-        if digits:
-            return int(digits)
-    return 0

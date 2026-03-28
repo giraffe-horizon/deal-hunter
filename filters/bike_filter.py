@@ -90,7 +90,7 @@ class BikeFilter(BaseFilter):
 
         # Check per brand
         for brand, target_sizes in self.brand_sizes.items():
-            if brand.lower() in text:
+            if re.search(rf"\b{re.escape(brand)}\b", text, re.IGNORECASE):
                 if any(sz in [s.lower() for s in target_sizes] for sz in found_sizes):
                     return "good"
                 else:

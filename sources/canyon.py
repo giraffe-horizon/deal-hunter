@@ -177,16 +177,16 @@ class CanyonSource(Source):
                 class_=re.compile(r"productTile__productSalePrice|price.*sale|price.*current")
             )
             if sale_tag:
-                price = self._extract_price(sale_tag.get_text())
+                price = self.extract_price(sale_tag.get_text())
             old_tag = tile.find(
                 class_=re.compile(r"productTile__productOldPrice|price.*old|price.*original")
             )
             if old_tag:
-                regular_price = self._extract_price(old_tag.get_text())
+                regular_price = self.extract_price(old_tag.get_text())
             if not price:
                 price_tag = tile.find(class_=re.compile(r"price"))
                 if price_tag:
-                    price = self._extract_price(price_tag.get_text())
+                    price = self.extract_price(price_tag.get_text())
 
             image_url = ""
             img = tile.find("img")
@@ -230,14 +230,3 @@ class CanyonSource(Source):
                 return " | ".join(sizes)
         return ""
 
-    @staticmethod
-    def _extract_price(text: str) -> int:
-        text = text.replace("\xa0", "").replace(" ", "").replace(",", ".")
-        m = re.search(r"(\d[\d\s]*(?:[.,]\d{1,2})?)", text)
-        if m:
-            digits = re.sub(r"[^\d.]", "", m.group(1))
-            try:
-                return int(float(digits))
-            except ValueError:
-                pass
-        return 0

@@ -77,15 +77,15 @@ class VeloshopSource(Source):
             price_old = prod.find("span", class_="price-old")
 
             if price_new:
-                price = self._extract_price(price_new.get_text())
+                price = self.extract_price(price_new.get_text())
             if price_old:
-                regular_price = self._extract_price(price_old.get_text())
+                regular_price = self.extract_price(price_old.get_text())
 
             # If no sale price, look for any price
             if not price:
                 price_tag = prod.find(class_=re.compile(r"price"))
                 if price_tag:
-                    price = self._extract_price(price_tag.get_text())
+                    price = self.extract_price(price_tag.get_text())
 
             # Image
             image_url = ""
@@ -137,14 +137,3 @@ class VeloshopSource(Source):
             logger.debug(f"Veloshop parse error: {e}")
             return None
 
-    @staticmethod
-    def _extract_price(text: str) -> int:
-        text = text.replace("\xa0", "").replace(" ", "").replace(",", ".")
-        m = re.search(r"(\d[\d\s]*(?:[.,]\d{1,2})?)", text)
-        if m:
-            digits = re.sub(r"[^\d.]", "", m.group(1))
-            try:
-                return int(float(digits))
-            except ValueError:
-                pass
-        return 0

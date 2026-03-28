@@ -97,18 +97,18 @@ class RowertourSource(Source):
                 class_=re.compile(r"product-price|price-new|price-current|current-price|price")
             )
             if price_tag:
-                price = self._extract_price(price_tag.get_text())
+                price = self.extract_price(price_tag.get_text())
 
             old_tag = prod.find(
                 class_=re.compile(r"price-old|regular-price|old-price|price-regular")
             )
             if old_tag:
-                regular_price = self._extract_price(old_tag.get_text())
+                regular_price = self.extract_price(old_tag.get_text())
 
             if not price:
                 all_prices = prod.find_all(class_=re.compile(r"price"))
                 for p in all_prices:
-                    val = self._extract_price(p.get_text())
+                    val = self.extract_price(p.get_text())
                     if val:
                         price = val
                         break
@@ -220,14 +220,3 @@ class RowertourSource(Source):
             logger.debug(f"Rowertour JSON-LD deal error: {e}")
             return None
 
-    @staticmethod
-    def _extract_price(text: str) -> int:
-        text = text.replace("\xa0", "").replace(" ", "").replace(",", ".")
-        m = re.search(r"(\d[\d\s]*(?:[.,]\d{1,2})?)", text)
-        if m:
-            digits = re.sub(r"[^\d.]", "", m.group(1))
-            try:
-                return int(float(digits))
-            except ValueError:
-                pass
-        return 0

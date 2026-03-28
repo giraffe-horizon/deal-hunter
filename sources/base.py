@@ -1,6 +1,7 @@
 """Base classes for deal sources."""
 
 import logging
+import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -35,6 +36,13 @@ class Deal:
     published_at: str  # ISO datetime or ""
     regular_price: int = 0  # original/regular price before discount
 
+    def __post_init__(self):
+        if not self.title or not self.title.strip():
+            raise ValueError(f"Deal has empty title: {self.id}")
+        if self.price < 0:
+            self.price = 0
+        self.temperature = self.temperature or 0
+
 
 class Source(ABC):
     """Base class for deal sources with rate limiting and retry."""
@@ -62,6 +70,43 @@ class Source(ABC):
                 if attempt < MAX_RETRIES:
                     time.sleep(RETRY_DELAY * attempt)
         return None
+
+    @staticmethod
+    def extract_price(text: str) -> int:
+        """Extract integer price from text, handling European number formats.
+
+        Handles: '1 234 PLN', '1.234,50 zł', '18.999 ZŁ', '1234',
+                 '1 234,50', '299,99 €'.
+        """
+        if not text:
+            return 0
+        # Remove everything except digits, dots, commas
+        cleaned = re.sub(r"[^\d.,]", "", text.replace("\xa0", "").replace(" ", ""))
+        if not cleaned:
+            return 0
+
+        # Comma as decimal separator (European format): "1.234,50" or "1234,50"
+        if "," in cleaned:
+            m = re.match(r"^([\d.]+),(\d{1,2})$", cleaned)
+            if m:
+                integer_part = m.group(1).replace(".", "")
+                return int(integer_part) if integer_part else 0
+            # Comma followed by 3+ digits = thousands separator
+            cleaned = cleaned.replace(",", "")
+
+        # Dot followed by groups of 3 digits = thousands separator: "18.999"
+        if "." in cleaned:
+            if re.match(r"^\d{1,3}(?:\.\d{3})+$", cleaned):
+                return int(cleaned.replace(".", ""))
+            # Otherwise dot is decimal separator
+            try:
+                return int(float(cleaned))
+            except ValueError:
+                pass
+
+        # Pure digits
+        digits = re.sub(r"\D", "", cleaned)
+        return int(digits) if digits else 0
 
     @abstractmethod
     def fetch_deals(self, config: dict) -> list[Deal]:

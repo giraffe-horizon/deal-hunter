@@ -1,4 +1,4 @@
-requests
-beautifulsoup4
-pyyaml
-python-dotenv
+beautifulsoup4==4.14.3
+python-dotenv==1.2.2
+PyYAML==6.0.3
+requests==2.32.5

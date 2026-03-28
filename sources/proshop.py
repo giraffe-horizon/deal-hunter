@@ -111,7 +111,7 @@ class ProshopSource(Source):
             if not price_tag:
                 price_tag = prod.find("span", class_=re.compile(r"price"))
             if price_tag:
-                price = self._extract_price(price_tag.get_text())
+                price = self.extract_price(price_tag.get_text())
 
             # Image
             image_url = ""
@@ -147,15 +147,3 @@ class ProshopSource(Source):
             logger.debug(f"Proshop parse error: {e}")
             return None
 
-    @staticmethod
-    def _extract_price(text: str) -> int:
-        """Extract integer price from text."""
-        text = text.replace("\xa0", "").replace(" ", "").replace(",", ".")
-        m = re.search(r"(\d[\d\s]*(?:[.,]\d{1,2})?)", text)
-        if m:
-            digits = re.sub(r"[^\d.]", "", m.group(1))
-            try:
-                return int(float(digits))
-            except ValueError:
-                pass
-        return 0

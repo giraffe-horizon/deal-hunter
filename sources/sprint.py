@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
 
@@ -28,7 +29,13 @@ class SprintSource(Source):
 
         for base_url in urls:
             for page in range(1, max_pages + 1):
-                url = base_url if page == 1 else f"{base_url}?page={page}"
+                if page == 1:
+                    url = base_url
+                else:
+                    parsed = urlparse(base_url)
+                    params = parse_qs(parsed.query)
+                    params["page"] = [str(page)]
+                    url = urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
                 html_text = self._fetch_page(url)
                 if not html_text:
                     logger.warning(f"Sprint: failed to fetch page {page} of {base_url}")
@@ -190,18 +197,18 @@ class SprintSource(Source):
                 class_=re.compile(r"price-new|price-current|current-price|price-sale|price")
             )
             if price_tag:
-                price = self._extract_price(price_tag.get_text())
+                price = self.extract_price(price_tag.get_text())
 
             old_tag = prod.find(
                 class_=re.compile(r"price-old|regular-price|old-price|price-regular")
             )
             if old_tag:
-                regular_price = self._extract_price(old_tag.get_text())
+                regular_price = self.extract_price(old_tag.get_text())
 
             if not price:
                 all_prices = prod.find_all(class_=re.compile(r"price"))
                 for p in all_prices:
-                    val = self._extract_price(p.get_text())
+                    val = self.extract_price(p.get_text())
                     if val:
                         price = val
                         break
@@ -238,14 +245,3 @@ class SprintSource(Source):
             logger.debug(f"Sprint HTML parse error: {e}")
             return None
 
-    @staticmethod
-    def _extract_price(text: str) -> int:
-        text = text.replace("\xa0", "").replace(" ", "").replace(",", ".")
-        m = re.search(r"(\d[\d\s]*(?:[.,]\d{1,2})?)", text)
-        if m:
-            digits = re.sub(r"[^\d.]", "", m.group(1))
-            try:
-                return int(float(digits))
-            except ValueError:
-                pass
-        return 0

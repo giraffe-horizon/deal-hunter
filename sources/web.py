@@ -1,5 +1,6 @@
 """Generic web scraper source — configurable via YAML CSS selectors."""
 
+import hashlib
 import logging
 import re
 from urllib.parse import urljoin
@@ -80,8 +81,8 @@ class WebSource(Source):
                 if not title or not price_text:
                     continue
 
-                price = self._parse_price(price_text)
-                if price is None:
+                price = self.extract_price(price_text)
+                if not price:
                     continue
 
                 # Resolve relative URLs
@@ -90,8 +91,11 @@ class WebSource(Source):
                 if image and not image.startswith("http"):
                     image = urljoin(base_url, image)
 
+                content_hash = hashlib.md5(
+                    (title + str(price) + link).encode()
+                ).hexdigest()[:12]
                 deal = Deal(
-                    id=f"web:{url}:{i}",
+                    id=f"web:{content_hash}",
                     title=title.strip(),
                     price=price,
                     link=link or url,
@@ -132,13 +136,3 @@ class WebSource(Source):
             return str(el.get_text(strip=True))
         return ""
 
-    @staticmethod
-    def _parse_price(text: str) -> int | None:
-        """Extract numeric price from text. Returns int or None."""
-        cleaned = text.replace("\xa0", "").replace(" ", "")
-        match = re.search(r"(\d[\d\s]*[\d]?)[,.]?\d{0,2}", cleaned)
-        if match:
-            digits = re.sub(r"\D", "", match.group(0).split(",")[0].split(".")[0])
-            if digits:
-                return int(digits)
-        return None
