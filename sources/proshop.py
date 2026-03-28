@@ -138,7 +138,7 @@ class ProshopSource(Source):
                 price=price,
                 link=link,
                 source=self.SOURCE_NAME,
-                description=f"Proshop search: {query}",
+                description="",
                 temperature=0,
                 image_url=image_url,
                 published_at="",
