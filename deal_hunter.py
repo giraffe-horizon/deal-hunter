@@ -23,7 +23,7 @@ from filters import FILTER_REGISTRY
 try:
     __version__ = importlib.metadata.version("deal-hunter")
 except importlib.metadata.PackageNotFoundError:
-    __version__ = "1.0.0"  # fallback when not installed as package
+    __version__ = "1.1.0"  # fallback when not installed as package
 from filters.base import BaseFilter
 from notifiers.notion import NotionNotifier
 from notifiers.telegram import TelegramNotifier
@@ -499,9 +499,16 @@ def main() -> None:
     )
     parser.add_argument("--list", "-l", action="store_true", help="List available profiles")
     parser.add_argument("--validate", action="store_true", help="Validate profile without running")
+    parser.add_argument("--init", action="store_true", help="Create a new profile interactively")
     parser.add_argument("--version", action="version", version=f"Deal Hunter {__version__}")
 
     args = parser.parse_args()
+
+    if args.init:
+        from utils.init_profile import run_init
+
+        run_init()
+        return
 
     if args.list:
         profiles = list_profiles()

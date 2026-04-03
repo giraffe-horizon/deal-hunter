@@ -1,0 +1,12 @@
+services:
+  deal-hunter:
+    build: .
+    container_name: deal-hunter
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-*/30 * * * *}
+      - TZ=${TZ:-Europe/Warsaw}
+    volumes:
+      - ./profiles:/app/profiles
+      - ./state:/app/state
