@@ -1,8 +1,25 @@
 """Tests for the interactive profile creator (--init)."""
 
+from collections import OrderedDict
+from unittest.mock import MagicMock
+
 import yaml
 
 from utils.init_profile import run_init
+
+# Fixed registry so tests don't break when new stores are added.
+# First entry is a search-type YAML store (accepts queries).
+_FIXED_REGISTRY = OrderedDict(
+    [
+        ("fake_store", MagicMock()),
+        ("pepper", MagicMock()),
+        ("web", MagicMock()),
+    ]
+)
+
+_FIXED_STORE_DEFS = {
+    "fake_store": {"name": "fake_store", "type": "search"},
+}
 
 
 def test_init_creates_valid_profile(tmp_path, monkeypatch):
@@ -10,7 +27,7 @@ def test_init_creates_valid_profile(tmp_path, monkeypatch):
     # Simulate user input sequence:
     # 1. Profile name: "test_gadgets"
     # 2. Emoji: (accept default)
-    # 3. Source selection: "1" (first available source)
+    # 3. Source selection: "1" (first available — fake_store, search type)
     # 4. Source config (queries for search-type): "wireless speaker, bluetooth"
     # 5. Budget min: "50"
     # 6. Budget max: "300"
@@ -24,8 +41,8 @@ def test_init_creates_valid_profile(tmp_path, monkeypatch):
         [
             "test_gadgets",  # profile name
             "",  # emoji (default)
-            "1",  # source selection (first available)
-            "wireless speaker, bluetooth",  # queries/urls for the source
+            "1",  # source selection (first available — fake_store)
+            "wireless speaker, bluetooth",  # queries for fake_store
             "50",  # budget min
             "300",  # budget max
             "sony, jbl, bose",  # score keywords
@@ -41,6 +58,8 @@ def test_init_creates_valid_profile(tmp_path, monkeypatch):
         return next(inputs)
 
     monkeypatch.setattr("builtins.input", mock_input)
+    monkeypatch.setattr("utils.init_profile.SOURCE_REGISTRY", _FIXED_REGISTRY)
+    monkeypatch.setattr("utils.init_profile.load_all_store_definitions", lambda: _FIXED_STORE_DEFS)
 
     # Redirect profiles dir to tmp
     profiles_dir = tmp_path / "profiles"
@@ -107,7 +126,7 @@ def test_init_rejects_invalid_name(tmp_path, monkeypatch, capsys):
             "BAD NAME",  # invalid (uppercase + space)
             "good_name",  # valid name
             "",  # emoji (default)
-            "1",  # source selection
+            "1",  # source selection (fake_store)
             "test query",  # source config
             "100",  # budget min
             "500",  # budget max
@@ -124,6 +143,8 @@ def test_init_rejects_invalid_name(tmp_path, monkeypatch, capsys):
         return next(inputs)
 
     monkeypatch.setattr("builtins.input", mock_input)
+    monkeypatch.setattr("utils.init_profile.SOURCE_REGISTRY", _FIXED_REGISTRY)
+    monkeypatch.setattr("utils.init_profile.load_all_store_definitions", lambda: _FIXED_STORE_DEFS)
 
     profiles_dir = tmp_path / "profiles"
     profiles_dir.mkdir()
@@ -150,6 +171,8 @@ def test_init_no_sources_aborts(tmp_path, monkeypatch, capsys):
         return next(inputs)
 
     monkeypatch.setattr("builtins.input", mock_input)
+    monkeypatch.setattr("utils.init_profile.SOURCE_REGISTRY", _FIXED_REGISTRY)
+    monkeypatch.setattr("utils.init_profile.load_all_store_definitions", lambda: _FIXED_STORE_DEFS)
 
     profiles_dir = tmp_path / "profiles"
     profiles_dir.mkdir()

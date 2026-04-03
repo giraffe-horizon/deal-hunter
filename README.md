@@ -68,17 +68,15 @@ python deal_hunter.py --profile my_product
 ```
 deal-hunter/
 ├── deal_hunter.py              Main orchestrator (CLI entry point)
-├── sources/                    Source plugins (one class per source)
+├── sources/                    Source plugins
+│   ├── __init__.py             Source registry + YAML auto-discovery
 │   ├── base.py                 Base Source class + Deal dataclass
-│   ├── pepper.py               Pepper.pl — Vue3 JSON + HTML fallback
-│   ├── ceneo.py                Ceneo.pl — price comparison scraper
-│   ├── proshop.py              Proshop.pl — store scraper
-│   ├── canyon.py               Canyon.com — outlet/catalog scraper
-│   ├── rowertour.py            Rowertour.com — bike shop scraper
-│   ├── veloshop.py             Veloshop.pl — OpenCart bike shop
-│   ├── centrumrowerowe.py      Centrumrowerowe.pl — bike shop scraper
-│   ├── sprint.py               Sprint-Rowery.pl — paginated bike shop
-│   └── web.py                  Generic web scraper (CSS selectors)
+│   ├── pepper.py               Pepper.pl — Vue3 JSON + HTML fallback (too complex for YAML)
+│   ├── web.py                  Generic web scraper (CSS selectors from profile)
+│   └── yaml_source.py          Universal YAML-driven source engine
+├── stores/                     Declarative store definitions (auto-discovered)
+│   ├── ceneo.yaml, proshop.yaml, canyon.yaml, etc.
+│   └── README.md               How to add a store in 5 minutes
 ├── filters/                    Scoring engines
 │   ├── base.py                 Base scorer (keywords, regex, budget, temperature)
 │   └── bike_filter.py          Extended scorer: sizes, colors, tires
@@ -214,17 +212,17 @@ notion: null
 
 ## Sources
 
-| Source | Type | Config |
-|--------|------|--------|
-| **Pepper.pl** | Deal aggregator | `urls` — list of URLs to scrape |
-| **Ceneo.pl** | Price comparison | `queries` — list of search queries |
-| **Proshop.pl** | Online store | `queries` — list of search queries |
-| **Canyon.com** | Bike manufacturer | `urls` — outlet/catalog pages |
-| **Rowertour.com** | Bike shop | `urls` — category/search pages |
-| **Veloshop.pl** | Bike shop (OpenCart) | `urls` — category/search pages |
-| **Centrumrowerowe.pl** | Bike shop | `urls` — category/search pages |
-| **Sprint-Rowery.pl** | Bike shop | `urls` — category pages, `max_pages` (default 5) |
-| **Web** (generic) | Any website | `sites` — list of sites with CSS selectors |
+| Source | Category | Type | Config |
+|--------|----------|------|--------|
+| **Pepper.pl** | Deal aggregator | Python | `urls` — list of URLs to scrape |
+| **Ceneo.pl** | Price comparison | YAML store | `queries` — list of search queries |
+| **Proshop.pl** | Online store | YAML store | `queries` — list of search queries |
+| **Canyon.com** | Bike manufacturer | YAML store | `urls` — outlet/catalog pages |
+| **Rowertour.com** | Bike shop | YAML store | `urls` — category/search pages |
+| **Veloshop.pl** | Bike shop (OpenCart) | YAML store | `urls` — category/search pages |
+| **Centrumrowerowe.pl** | Bike shop | YAML store | `urls` — category/search pages |
+| **Sprint-Rowery.pl** | Bike shop | YAML store | `urls` — category pages, `max_pages` (default 5) |
+| **Web** (generic) | Any website | Python | `sites` — list of sites with CSS selectors |
 
 All sources have built-in rate limiting (min 2s between requests), retry with exponential backoff, and graceful degradation.
 

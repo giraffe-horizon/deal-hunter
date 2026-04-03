@@ -8,20 +8,15 @@ if [ $# -gt 0 ]; then
     exec python /app/deal_hunter.py "$@"
 fi
 
-# Build cron job — run all profiles on schedule
-# Pass environment variables to the cron job
-env | grep -E '^(TELEGRAM_|NOTION_|PATH=)' > /app/.cronenv
+# Build environment file for cron jobs (secrets not world-readable)
+umask 077
+env | grep -E '^(TELEGRAM_|NOTION_|^PATH=)' > /app/.cronenv
+chmod 600 /app/.cronenv
 
-CRON_CMD="$CRON_SCHEDULE cd /app && export \$(cat /app/.cronenv | xargs) && python deal_hunter.py --all >> /var/log/deal_hunter_cron.log 2>&1"
-
-echo "$CRON_CMD" | crontab -
-
-# Create log file
-touch /var/log/deal_hunter_cron.log
+# Build supercronic crontab
+echo "$CRON_SCHEDULE cd /app && export \$(cat /app/.cronenv | xargs) && python deal_hunter.py --all >> /tmp/deal_hunter_cron.log 2>&1" > /app/crontab
 
 echo "Deal Hunter cron started: $CRON_SCHEDULE"
-echo "Logs: /var/log/deal_hunter_cron.log"
 
-# Run cron in foreground, tailing the log
-cron
-exec tail -f /var/log/deal_hunter_cron.log
+# Run supercronic (handles signals, runs as non-root)
+exec supercronic /app/crontab

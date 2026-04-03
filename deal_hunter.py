@@ -23,7 +23,7 @@ from filters import FILTER_REGISTRY
 try:
     __version__ = importlib.metadata.version("deal-hunter")
 except importlib.metadata.PackageNotFoundError:
-    __version__ = "1.0.0"  # fallback when not installed as package
+    __version__ = "1.1.0"  # fallback when not installed as package
 from filters.base import BaseFilter
 from notifiers.notion import NotionNotifier
 from notifiers.telegram import TelegramNotifier

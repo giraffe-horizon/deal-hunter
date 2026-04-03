@@ -254,8 +254,12 @@ def run_init() -> None:
 
         # Budget
         print("\nBudget range (PLN):")
-        budget_min = _ask_int("  Minimum price", 100)
-        budget_max = _ask_int("  Maximum price", 500)
+        while True:
+            budget_min = _ask_int("  Minimum price", 100)
+            budget_max = _ask_int("  Maximum price", 500)
+            if budget_min < budget_max:
+                break
+            print("  Minimum must be less than maximum. Try again.")
 
         # Score rules
         print("\nKeywords to score positively (comma-separated):")
@@ -273,7 +277,11 @@ def run_init() -> None:
         tg_config: dict = {}
         if use_telegram:
             topic_id_raw = _ask("  Telegram topic ID (0 or leave empty for no topic)", "0")
-            topic_id = int(topic_id_raw) if topic_id_raw.isdigit() else None
+            try:
+                topic_id = int(topic_id_raw)
+            except ValueError:
+                print("  Invalid topic ID, using no topic.")
+                topic_id = None
             max_alerts = _ask_int("  Max alerts per run", 5)
             tg_config = {"topic_id": topic_id if topic_id else None, "max_alerts": max_alerts}
         else:

@@ -2,9 +2,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install dependencies first (layer caching)
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+# Install tini (PID 1) and supercronic (non-root cron)
+RUN apt-get update && apt-get install -y --no-install-recommends tini curl \
+    && curl -fsSL https://github.com/aptible/supercronic/releases/download/v0.2.33/supercronic-linux-amd64 -o /usr/local/bin/supercronic \
+    && chmod +x /usr/local/bin/supercronic \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies first (layer caching)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY deal_hunter.py .
@@ -14,16 +20,13 @@ COPY notifiers/ notifiers/
 COPY utils/ utils/
 COPY stores/ stores/
 COPY examples/ examples/
+COPY pyproject.toml .
+RUN pip install --no-cache-dir -e .
 
-# Create directories for runtime data
-RUN mkdir -p profiles state
-
-# Install cron
-RUN apt-get update && apt-get install -y --no-install-recommends cron \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash dealer
+# Create non-root user and directories
+RUN useradd --create-home --shell /bin/bash dealer \
+    && mkdir -p profiles state \
+    && chown -R dealer:dealer /app
 
 # Entrypoint
 COPY docker/entrypoint.sh /entrypoint.sh
@@ -32,4 +35,6 @@ RUN chmod +x /entrypoint.sh
 # Volumes for persistent data and config
 VOLUME ["/app/profiles", "/app/state"]
 
-ENTRYPOINT ["/entrypoint.sh"]
+USER dealer
+
+ENTRYPOINT ["tini", "--", "/entrypoint.sh"]

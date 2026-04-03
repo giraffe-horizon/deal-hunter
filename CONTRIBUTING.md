@@ -21,7 +21,7 @@ cp .env.example .env
 # Edit .env with your Telegram bot token and chat ID
 
 # Try the included example profile (no Telegram needed!)
-python deal_hunter.py --profile examples/headphones --verify
+python deal_hunter.py --profile headphones --verify
 
 # Or create your own (see docs/creating-profiles.md)
 python deal_hunter.py --profile my_product --validate
