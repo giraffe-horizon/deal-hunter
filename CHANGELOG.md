@@ -1,6 +1,17 @@
 # CHANGELOG
 
 
+## v0.1.1 (2026-04-03)
+
+### Bug Fixes
+
+- Trigger Docker build from Release workflow_run instead of tag push
+  ([`c45876b`](https://github.com/giraffe-horizon/deal-hunter/commit/c45876b0786201d9e168782e0866a843c6a09823))
+
+GITHUB_TOKEN tags don't trigger other workflows. Use workflow_run event on Release completion +
+  fetch latest release tag via API.
+
+
 ## v0.1.0 (2026-04-03)
 
 ### Bug Fixes

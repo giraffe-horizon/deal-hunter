@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 
 from filters import FILTER_REGISTRY
 
-__version__ = "0.1.0"  # maintained by semantic-release
+__version__ = "0.1.1"  # maintained by semantic-release
 try:
     __version__ = importlib.metadata.version("deal-hunter")
 except importlib.metadata.PackageNotFoundError:
