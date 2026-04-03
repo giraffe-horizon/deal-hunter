@@ -1,11 +1,14 @@
-"""Tests for Ceneo.pl parser — product rows and card layouts."""
+"""Tests for Ceneo.pl parser — product rows and card layouts.
+
+Uses the YAML-driven source engine with the ceneo store definition.
+"""
 
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sources.ceneo import CeneoSource
+from sources.yaml_source import YamlSource, load_store_definition
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -15,14 +18,16 @@ def _load_fixture(name: str) -> str:
 
 
 class TestParseResults:
-    """Tests for CeneoSource._parse_results."""
+    """Tests for ceneo product parsing via YamlSource CSS strategy."""
 
     def setup_method(self):
-        self.source = CeneoSource()
+        store_def = load_store_definition("ceneo")
+        assert store_def is not None, "ceneo.yaml store definition not found"
+        self.source = YamlSource(store_def)
 
     def test_product_rows(self):
         html = _load_fixture("ceneo_results.html")
-        deals = self.source._parse_results(html, "słuchawki ANC")
+        deals = self.source._parse_page(html, "https://www.ceneo.pl/test")
         assert len(deals) == 3
 
         # First product
@@ -45,18 +50,18 @@ class TestParseResults:
 
     def test_product_id_from_data_pid(self):
         html = _load_fixture("ceneo_results.html")
-        deals = self.source._parse_results(html, "test")
+        deals = self.source._parse_page(html, "https://www.ceneo.pl/test")
         assert deals[0].id == "ceneo:40001"
         assert deals[1].id == "ceneo:40002"
 
     def test_empty_results(self):
         html = _load_fixture("ceneo_empty.html")
-        deals = self.source._parse_results(html, "nonexistent product")
+        deals = self.source._parse_page(html, "https://www.ceneo.pl/test")
         assert deals == []
 
     def test_card_layout(self):
         html = _load_fixture("ceneo_cards.html")
-        deals = self.source._parse_results(html, "słuchawki")
+        deals = self.source._parse_page(html, "https://www.ceneo.pl/test")
         assert len(deals) == 2
 
         assert deals[0].title == "Sennheiser HD 450BT ANC"

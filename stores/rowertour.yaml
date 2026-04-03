@@ -1,0 +1,16 @@
+name: rowertour
+type: catalog
+base_url: "https://www.rowertour.com"
+
+strategies:
+  - css
+  - json-ld
+
+selectors:
+  products: ".box_item_wrapper, article.product-miniature, div.product-container, .product-item, .product-card"
+  title: ".product-title a, .product-name a, .box_item_name a, h2 a, h3 a"
+  price: ".product-price, .price-new, .price-current, .current-price, [class*='price']"
+  link: ".product-title a@href, .product-name a@href, .box_item_name a@href, h2 a@href"
+  image: "img@data-src, img@src, img@data-original"
+  regular_price: ".price-old, .regular-price, .old-price, .price-regular"
+  id: "@data-id, @data-id-product"

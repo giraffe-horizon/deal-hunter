@@ -1,0 +1,14 @@
+name: centrumrowerowe
+type: catalog
+base_url: "https://centrumrowerowe.pl"
+
+strategies:
+  - json-ld
+  - css
+
+selectors:
+  products: ".product-item, .product-card, .product-miniature, article[class*='product']"
+  title: ".product-title a, .product-name a, [class*='name'] a, h2 a, h3 a"
+  price: "[class*='price']"
+  link: ".product-title a@href, .product-name a@href, a@href"
+  image: "img@src, img@data-src"

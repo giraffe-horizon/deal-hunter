@@ -1,0 +1,17 @@
+name: ceneo
+type: search
+base_url: "https://www.ceneo.pl"
+search_url: "https://www.ceneo.pl/;szukaj-{query}"
+search_url_category: "https://www.ceneo.pl/{category};szukaj-{query}"
+
+strategies:
+  - css
+
+selectors:
+  products: ".cat-prod-row, .product-card"
+  title: "a.go-to-product, .product-name a, .cat-prod-row__name a"
+  price: ".price-format, .product-price, .price-value"
+  link: "a.go-to-product@href, .product-name a@href"
+  image: "img@data-original, img@src"
+  regular_price: ".price-format--old, .price-old, .text-line-through"
+  id: "@data-pid, @data-productid"
