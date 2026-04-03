@@ -1,9 +1,9 @@
 name: Docker
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
 
 env:
   REGISTRY: ghcr.io
@@ -16,8 +16,24 @@ jobs:
       contents: read
       packages: write
 
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
+      - name: Get release tag
+        id: get-tag
+        run: |
+          TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name' 2>/dev/null || echo '')
+          if [ -z "$TAG" ]; then
+            echo "No release found, skipping"
+            exit 1
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Released tag: $TAG"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.get-tag.outputs.tag }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -38,10 +54,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}},value=${{ steps.get-tag.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.get-tag.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ steps.get-tag.outputs.tag }}
+            type=raw,value=latest
           labels: |
             org.opencontainers.image.title=Deal Hunter
             org.opencontainers.image.description=Universal multi-source deal monitor
