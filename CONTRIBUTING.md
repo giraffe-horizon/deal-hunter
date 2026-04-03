@@ -13,19 +13,19 @@ cd deal-hunter
 python3 -m venv venv
 source venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install in development mode (includes test/lint deps)
+pip install -e ".[dev]"
 
 # Set up environment
 cp .env.example .env
 # Edit .env with your Telegram bot token and chat ID
 
-# Create a test profile (see docs/creating-profiles.md for template)
-# Create profiles/test.yaml with your search config
+# Try the included example profile (no Telegram needed!)
+python deal_hunter.py --profile examples/headphones --verify
 
-# Verify everything works
-python deal_hunter.py --profile test --validate
-python deal_hunter.py --profile test --verify
+# Or create your own (see docs/creating-profiles.md)
+python deal_hunter.py --profile my_product --validate
+python deal_hunter.py --profile my_product --verify
 ```
 
 ## Code Style
@@ -214,21 +214,24 @@ Before submitting a PR, make sure all checks pass locally:
 ```bash
 source venv/bin/activate
 
-# Install test/lint dependencies
-pip install pytest ruff mypy types-requests types-beautifulsoup4 types-PyYAML
-
-# Run unit tests
+# Run unit tests (use Makefile for convenience)
+make test
+# or directly:
 pytest tests/ -v
 
 # Linting (must pass clean)
+make lint
+# or directly:
 ruff check .
 ruff format --check .
 
 # Type checking
+make typecheck
+# or directly:
 mypy --ignore-missing-imports deal_hunter.py sources/ filters/ notifiers/ utils/
 
-# Validate a profile
-python deal_hunter.py --profile my_product --validate
+# Try the example profile
+make verify-example
 ```
 
 CI runs all of the above automatically on every push and PR to `main`.
