@@ -146,4 +146,3 @@ class ProshopSource(Source):
         except Exception as e:
             logger.debug(f"Proshop parse error: {e}")
             return None
-

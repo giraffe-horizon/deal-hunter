@@ -8,3 +8,5 @@ venv/
 
 # User profiles (not committed — see docs/creating-profiles.md)
 profiles/*.yaml
+.coverage
+deal_hunter.egg-info/

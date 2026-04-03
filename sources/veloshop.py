@@ -136,4 +136,3 @@ class VeloshopSource(Source):
         except Exception as e:
             logger.debug(f"Veloshop parse error: {e}")
             return None
-

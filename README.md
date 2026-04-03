@@ -9,9 +9,15 @@
 
 ---
 
+## Why Deal Hunter?
+
+Tired of manually checking multiple websites for deals? Deal Hunter automates the entire workflow: it scrapes 9+ sources on a schedule, scores every offer against your personal criteria, and pings you on Telegram only when something is actually worth your attention. One YAML file per product category — no code required.
+
+---
+
 ## Features
 
-- **Multi-source scanning** — Pepper.pl, Ceneo.pl, Proshop.pl, and any website via configurable CSS selectors
+- **Multi-source scanning** — 9 built-in sources (Pepper.pl, Ceneo.pl, Proshop.pl, Canyon, Rowertour, Veloshop, Centrumrowerowe, Sprint-Rowery) plus any website via configurable CSS selectors
 - **Smart scoring engine** — keyword rules, penalties, budget checks, regex patterns, temperature bonuses
 - **Custom filters** — extend the base scorer with domain-specific logic (e.g., bike sizes, tire widths)
 - **Price tracking** — automatic price drop detection across runs
@@ -32,21 +38,23 @@ cd deal-hunter
 # Setup environment
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"       # editable install with dev dependencies
 
-# Configure
+# Try the example profile (no Telegram needed)
+python deal_hunter.py --profile headphones --verify
+
+# Configure for real use
 cp .env.example .env
 # Edit .env — add your Telegram bot token and chat ID
 
-# Create your first profile — see docs/creating-profiles.md for a guide
+# Create your own profile — see docs/creating-profiles.md for a guide
 # Create profiles/my_product.yaml with your search config
-
-# Test it (shows all deals with scores, no notifications sent)
-python deal_hunter.py --profile my_product --verify
 
 # Run for real
 python deal_hunter.py --profile my_product
 ```
+
+> The included `examples/headphones.yaml` is a fully working profile that searches Pepper.pl and Ceneo.pl for wireless ANC headphones. Use `--verify` to see scored results without sending notifications.
 
 ## Architecture
 
@@ -58,6 +66,11 @@ deal-hunter/
 │   ├── pepper.py               Pepper.pl — Vue3 JSON + HTML fallback
 │   ├── ceneo.py                Ceneo.pl — price comparison scraper
 │   ├── proshop.py              Proshop.pl — store scraper
+│   ├── canyon.py               Canyon.com — outlet/catalog scraper
+│   ├── rowertour.py            Rowertour.com — bike shop scraper
+│   ├── veloshop.py             Veloshop.pl — OpenCart bike shop
+│   ├── centrumrowerowe.py      Centrumrowerowe.pl — bike shop scraper
+│   ├── sprint.py               Sprint-Rowery.pl — paginated bike shop
 │   └── web.py                  Generic web scraper (CSS selectors)
 ├── filters/                    Scoring engines
 │   ├── base.py                 Base scorer (keywords, regex, budget, temperature)
@@ -67,15 +80,21 @@ deal-hunter/
 │   └── notion.py               Notion API (categories from profile)
 ├── utils/                      Utilities
 │   └── validation.py           YAML profile validation
-├── profiles/                   Product profiles (YAML, gitignored)
+├── examples/                   Example profiles (committed to repo)
+│   └── headphones.yaml         Working example — ANC headphones
+├── profiles/                   User profiles (YAML, gitignored)
+├── tests/                      Test suite
+│   └── fixtures/               HTML fixtures for parser tests
 ├── docs/                       Documentation
 │   └── creating-profiles.md    Profile creation guide
 ├── state/                      Persistent state per profile (JSON, 14-day TTL)
+├── Makefile                    Dev commands: install, test, lint, typecheck
 ├── .env                        Secrets (not committed)
 ├── .env.example                Environment variable template
-├── requirements.txt            Python dependencies
-├── pyproject.toml              Project metadata
+├── pyproject.toml              Project metadata + tool config
 ├── CONTRIBUTING.md             Contribution guide
+├── CHANGELOG.md                Release history
+├── SECURITY.md                 Vulnerability reporting
 └── LICENSE                     MIT
 ```
 
@@ -161,6 +180,11 @@ notion: null
 | **Pepper.pl** | Deal aggregator | `urls` — list of URLs to scrape |
 | **Ceneo.pl** | Price comparison | `queries` — list of search queries |
 | **Proshop.pl** | Online store | `queries` — list of search queries |
+| **Canyon.com** | Bike manufacturer | `urls` — outlet/catalog pages |
+| **Rowertour.com** | Bike shop | `urls` — category/search pages |
+| **Veloshop.pl** | Bike shop (OpenCart) | `urls` — category/search pages |
+| **Centrumrowerowe.pl** | Bike shop | `urls` — category/search pages |
+| **Sprint-Rowery.pl** | Bike shop | `urls` — category pages, `max_pages` (default 5) |
 | **Web** (generic) | Any website | `sites` — list of sites with CSS selectors |
 
 All sources have built-in rate limiting (min 2s between requests), retry with exponential backoff, and graceful degradation.
@@ -251,18 +275,23 @@ Deal Hunter automatically tracks prices across runs. If a deal reappears with a 
 ```bash
 source venv/bin/activate
 
-# Install test/lint dependencies
-pip install pytest ruff mypy types-requests types-beautifulsoup4 types-PyYAML
+# Install with dev dependencies
+pip install -e ".[dev]"
 
-# Run tests
-pytest tests/ -v
+# Run tests (with coverage)
+make test
+
+# Or with coverage report
+python -m pytest tests/ -v --cov=sources --cov=filters --cov=deal_hunter --cov-report=term-missing
 
 # Linting
-ruff check .
-ruff format --check .
+make lint
 
 # Type checking
-mypy --ignore-missing-imports deal_hunter.py sources/ filters/ notifiers/ utils/
+make typecheck
+
+# Verify example profile
+make verify-example
 ```
 
 ## Contributing

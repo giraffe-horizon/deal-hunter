@@ -209,4 +209,3 @@ class CeneoSource(Source):
         except Exception as e:
             logger.debug(f"Ceneo card parse error: {e}")
             return None
-

@@ -1,4 +1,4 @@
-"""Tests for deal deduplication."""
+"""Tests for deal deduplication and title normalization."""
 
 import sys
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 # Ensure project root is on path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from deal_hunter import deduplicate
+from deal_hunter import _normalize_title, deduplicate
 from sources.base import Deal
 
 
@@ -72,3 +72,26 @@ def test_different_price_not_deduped():
     ]
     result = deduplicate(deals)
     assert len(result) == 2
+
+
+# ── _normalize_title tests ──
+
+
+def test_normalize_title_lowercase():
+    assert _normalize_title("Sony WH-1000XM5") == "sony wh1000xm5"
+
+
+def test_normalize_title_strips_punctuation():
+    assert _normalize_title("Deal! (wow) - great.") == "deal wow great"
+
+
+def test_normalize_title_collapses_whitespace():
+    assert _normalize_title("  lots   of   spaces  ") == "lots of spaces"
+
+
+def test_normalize_title_empty():
+    assert _normalize_title("") == ""
+
+
+def test_normalize_title_unicode():
+    assert _normalize_title("Słuchawki ANC — super!") == "słuchawki anc super"

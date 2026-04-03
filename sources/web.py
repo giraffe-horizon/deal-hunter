@@ -2,7 +2,6 @@
 
 import hashlib
 import logging
-import re
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -91,9 +90,7 @@ class WebSource(Source):
                 if image and not image.startswith("http"):
                     image = urljoin(base_url, image)
 
-                content_hash = hashlib.md5(
-                    (title + str(price) + link).encode()
-                ).hexdigest()[:12]
+                content_hash = hashlib.sha256((title + str(price) + link).encode()).hexdigest()[:12]
                 deal = Deal(
                     id=f"web:{content_hash}",
                     title=title.strip(),
@@ -135,4 +132,3 @@ class WebSource(Source):
         if el:
             return str(el.get_text(strip=True))
         return ""
-

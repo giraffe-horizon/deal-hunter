@@ -238,4 +238,3 @@ class CentrumroweroweSource(Source):
         except Exception as e:
             logger.debug(f"Centrumrowerowe HTML parse error: {e}")
             return None
-
