@@ -72,3 +72,13 @@ python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["deal_hunter.py:__version__"]
+branch = "main"
+commit_message = "chore(release): {version}"
+build_command = ""
+upload_to_pypi = false
+tag_format = "v{version}"
+major_on_zero = false

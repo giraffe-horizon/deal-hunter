@@ -1,6 +1,7 @@
 services:
   deal-hunter:
-    build: .
+    # image: ghcr.io/giraffe-horizon/deal-hunter:latest  # pre-built
+    build: .  # or build locally
     container_name: deal-hunter
     restart: unless-stopped
     env_file: .env

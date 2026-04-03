@@ -3,6 +3,7 @@
 **Universal multi-source deal monitor.** Define what you're looking for in a YAML profile — Deal Hunter scans multiple sources, scores every offer with a configurable scoring engine (with regex support), tracks price changes, and sends alerts to Telegram + optionally Notion.
 
 [![CI](https://github.com/giraffe-horizon/deal-hunter/actions/workflows/ci.yml/badge.svg)](https://github.com/giraffe-horizon/deal-hunter/actions/workflows/ci.yml)
+[![Release](https://github.com/giraffe-horizon/deal-hunter/actions/workflows/release.yml/badge.svg)](https://github.com/giraffe-horizon/deal-hunter/actions/workflows/release.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
@@ -144,13 +145,19 @@ python deal_hunter.py --version
 
 ### Running with Docker
 
-Run Deal Hunter on a schedule with zero system dependencies:
+Run Deal Hunter on a schedule with zero system dependencies. Pre-built images for amd64 and arm64 (Raspberry Pi) are available on [GitHub Container Registry](https://github.com/giraffe-horizon/deal-hunter/pkgs/container/deal-hunter):
 
 ```bash
 # Configure
 cp .env.example .env
 # Edit .env with your Telegram bot token and chat ID
 # Put your profiles in profiles/
+
+# Option 1: Use pre-built image
+docker pull ghcr.io/giraffe-horizon/deal-hunter:latest
+
+# Option 2: Build locally
+# (docker-compose.yml builds by default — uncomment `image:` to use pre-built)
 
 # Start (runs --all every 30 minutes by default)
 docker compose up -d
