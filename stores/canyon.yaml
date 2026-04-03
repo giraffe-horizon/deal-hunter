@@ -1,0 +1,15 @@
+name: canyon
+type: catalog
+base_url: "https://www.canyon.com"
+
+strategies:
+  - gtm
+  - css
+
+selectors:
+  products: ".productGrid__product, .productTile, .product-tile, .js-productTile"
+  title: ".productTile__productName, [class*='product'][class*='name'], [class*='product'][class*='title'], h2, h3"
+  price: ".productTile__productSalePrice, [class*='price'][class*='sale'], [class*='price'][class*='current'], [class*='price']"
+  link: "a@href"
+  image: "img@src, img@data-src"
+  regular_price: ".productTile__productOldPrice, [class*='price'][class*='old'], [class*='price'][class*='original']"

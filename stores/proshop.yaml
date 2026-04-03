@@ -1,0 +1,16 @@
+name: proshop
+type: search
+base_url: "https://www.proshop.pl"
+search_url: "https://www.proshop.pl/Search?search={query}"
+search_url_category: "https://www.proshop.pl/{category}?pre_search=1&search={query}"
+
+strategies:
+  - css
+
+selectors:
+  products: "[data-product-id], .product-list__item, #products .product, .product-list .product-item"
+  title: "a.site-product-link, .product-title a, h2 a, h3 a"
+  price: ".site-currency-lg, .site-currency-attention, .site-currency-sm, .product-price, .price-value"
+  link: "a.site-product-link@href, .product-title a@href, h2 a@href"
+  image: "img@src, img@data-src"
+  id: "@data-product-id, @id"

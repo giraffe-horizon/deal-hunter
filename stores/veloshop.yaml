@@ -1,0 +1,14 @@
+name: veloshop
+type: catalog
+base_url: "https://veloshop.pl"
+
+strategies:
+  - css
+
+selectors:
+  products: "div.product-thumb, .product-layout, .product-grid .product-item"
+  title: "h4.product-title > a, .caption h4 a, h4 a, h3 a, h5 a"
+  price: "span.price-new, [class*='price']"
+  link: "h4.product-title > a@href, .caption h4 a@href, h4 a@href"
+  image: "img@src, img@data-src"
+  regular_price: "span.price-old"

@@ -1,0 +1,20 @@
+name: sprint
+type: catalog
+base_url: "https://sprint-rowery.pl"
+
+strategies:
+  - json-ld
+  - css
+
+pagination:
+  param: page
+  max_pages: 5
+
+selectors:
+  products: ".product-item, .product-card, .product-miniature, .product-thumb, .product-box, article[class*='product'], li[class*='product']"
+  title: ".product-title a, .product-name a, [class*='name'] a, h2 a, h3 a"
+  price: ".price-new, .price-current, .current-price, .price-sale, [class*='price']"
+  link: ".product-title a@href, .product-name a@href, a@href"
+  image: "img@src, img@data-src"
+  regular_price: ".price-old, .regular-price, .old-price, .price-regular"
+  id: "@data-id, @data-product-id"
