@@ -18,10 +18,11 @@
 ```
 deal_hunter.py          Orchestrator: loads profile -> sources -> scoring -> notifications
 sources/base.py         Base Source class + Deal dataclass (common format)
-sources/pepper.py       Pepper.pl scraper (Vue3 JSON + HTML fallback)
-sources/ceneo.py        Ceneo.pl scraper (search results)
-sources/proshop.py      Proshop.pl scraper (search results)
-sources/web.py          Generic web scraper (configurable CSS selectors from YAML)
+sources/yaml_source.py  Universal YAML-driven source engine (CSS, JSON-LD, GTM strategies)
+sources/pepper.py       Pepper.pl scraper (Vue3 JSON + HTML fallback — too complex for YAML)
+sources/web.py          Generic web scraper (configurable CSS selectors from profile YAML)
+stores/*.yaml           Declarative store definitions (auto-discovered, no Python needed)
+stores/README.md        Guide: "How to add a new store in 5 minutes"
 filters/base.py         Base scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting
@@ -92,7 +93,7 @@ Each profile (`profiles/*.yaml`) defines:
 - `notion` — `{database_id, categories}` or `null` (categories map names to keyword lists)
 
 ### Plugin Registration
-- Sources: `sources/__init__.py` -> `SOURCE_REGISTRY = {"pepper": PepperSource, ...}`
+- Sources: `sources/__init__.py` -> `SOURCE_REGISTRY` — Python sources (pepper, web) registered explicitly; YAML stores from `stores/*.yaml` auto-discovered at import time
 - Filters: `filters/__init__.py` -> `FILTER_REGISTRY = {"bike_filter.BikeFilter": BikeFilter, ...}`
 
 ## How to Run
@@ -117,13 +118,32 @@ NOTION_API_KEY_PATH=~/.config/notion/api_key
 
 ## Adding a New Source
 
+**Preferred (no Python):** Create a YAML store definition in `stores/`. See `stores/README.md` for a 5-minute guide.
+
+```yaml
+# stores/myshop.yaml
+name: myshop
+type: catalog          # or "search" for query-based stores
+base_url: "https://myshop.com"
+strategies:
+  - css                # also: json-ld, gtm
+selectors:
+  products: "div.product"
+  title: "h2.name"
+  price: "span.price"
+  link: "a@href"
+  image: "img@src"
+```
+
+The store is auto-discovered and registered — no code changes needed.
+
+**For complex sources** (like Pepper with Vue3 JSON + temperature):
 1. Create `sources/new_source.py`
 2. Class inherits from `Source`, implements `fetch_deals(config) -> list[Deal]`
 3. Use `self._fetch_page(url)` and `self._rate_limit()` from the base class
 4. Register in `sources/__init__.py`: `SOURCE_REGISTRY["new_source"] = NewSource`
-5. Add source config to profile YAML
 
-**Alternatively:** use the generic web scraper (`sources/web.py`) — no code needed, configure CSS selectors in YAML:
+**Web scraper** (`sources/web.py`) — for one-off sites configured directly in profile YAML:
 ```yaml
 sources:
   web:
@@ -134,7 +154,7 @@ sources:
           container: "div.product"
           title: "h2.name"
           price: "span.price"
-          link: "a@href"        # @attr syntax — extracts HTML attribute
+          link: "a@href"
           image: "img@src"
 ```
 
@@ -182,9 +202,21 @@ CLI: `python deal_hunter.py --profile bikes --validate`
 
 ## Tests
 
-No unit tests yet (TODO). Manual testing:
 ```bash
-# Verify scoring — shows all deals with scores
+python -m pytest tests/ -v              # run all tests
+python -m pytest tests/ -v --tb=short   # compact output
+```
+
+Test modules:
+- `test_yaml_source.py` — YAML source engine: CSS/JSON-LD/GTM strategies, field extraction, pagination, store loading, auto-discovery
+- `test_ceneo_parser.py` — Ceneo store parsing via YAML source (validates selectors against HTML fixtures)
+- `test_pepper_parser.py` — Pepper parser (Vue3 + HTML)
+- `test_scoring.py`, `test_bike_filter.py` — scoring engine
+- `test_extract_price.py` — price parser
+- `test_deal.py`, `test_dedup.py`, `test_state.py`, `test_validation.py` — core logic
+
+Manual testing:
+```bash
 python deal_hunter.py --profile bikes --verify
 python deal_hunter.py --profile nas_hdd --verify
 ```

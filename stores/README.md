@@ -18,8 +18,8 @@ selectors:
   products: ".product-card"
   title: "h3.product-name"
   price: ".price"
-  link: "a @href"
-  image: "img @src"
+  link: "a@href"
+  image: "img@src"
 ```
 
 That's it. The engine handles fetching, rate limiting, price parsing, and dedup.
@@ -36,8 +36,8 @@ selectors:
   products: ".result-item"
   title: ".item-name"
   price: ".item-price"
-  link: ".item-name a @href"
-  image: ".item-img img @src"
+  link: ".item-name a@href"
+  image: ".item-img img@src"
 ```
 
 Use `{query}` in `search_url` — it gets replaced with the search term from the profile.
@@ -52,14 +52,7 @@ pagination:
 
 ## Price Parsing
 
-Default handles European format (`1 299,00 zł` → `1299`). Override if needed:
-
-```yaml
-price_format:
-  decimal: ","
-  thousands: " "
-  currency_strip: ["zł", "PLN", "€"]
-```
+The default parser handles European formats automatically (`1 299,00 zł` → `1299`, `18.999 ZŁ` → `18999`, `299,99 €` → `299`). No configuration needed.
 
 ## Parsing Strategies
 
@@ -78,12 +71,12 @@ Default: `[css]`. Most stores with structured data work great with `[json-ld, cs
 
 Use `@attr` to extract attributes instead of text:
 
-- `"a @href"` → extracts the `href` attribute
-- `"img @src"` → extracts the `src` attribute
-- `"img @data-src"` → extracts `data-src` (lazy loading)
+- `"a@href"` → extracts the `href` attribute
+- `"img@src"` → extracts the `src` attribute
+- `"img@data-src"` → extracts `data-src` (lazy loading)
 - `".price"` → extracts text content (no `@`)
 
-Comma-separated fallbacks: `"img @data-src, img @src"` tries `data-src` first.
+Comma-separated fallbacks: `"img@data-src, img@src"` tries `data-src` first.
 
 ## Using Your Store in a Profile
 

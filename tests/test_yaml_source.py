@@ -3,6 +3,7 @@
 import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -613,3 +614,244 @@ class TestMakeYamlSourceClass:
     def test_class_name_derived_from_store(self):
         cls = make_yaml_source_class(_minimal_store(name="cool_store"))
         assert "CoolStore" in cls.__name__
+
+
+# ── Native ID Edge Cases (Fix #3) ──
+
+
+class TestNativeIDExtraction:
+    """Tests for _extract_native_id edge cases."""
+
+    def test_last_digit_segment_preferred(self):
+        """URL /2024/new/42 should return 42, not 2024."""
+        store = _minimal_store()
+        source = _make_source(store)
+        html = """
+        <div class="product">
+            <h2>Product X</h2>
+            <span class="price">100 zł</span>
+            <a href="/2024/new/42">Link</a>
+        </div>
+        """
+        deals = source._parse_css(html, "https://example.com")
+        assert len(deals) == 1
+        assert deals[0].id == "test:42"
+
+    def test_title_fallback_when_no_link_digits_and_no_id_selector(self):
+        """When link has no digits and no ID selector, fall back to sanitized title."""
+        store = _minimal_store()
+        source = _make_source(store)
+        html = """
+        <div class="product">
+            <h2>My Cool Widget</h2>
+            <span class="price">100 zł</span>
+            <a href="/products/cool-widget">Link</a>
+        </div>
+        """
+        deals = source._parse_css(html, "https://example.com")
+        assert len(deals) == 1
+        assert deals[0].id == "test:My_Cool_Widget"
+
+    def test_single_digit_segment_still_works(self):
+        """URL with single digit segment should still work."""
+        store = _minimal_store()
+        source = _make_source(store)
+        html = """
+        <div class="product">
+            <h2>Item</h2>
+            <span class="price">50 zł</span>
+            <a href="/item/999">Link</a>
+        </div>
+        """
+        deals = source._parse_css(html, "https://example.com")
+        assert deals[0].id == "test:999"
+
+
+# ── JSON-LD regular_price (Fix #2) ──
+
+
+class TestJSONLDRegularPrice:
+    """Tests for regular_price extraction from JSON-LD highPrice."""
+
+    def test_high_price_sets_regular_price(self):
+        store = _minimal_store(name="shop")
+        source = _make_source(store)
+        jsonld = json.dumps(
+            {
+                "@type": "Product",
+                "name": "Discounted Widget",
+                "url": "https://shop.com/widget",
+                "sku": "W001",
+                "offers": {"price": "199", "highPrice": "299"},
+            }
+        )
+        html = f'<html><head><script type="application/ld+json">{jsonld}</script></head></html>'
+        deals = source._parse_jsonld(html, "https://shop.com")
+        assert len(deals) == 1
+        assert deals[0].price == 199
+        assert deals[0].regular_price == 299
+
+    def test_no_high_price_regular_price_is_zero(self):
+        store = _minimal_store(name="shop")
+        source = _make_source(store)
+        jsonld = json.dumps(
+            {
+                "@type": "Product",
+                "name": "Full Price Widget",
+                "url": "https://shop.com/widget",
+                "sku": "W002",
+                "offers": {"price": "299"},
+            }
+        )
+        html = f'<html><head><script type="application/ld+json">{jsonld}</script></head></html>'
+        deals = source._parse_jsonld(html, "https://shop.com")
+        assert len(deals) == 1
+        assert deals[0].regular_price == 0
+
+    def test_high_price_equal_to_price_no_regular(self):
+        store = _minimal_store(name="shop")
+        source = _make_source(store)
+        jsonld = json.dumps(
+            {
+                "@type": "Product",
+                "name": "Same Price Widget",
+                "url": "https://shop.com/widget",
+                "sku": "W003",
+                "offers": {"price": "299", "highPrice": "299"},
+            }
+        )
+        html = f'<html><head><script type="application/ld+json">{jsonld}</script></head></html>'
+        deals = source._parse_jsonld(html, "https://shop.com")
+        assert len(deals) == 1
+        assert deals[0].regular_price == 0
+
+
+# ── Pagination Edge Cases ──
+
+
+class TestPaginationStopOnEmpty:
+    """Test that pagination stops when a page returns no deals."""
+
+    def test_stops_on_empty_page(self):
+        store = _minimal_store()
+        store["pagination"] = {"param": "page", "max_pages": 5}
+        source = _make_source(store)
+
+        pages_fetched = []
+
+        def mock_fetch_page(url):
+            pages_fetched.append(url)
+            if "page=2" in url:
+                # Second page returns no products
+                return "<html><body></body></html>"
+            return """
+            <div class="product">
+                <h2>Item</h2>
+                <span class="price">100 zł</span>
+                <a href="/item/1">Link</a>
+            </div>
+            """
+
+        source._fetch_page = mock_fetch_page
+        deals = source._fetch_catalog({"urls": ["https://example.com/list"]})
+        assert len(deals) == 1
+        assert len(pages_fetched) == 2  # stopped at page 2, didn't continue to 3-5
+
+
+# ── URL Resolution Edge Cases (Fix #7) ──
+
+
+class TestResolveURLEdgeCases:
+    """Tests for _resolve_url with base_url that includes a path."""
+
+    def test_slash_url_with_base_url_including_path(self):
+        """base_url has a path — slash-prefixed URL should use only origin."""
+        store = _minimal_store(base_url="https://example.com/shop/category")
+        source = _make_source(store)
+        result = source._resolve_url("/item/5", "https://example.com/shop/category")
+        assert result == "https://example.com/item/5"
+
+    def test_slash_url_with_base_url_trailing_slash(self):
+        store = _minimal_store(base_url="https://example.com/")
+        source = _make_source(store)
+        result = source._resolve_url("/products/1", "https://example.com/")
+        assert result == "https://example.com/products/1"
+
+    def test_relative_url_no_slash_prefix(self):
+        """Non-slash relative URL should use urljoin."""
+        store = _minimal_store(base_url="https://example.com/shop/")
+        source = _make_source(store)
+        result = source._resolve_url("item/5", "https://example.com/shop/")
+        assert result == "https://example.com/shop/item/5"
+
+
+# ── Store Validation Edge Cases (Fix #5) ──
+
+
+class TestStoreValidation:
+    """Tests for store YAML validation in load_all_store_definitions."""
+
+    def test_malformed_selectors_as_string(self, tmp_path):
+        """Store with selectors as string instead of dict should be skipped."""
+        store_yaml = tmp_path / "badstore.yaml"
+        store_yaml.write_text("name: badstore\nstrategies:\n  - css\nselectors: 'div.product'\n")
+        with patch("sources.yaml_source.STORES_DIR", tmp_path):
+            stores = load_all_store_definitions()
+        assert "badstore" not in stores
+
+    def test_css_strategy_missing_products_selector(self, tmp_path):
+        """Store with css strategy but missing selectors.products should be skipped."""
+        store_yaml = tmp_path / "nocontainer.yaml"
+        store_yaml.write_text(
+            "name: nocontainer\nstrategies:\n  - css\nselectors:\n  title: h2\n  price: span\n"
+        )
+        with patch("sources.yaml_source.STORES_DIR", tmp_path):
+            stores = load_all_store_definitions()
+        assert "nocontainer" not in stores
+
+    def test_valid_css_store_loaded(self, tmp_path):
+        """Valid store with css strategy and selectors.products should load."""
+        store_yaml = tmp_path / "goodstore.yaml"
+        store_yaml.write_text(
+            "name: goodstore\nstrategies:\n  - css\nselectors:\n  products: div.item\n  title: h2\n"
+        )
+        with patch("sources.yaml_source.STORES_DIR", tmp_path):
+            stores = load_all_store_definitions()
+        assert "goodstore" in stores
+
+    def test_jsonld_only_store_no_products_ok(self, tmp_path):
+        """Store with only json-ld strategy should not require selectors.products."""
+        store_yaml = tmp_path / "jsononly.yaml"
+        store_yaml.write_text("name: jsononly\nstrategies:\n  - json-ld\nselectors:\n  title: h2\n")
+        with patch("sources.yaml_source.STORES_DIR", tmp_path):
+            stores = load_all_store_definitions()
+        assert "jsononly" in stores
+
+
+# ── YAML Shadowing Python Source (Fix #6) ──
+
+
+class TestYAMLShadowWarning:
+    """Test that a warning is logged when a YAML store shadows a Python source."""
+
+    def test_shadow_warning_logged(self, tmp_path):
+        """YAML store named 'pepper' should trigger a warning."""
+        store_yaml = tmp_path / "pepper.yaml"
+        store_yaml.write_text(
+            "name: pepper\nstrategies:\n  - css\nselectors:\n  products: div.item\n  title: h2\n"
+        )
+        with patch("sources.yaml_source.STORES_DIR", tmp_path):
+            store_defs = load_all_store_definitions()
+
+        # Re-import to test the warning in __init__.py
+        import sources
+
+        with patch.dict(sources.SOURCE_REGISTRY, {"pepper": sources.PepperSource}):
+            with patch("sources.logger") as mock_logger:
+                for name, store_def in store_defs.items():
+                    if name in sources.SOURCE_REGISTRY:
+                        mock_logger.warning(f"YAML store '{name}' overrides Python source")
+                    sources.SOURCE_REGISTRY[name] = make_yaml_source_class(store_def)
+                mock_logger.warning.assert_called_once_with(
+                    "YAML store 'pepper' overrides Python source"
+                )

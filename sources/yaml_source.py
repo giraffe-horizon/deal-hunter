@@ -42,6 +42,16 @@ def load_all_store_definitions() -> dict[str, dict]:
             with open(path, encoding="utf-8") as f:
                 store_def = yaml.safe_load(f)
             if isinstance(store_def, dict) and "name" in store_def:
+                strategies = store_def.get("strategies", ["css"])
+                selectors = store_def.get("selectors", {})
+                if "css" in strategies and (
+                    not isinstance(selectors, dict) or not selectors.get("products")
+                ):
+                    logger.warning(
+                        f"Store '{store_def['name']}' uses css strategy but missing "
+                        f"selectors.products, skipping: {path}"
+                    )
+                    continue
                 stores[store_def["name"]] = store_def
             else:
                 logger.warning(f"Invalid store definition (missing 'name'): {path}")
@@ -290,11 +300,15 @@ class YamlSource(Source):
                 link = f"{self._base_url}{link}" if self._base_url else link
 
             price = 0
+            regular_price = 0
             offers = product.get("offers", {})
             if isinstance(offers, list):
                 offers = offers[0] if offers else {}
             if offers:
                 price = int(float(offers.get("price", 0)))
+                high_price = int(float(offers.get("highPrice", 0)))
+                if high_price > price:
+                    regular_price = high_price
 
             image_url = product.get("image", "")
             if isinstance(image_url, list):
@@ -302,8 +316,8 @@ class YamlSource(Source):
 
             native_id = product.get("sku", product.get("productID", ""))
             if not native_id:
-                m = re.search(r"/(\d+)", link)
-                native_id = m.group(1) if m else re.sub(r"\W+", "_", name[:60])
+                matches = re.findall(r"/(\d+)", link)
+                native_id = matches[-1] if matches else re.sub(r"\W+", "_", name[:60])
 
             description = product.get("description", "")
 
@@ -317,6 +331,7 @@ class YamlSource(Source):
                 temperature=0,
                 image_url=image_url,
                 published_at="",
+                regular_price=regular_price,
             )
         except Exception as e:
             logger.debug(f"{self._store_name} JSON-LD deal error: {e}")
@@ -450,7 +465,10 @@ class YamlSource(Source):
             return url
         base = self._base_url or page_url
         if url.startswith("/"):
-            return f"{base.rstrip('/')}" + url if base else url
+            if base:
+                parsed = urlparse(base)
+                return f"{parsed.scheme}://{parsed.netloc}{url}"
+            return url
         return urljoin(base, url)
 
     @staticmethod
@@ -463,11 +481,11 @@ class YamlSource(Source):
             if native_id:
                 return native_id
 
-        # Try to extract from link
+        # Try to extract from link (use last digit segment)
         if link:
-            m = re.search(r"/(\d+)", link)
-            if m:
-                return m.group(1)
+            matches = re.findall(r"/(\d+)", link)
+            if matches:
+                return matches[-1]
 
         # Fallback to sanitized title
         return re.sub(r"\W+", "_", title[:60])

@@ -31,5 +31,7 @@ SOURCE_REGISTRY: dict[str, type[Source]] = {
 
 # Auto-discover YAML store definitions — YAML wins over Python for same name
 for _name, _store_def in load_all_store_definitions().items():
+    if _name in SOURCE_REGISTRY:
+        logger.warning(f"YAML store '{_name}' overrides Python source")
     SOURCE_REGISTRY[_name] = make_yaml_source_class(_store_def)
     logger.debug(f"Registered YAML store: {_name}")
