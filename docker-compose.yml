@@ -1,0 +1,14 @@
+services:
+  deal-hunter:
+    build: .
+    container_name: deal-hunter
+    restart: unless-stopped
+    environment:
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-*/30 * * * *}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - NOTION_API_KEY_PATH=${NOTION_API_KEY_PATH:-}
+    volumes:
+      - ./profiles:/app/profiles
+      - ./state:/app/state
+      - ./.env:/app/.env:ro

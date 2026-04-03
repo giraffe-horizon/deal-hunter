@@ -1,0 +1,14 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+state/
+*.log
+.git/
+.pytest_cache/
+.coverage
+deal_hunter.egg-info/
+tests/
+docs/
+.github/

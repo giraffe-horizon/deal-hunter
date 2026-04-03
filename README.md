@@ -11,20 +11,27 @@
 
 ## Why Deal Hunter?
 
-Tired of manually checking multiple websites for deals? Deal Hunter automates the entire workflow: it scrapes 9+ sources on a schedule, scores every offer against your personal criteria, and pings you on Telegram only when something is actually worth your attention. One YAML file per product category — no code required.
+You're looking for a specific product — the right bike, the right headphones, the right NAS drive — and it's scattered across dozens of websites, each with different layouts, search UIs, and pricing formats. Checking them manually every day is tedious and you inevitably miss the best deals. Deal Hunter watches all of them for you, scores every offer against your personal criteria, and only pings you when something is actually worth your attention.
+
+**Works with ANY website** — point Deal Hunter at any page with product listings and configure CSS selectors in YAML. No code required. Polish deal sites (Pepper.pl, Ceneo.pl, Proshop.pl) and bike shops (Canyon, Rowertour, Veloshop, and more) come as included batteries with pre-built store definitions.
+
+<!-- TODO: Add demo GIF — showing: `deal_hunter.py --profile headphones --verify` with colorful scored output, then a Telegram notification screenshot -->
 
 ---
 
 ## Features
 
-- **Multi-source scanning** — 9 built-in sources (Pepper.pl, Ceneo.pl, Proshop.pl, Canyon, Rowertour, Veloshop, Centrumrowerowe, Sprint-Rowery) plus any website via configurable CSS selectors
+- **Works with any website** — generic web scraper with configurable CSS selectors, or declarative YAML store definitions (no Python needed)
+- **9 built-in sources** — Pepper.pl, Ceneo.pl, Proshop.pl, Canyon, Rowertour, Veloshop, Centrumrowerowe, Sprint-Rowery — included as batteries
 - **Smart scoring engine** — keyword rules, penalties, budget checks, regex patterns, temperature bonuses
 - **Custom filters** — extend the base scorer with domain-specific logic (e.g., bike sizes, tire widths)
 - **Price tracking** — automatic price drop detection across runs
 - **Telegram alerts** — tiered notifications with rate limiting and retry
 - **Notion integration** — save deals to a Notion database with categories
 - **YAML profiles** — one profile per product type, fully declarative
+- **Interactive setup** — `--init` walks you through creating a new profile
 - **Profile validation** — catch config errors before running
+- **Docker support** — run on a schedule with docker-compose, zero system dependencies
 - **Graceful degradation** — one source fails, the rest keep working
 - **Cross-source dedup** — fuzzy title+price matching prevents duplicate alerts
 
@@ -47,8 +54,8 @@ python deal_hunter.py --profile headphones --verify
 cp .env.example .env
 # Edit .env — add your Telegram bot token and chat ID
 
-# Create your own profile — see docs/creating-profiles.md for a guide
-# Create profiles/my_product.yaml with your search config
+# Create your own profile interactively
+python deal_hunter.py --init
 
 # Run for real
 python deal_hunter.py --profile my_product
@@ -79,7 +86,8 @@ deal-hunter/
 │   ├── telegram.py             Telegram Bot API (retry + rate limiting)
 │   └── notion.py               Notion API (categories from profile)
 ├── utils/                      Utilities
-│   └── validation.py           YAML profile validation
+│   ├── validation.py           YAML profile validation
+│   └── init_profile.py         Interactive profile creator (--init)
 ├── examples/                   Example profiles (committed to repo)
 │   └── headphones.yaml         Working example — ANC headphones
 ├── profiles/                   User profiles (YAML, gitignored)
@@ -89,6 +97,9 @@ deal-hunter/
 │   └── creating-profiles.md    Profile creation guide
 ├── state/                      Persistent state per profile (JSON, 14-day TTL)
 ├── Makefile                    Dev commands: install, test, lint, typecheck
+├── Dockerfile                  Docker image definition
+├── docker-compose.yml          Docker Compose service config
+├── docker/entrypoint.sh        Container entrypoint (cron setup)
 ├── .env                        Secrets (not committed)
 ├── .env.example                Environment variable template
 ├── pyproject.toml              Project metadata + tool config
@@ -101,6 +112,9 @@ deal-hunter/
 ## Usage
 
 ```bash
+# Create a new profile interactively
+python deal_hunter.py --init
+
 # Run a single profile
 python deal_hunter.py --profile my_product
 
@@ -129,6 +143,31 @@ python deal_hunter.py --version
 # Or run all profiles at once
 */30 * * * * cd ~/Projects/deal-hunter && venv/bin/python deal_hunter.py --all >> deal_hunter.log 2>&1
 ```
+
+### Running with Docker
+
+Run Deal Hunter on a schedule with zero system dependencies:
+
+```bash
+# Configure
+cp .env.example .env
+# Edit .env with your Telegram bot token and chat ID
+# Put your profiles in profiles/
+
+# Start (runs --all every 30 minutes by default)
+docker compose up -d
+
+# Custom schedule (every 15 minutes)
+CRON_SCHEDULE="*/15 * * * *" docker compose up -d
+
+# One-off run inside the container
+docker compose run --rm deal-hunter --profile my_product --verify
+
+# View logs
+docker compose logs -f
+```
+
+The container mounts `profiles/` and `state/` as volumes, so your data persists across restarts.
 
 ## Profiles
 

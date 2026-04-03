@@ -499,9 +499,16 @@ def main() -> None:
     )
     parser.add_argument("--list", "-l", action="store_true", help="List available profiles")
     parser.add_argument("--validate", action="store_true", help="Validate profile without running")
+    parser.add_argument("--init", action="store_true", help="Create a new profile interactively")
     parser.add_argument("--version", action="version", version=f"Deal Hunter {__version__}")
 
     args = parser.parse_args()
+
+    if args.init:
+        from utils.init_profile import run_init
+
+        run_init()
+        return
 
     if args.list:
         profiles = list_profiles()
