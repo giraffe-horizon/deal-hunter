@@ -244,4 +244,3 @@ class SprintSource(Source):
         except Exception as e:
             logger.debug(f"Sprint HTML parse error: {e}")
             return None
-

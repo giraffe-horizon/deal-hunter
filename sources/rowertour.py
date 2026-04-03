@@ -219,4 +219,3 @@ class RowertourSource(Source):
         except Exception as e:
             logger.debug(f"Rowertour JSON-LD deal error: {e}")
             return None
-

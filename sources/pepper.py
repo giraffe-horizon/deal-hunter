@@ -213,5 +213,3 @@ class PepperSource(Source):
             published_at=published_at,
             regular_price=regular_price,
         )
-
-

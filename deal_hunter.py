@@ -4,9 +4,8 @@
 Profiles define products, sources, scoring rules, and notification targets.
 """
 
-__version__ = "1.0.0"
-
 import argparse
+import importlib.metadata
 import json
 import logging
 import os
@@ -20,6 +19,11 @@ import yaml
 from dotenv import load_dotenv
 
 from filters import FILTER_REGISTRY
+
+try:
+    __version__ = importlib.metadata.version("deal-hunter")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "1.0.0"  # fallback when not installed as package
 from filters.base import BaseFilter
 from notifiers.notion import NotionNotifier
 from notifiers.telegram import TelegramNotifier
@@ -159,26 +163,36 @@ def check_price_changes(deal, state: dict, profile_name: str) -> list[str]:
 # ──────────────── PROFILE ────────────────
 
 
+EXAMPLES_DIR = BASE_DIR / "examples"
+
+
 def load_profile(name: str) -> dict:
-    """Load a YAML profile by name."""
+    """Load a YAML profile by name. Checks profiles/ first, then examples/."""
     path = PROFILES_DIR / f"{name}.yaml"
     if not path.exists():
-        logger.error(f"Profile not found: {path}")
+        path = EXAMPLES_DIR / f"{name}.yaml"
+    if not path.exists():
+        logger.error(f"Profile not found: {name}")
         sys.exit(1)
     with open(path, encoding="utf-8") as f:
         return dict(yaml.safe_load(f))
 
 
 def list_profiles(include_disabled: bool = True) -> list[str]:
-    """List available profile names. By default includes disabled profiles."""
+    """List available profile names. Checks profiles/ and examples/."""
     names: list[str] = []
-    for p in PROFILES_DIR.glob("*.yaml"):
-        if not include_disabled:
-            with open(p, encoding="utf-8") as f:
-                prof = yaml.safe_load(f)
-            if isinstance(prof, dict) and not prof.get("enabled", True):
+    for directory in (PROFILES_DIR, EXAMPLES_DIR):
+        if not directory.exists():
+            continue
+        for p in directory.glob("*.yaml"):
+            if p.stem in names:
                 continue
-        names.append(p.stem)
+            if not include_disabled:
+                with open(p, encoding="utf-8") as f:
+                    prof = yaml.safe_load(f)
+                if isinstance(prof, dict) and not prof.get("enabled", True):
+                    continue
+            names.append(p.stem)
     return names
 
 
@@ -309,6 +323,9 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
     # Setup notifiers
     tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+    if not tg_token or not tg_chat:
+        logger.warning("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — Telegram alerts disabled")
     tg_config = profile.get("telegram", {})
     tg_topic = tg_config.get("topic_id")
     max_alerts = tg_config.get("max_alerts", 5)

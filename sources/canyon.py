@@ -137,10 +137,7 @@ class CanyonSource(Source):
         soup = BeautifulSoup(html_text, "html.parser")
         deals: list[Deal] = []
 
-        tiles = soup.select(
-            ".productGrid__product, .productTile, "
-            ".product-tile, .js-productTile"
-        )
+        tiles = soup.select(".productGrid__product, .productTile, .product-tile, .js-productTile")
         if not tiles:
             tiles = soup.find_all("div", class_=re.compile(r"product.*tile|product.*card"))
 
@@ -229,4 +226,3 @@ class CanyonSource(Source):
             if sizes:
                 return " | ".join(sizes)
         return ""
-
