@@ -20,10 +20,11 @@ from dotenv import load_dotenv
 
 from filters import FILTER_REGISTRY
 
+__version__ = "1.1.0"  # maintained by semantic-release
 try:
     __version__ = importlib.metadata.version("deal-hunter")
 except importlib.metadata.PackageNotFoundError:
-    __version__ = "1.1.0"  # fallback when not installed as package
+    pass  # use the version above when not installed as package
 from filters.base import BaseFilter
 from notifiers.notion import NotionNotifier
 from notifiers.telegram import TelegramNotifier
