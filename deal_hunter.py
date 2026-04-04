@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import sys
+import time
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -538,9 +539,7 @@ def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict) -> None:
 
 def _run_with_health_tracking(profile_names: list[str], verify: bool = False) -> None:
     """Run profiles and write health.json with results."""
-    import time as _time
-
-    start = _time.monotonic()
+    start = time.monotonic()
     existing_health = load_health()
 
     profile_results: dict[str, dict] = {}
@@ -550,9 +549,10 @@ def _run_with_health_tracking(profile_names: list[str], verify: bool = False) ->
         try:
             result = run_profile(profile_name, verify=verify)
             if result is not None:
-                # Extract source_results before storing in profile_results
-                source_results = result.pop("source_results", {})
-                profile_results[profile_name] = result
+                source_results = result.get("source_results", {})
+                profile_results[profile_name] = {
+                    k: v for k, v in result.items() if k != "source_results"
+                }
                 # Merge source results (last write wins per source, which is fine)
                 all_source_results.update(source_results)
         except Exception as e:
@@ -568,7 +568,7 @@ def _run_with_health_tracking(profile_names: list[str], verify: bool = False) ->
     if verify or not profile_results:
         return
 
-    duration = _time.monotonic() - start
+    duration = time.monotonic() - start
     sources_health = update_sources_health(existing_health, all_source_results)
     health_data = build_health_data(profile_results, sources_health, duration, __version__)
     save_health(health_data)
@@ -586,6 +586,9 @@ def _send_source_failure_alert(failing_sources: list[str], sources_health: dict)
     if not tg_token or not tg_chat:
         return
 
+    topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
+    topic_id = int(topic_id_str) if topic_id_str else None
+
     telegram = TelegramNotifier(tg_token, tg_chat)
     lines = []
     for name in failing_sources:
@@ -595,7 +598,7 @@ def _send_source_failure_alert(failing_sources: list[str], sources_health: dict)
         lines.append(f"  • {name}: {count} consecutive failures (last success: {last})")
 
     msg = f"⚠️ Deal Hunter: source failures detected!\n\n" + "\n".join(lines)
-    telegram._send_message(msg)
+    telegram.send_text(msg, topic_id=topic_id)
 
 
 def main() -> None:
@@ -639,8 +642,10 @@ def main() -> None:
             tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
             tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
             if tg_token and tg_chat:
+                topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
+                topic_id = int(topic_id_str) if topic_id_str else None
                 telegram = TelegramNotifier(tg_token, tg_chat)
-                telegram._send_message(f"⚠️ Deal Hunter watchdog: {message}")
+                telegram.send_text(f"⚠️ Deal Hunter watchdog: {message}", topic_id=topic_id)
             sys.exit(1)
 
     if args.list:

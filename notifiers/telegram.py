@@ -97,6 +97,10 @@ class TelegramNotifier:
 
         self._send_message(msg, topic_id=topic_id, disable_preview=True)
 
+    def send_text(self, text: str, topic_id: int | None = None) -> None:
+        """Send a plain text message, optionally to a specific topic."""
+        self._send_message(text, topic_id=topic_id)
+
     def _send_message(
         self, text: str, topic_id: int | None = None, disable_preview: bool = False
     ) -> None:
