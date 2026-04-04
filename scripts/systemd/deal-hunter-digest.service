@@ -1,0 +1,13 @@
+[Unit]
+Description=Deal Hunter weekly price drop digest
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Projects/deal-hunter
+ExecStart=%h/Projects/deal-hunter/venv/bin/python deal_hunter.py --digest
+EnvironmentFile=%h/Projects/deal-hunter/.env
+
+[Install]
+WantedBy=default.target

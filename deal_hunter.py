@@ -504,9 +504,11 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
     state["seen"] = seen
     save_state(profile_name, state)
 
-    # Send price drop alerts first (higher priority)
+    # Send price drop alerts first (higher priority), limited by max_alerts
+    if price_drop_alerts:
+        price_drop_alerts.sort(key=lambda x: x["price_change"]["diff_percent"], reverse=True)
     if telegram and price_drop_alerts:
-        for pda in price_drop_alerts:
+        for pda in price_drop_alerts[:max_alerts]:
             telegram.send_price_drop_alert(
                 pda["deal"],
                 pda["price_change"],
@@ -514,7 +516,7 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                 emoji=emoji,
                 currency=currency,
             )
-        logger.info(f"Sent {len(price_drop_alerts)} price drop alerts for {profile_name}")
+        logger.info(f"Sent {min(len(price_drop_alerts), max_alerts)} price drop alerts for {profile_name}")
 
     # Console output for price drops
     for pda in price_drop_alerts:
@@ -525,7 +527,7 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         print(f"{emoji} \U0001f4c9 PRICE DROP: {d.title[:60]}")
         print(f"  {old_str} -> {new_str} (-{pc['diff_percent']:.0f}%, -{pc['diff_pln']} {currency})")
         if pc.get("is_lowest_ever"):
-            print(f"  \U0001f525 Najnizsza cena w historii!")
+            print(f"  \U0001f525 Najniższa cena w historii!")
         print(f"  {d.link}")
         print()
 
@@ -648,6 +650,13 @@ def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict) -> None:
 
 def run_digest() -> None:
     """Generate and send weekly price digest from SQLite price_history."""
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not tg_token or not tg_chat:
+        logger.warning("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — cannot send digest")
+        print("Warning: Telegram not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env")
+        return
+
     db: SQLiteStorage | None = None
     try:
         db = SQLiteStorage(DB_PATH)
@@ -677,16 +686,11 @@ def run_digest() -> None:
         print(f"  \U0001f4c9 {d['title'][:60]}: {old_str} -> {new_str} (-{d['diff_percent']}%){lowest}")
 
     # Send Telegram digest
-    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if tg_token and tg_chat:
-        topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
-        topic_id = int(topic_id_str) if topic_id_str else None
-        telegram = TelegramNotifier(tg_token, tg_chat)
-        telegram.send_digest(drops, topic_id=topic_id)
-        print(f"\nDigest sent to Telegram ({len(drops)} drops).")
-    else:
-        print("\nTelegram not configured — digest printed to console only.")
+    topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
+    topic_id = int(topic_id_str) if topic_id_str else None
+    telegram = TelegramNotifier(tg_token, tg_chat)
+    telegram.send_digest(drops, topic_id=topic_id)
+    print(f"\nDigest sent to Telegram ({len(drops)} drops).")
 
 
 def _run_with_health_tracking(profile_names: list[str], verify: bool = False) -> None:
