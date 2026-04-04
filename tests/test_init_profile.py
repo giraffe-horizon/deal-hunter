@@ -36,7 +36,6 @@ def test_init_creates_valid_profile(tmp_path, monkeypatch):
     # 9. Telegram: "y"
     # 10. Topic ID: "0"
     # 11. Max alerts: "5"
-    # 12. Notion: "n"
     inputs = iter(
         [
             "test_gadgets",  # profile name
@@ -50,7 +49,6 @@ def test_init_creates_valid_profile(tmp_path, monkeypatch):
             "y",  # enable telegram
             "0",  # topic id
             "5",  # max alerts
-            "n",  # no notion
         ]
     )
 
@@ -87,7 +85,6 @@ def test_init_creates_valid_profile(tmp_path, monkeypatch):
     assert "sony" in parsed["score_rules"]
     assert parsed["score_rules"]["sony"] == 30
     assert "broken" in parsed.get("excluded_words", [])
-    assert parsed["notion"] is None
 
 
 def test_init_handles_keyboard_interrupt(monkeypatch, capsys):
@@ -135,7 +132,6 @@ def test_init_rejects_invalid_name(tmp_path, monkeypatch, capsys):
             "y",  # telegram
             "0",  # topic id
             "5",  # max alerts
-            "n",  # no notion
         ]
     )
 

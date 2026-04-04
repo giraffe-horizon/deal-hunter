@@ -45,5 +45,4 @@ telegram:
   topic_id: null
   max_alerts: 5
 
-notion: null
 currency: PLN

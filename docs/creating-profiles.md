@@ -22,7 +22,7 @@ How it works:
 1. Deal Hunter loads the profile
 2. Scans the configured sources (Pepper, Ceneo, Proshop, web)
 3. Each found offer goes through the scoring engine
-4. Offers above the threshold -> alert on Telegram (+ optionally Notion)
+4. Offers above the threshold -> alert on Telegram
 5. State is saved locally -> the same offers won't alert again
 
 User profiles **are not committed to the repo** (`.gitignore`). Create your own from the minimal template below.
@@ -56,8 +56,6 @@ score_threshold_alert: 70
 telegram:
   topic_id: 0
   max_alerts: 5
-
-notion: null
 ```
 
 Then test it:
@@ -95,7 +93,6 @@ python deal_hunter.py --profile my_product
 | `custom_filter` | string | `null` | Custom filter class name |
 | `custom_data` | dict | `{}` | Arbitrary data for custom filter |
 | `currency` | string | `PLN` | Currency code for alerts |
-| `notion` | dict/null | `null` | Notion config (`null` = disabled) |
 
 ### Budget
 
@@ -383,35 +380,6 @@ TELEGRAM_BOT_TOKEN=your_token
 TELEGRAM_CHAT_ID=chat_or_group_id
 ```
 
-### Notion
-
-```yaml
-# Disabled:
-notion: null
-
-# Enabled:
-notion:
-  database_id: "your-notion-database-id"
-```
-
-Deals are saved to Notion as new pages. Requires:
-- `NOTION_API_KEY_PATH` configured in `.env`
-- A Notion database with matching properties
-
-### Notion Categories
-
-Categories can be configured per profile:
-
-```yaml
-notion:
-  database_id: "your-db-id"
-  categories:
-    "electronics": ["laptop", "phone", "tablet"]
-    "audio": ["headphones", "speaker", "soundbar"]
-```
-
-If no categories are defined, the profile name is used as the category.
-
 ---
 
 ## Examples
@@ -454,8 +422,6 @@ score_threshold_alert: 70
 telegram:
   topic_id: 31
   max_alerts: 5
-
-notion: null
 ```
 
 ### Medium Profile — NAS HDD 12TB
@@ -511,8 +477,6 @@ score_threshold_alert: 80
 telegram:
   topic_id: 31
   max_alerts: 5
-
-notion: null
 ```
 
 ### Advanced Profile — Bikes with Custom Filter
@@ -572,9 +536,6 @@ custom_data:
 telegram:
   topic_id: 31
   max_alerts: 5
-
-notion:
-  database_id: "your-notion-database-id"
 ```
 
 ---

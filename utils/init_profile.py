@@ -187,15 +187,6 @@ def _generate_yaml(profile: dict, name: str) -> str:
     lines.append(f"  max_alerts: {tg.get('max_alerts', 5)}")
     lines.append("")
 
-    notion = profile.get("notion")
-    lines.append("# Notion integration — set database_id to enable, or null to disable")
-    if notion and isinstance(notion, dict) and notion.get("database_id"):
-        lines.append("notion:")
-        lines.append(f'  database_id: "{notion["database_id"]}"')
-    else:
-        lines.append("notion: null")
-    lines.append("")
-
     return "\n".join(lines)
 
 
@@ -287,13 +278,6 @@ def run_init() -> None:
         else:
             tg_config = {"topic_id": None, "max_alerts": 5}
 
-        use_notion = _ask_yes_no("  Enable Notion integration?", default=False)
-        notion_config = None
-        if use_notion:
-            db_id = _ask("  Notion database ID")
-            if db_id:
-                notion_config = {"database_id": db_id}
-
         # Build profile dict
         profile = {
             "name": name,
@@ -305,7 +289,6 @@ def run_init() -> None:
             "score_threshold": 40,
             "score_threshold_alert": 80,
             "telegram": tg_config,
-            "notion": notion_config,
         }
         if excluded:
             profile["excluded_words"] = excluded

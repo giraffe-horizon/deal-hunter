@@ -26,7 +26,6 @@ try:
 except importlib.metadata.PackageNotFoundError:
     pass  # use the version above when not installed as package
 from filters.base import BaseFilter
-from notifiers.notion import NotionNotifier
 from notifiers.telegram import TelegramNotifier
 from sources import SOURCE_REGISTRY
 from utils.validation import validate_profile
@@ -333,11 +332,6 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
 
     telegram = TelegramNotifier(tg_token, tg_chat) if tg_token and tg_chat else None
 
-    notion_config = profile.get("notion")
-    notion_db = notion_config.get("database_id") if isinstance(notion_config, dict) else None
-    notion_key_path = os.environ.get("NOTION_API_KEY_PATH", "~/.config/notion/api_key")
-    notion = NotionNotifier(notion_key_path) if notion_db else None
-
     alerts: list[dict] = []
 
     for deal in deals:
@@ -376,13 +370,6 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
 
     # Sort by score descending
     alerts.sort(key=lambda x: x["score"], reverse=True)
-
-    # Notion — save all
-    if notion and notion_db:
-        for a in alerts:
-            notion.save_deal(
-                a["deal"], a["score"], a["plus"], notion_db, profile_name, profile=profile
-            )
 
     # Telegram — top alerts individually, rest in summary
     if telegram:

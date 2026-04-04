@@ -47,7 +47,6 @@ def sample_profile() -> dict:
         "score_threshold": 40,
         "score_threshold_alert": 80,
         "telegram": {"topic_id": 31, "max_alerts": 5},
-        "notion": None,
         "currency": "PLN",
     }
 

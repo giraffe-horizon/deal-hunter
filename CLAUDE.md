@@ -2,7 +2,7 @@
 
 ## Project
 
-**Deal Hunter** — universal multi-source deal monitor. Scans various sources (Pepper.pl, Ceneo.pl, Proshop.pl, any website via generic web scraper), scores offers using a YAML-driven scoring engine (with regex support), tracks price changes, and sends alerts to Telegram + Notion.
+**Deal Hunter** — universal multi-source deal monitor. Scans various sources (Pepper.pl, Ceneo.pl, Proshop.pl, any website via generic web scraper), scores offers using a YAML-driven scoring engine (with regex support), tracks price changes, and sends alerts to Telegram.
 
 ## Tech Stack
 
@@ -26,7 +26,6 @@ stores/README.md        Guide: "How to add a new store in 5 minutes"
 filters/base.py         Base scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting
-notifiers/notion.py     Notion API (categories from profile, optional per profile)
 utils/validation.py     YAML profile validation (types, required fields, sanity checks)
 profiles/*.yaml         Product profiles (gitignored, see docs/creating-profiles.md)
 docs/creating-profiles.md  Profile creation guide
@@ -90,7 +89,6 @@ Each profile (`profiles/*.yaml`) defines:
 - `score_threshold`, `score_threshold_alert` — thresholds
 - `currency` — currency code (default "PLN")
 - `telegram` — `{topic_id, max_alerts}`
-- `notion` — `{database_id, categories}` or `null` (categories map names to keyword lists)
 
 ### Plugin Registration
 - Sources: `sources/__init__.py` -> `SOURCE_REGISTRY` — Python sources (pepper, web) registered explicitly; YAML stores from `stores/*.yaml` auto-discovered at import time
@@ -113,7 +111,6 @@ File `.env` (not committed):
 ```
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
-NOTION_API_KEY_PATH=~/.config/notion/api_key
 ```
 
 ## Adding a New Source
@@ -178,7 +175,6 @@ sources:
 
 - **Language:** English for all code, comments, docstrings, and log messages
 - **Telegram messages:** Polish (they go to a Polish-speaking user)
-- **Notion property names:** Polish (they match the database schema)
 - **Logging:** `logging` module, not `print()` (exception: `--verify` mode prints to stdout)
 - **Error handling:** graceful degradation — one source fails -> rest continue, one notifier fails -> rest continue
 - **Rate limiting:** each source has min 2s between requests, Telegram 1.5s + retry on 429

@@ -1,6 +1,6 @@
 # Deal Hunter
 
-**Universal multi-source deal monitor.** Define what you're looking for in a YAML profile — Deal Hunter scans multiple sources, scores every offer with a configurable scoring engine (with regex support), tracks price changes, and sends alerts to Telegram + optionally Notion.
+**Universal multi-source deal monitor.** Define what you're looking for in a YAML profile — Deal Hunter scans multiple sources, scores every offer with a configurable scoring engine (with regex support), tracks price changes, and sends alerts to Telegram.
 
 [![CI](https://github.com/giraffe-horizon/deal-hunter/actions/workflows/ci.yml/badge.svg)](https://github.com/giraffe-horizon/deal-hunter/actions/workflows/ci.yml)
 [![Release](https://github.com/giraffe-horizon/deal-hunter/actions/workflows/release.yml/badge.svg)](https://github.com/giraffe-horizon/deal-hunter/actions/workflows/release.yml)
@@ -28,7 +28,6 @@ You're looking for a specific product — the right bike, the right headphones, 
 - **Custom filters** — extend the base scorer with domain-specific logic (e.g., bike sizes, tire widths)
 - **Price tracking** — automatic price drop detection across runs
 - **Telegram alerts** — tiered notifications with rate limiting and retry
-- **Notion integration** — save deals to a Notion database with categories
 - **YAML profiles** — one profile per product type, fully declarative
 - **Interactive setup** — `--init` walks you through creating a new profile
 - **Profile validation** — catch config errors before running
@@ -82,8 +81,7 @@ deal-hunter/
 │   ├── base.py                 Base scorer (keywords, regex, budget, temperature)
 │   └── bike_filter.py          Extended scorer: sizes, colors, tires
 ├── notifiers/                  Notification backends
-│   ├── telegram.py             Telegram Bot API (retry + rate limiting)
-│   └── notion.py               Notion API (categories from profile)
+│   └── telegram.py             Telegram Bot API (retry + rate limiting)
 ├── utils/                      Utilities
 │   ├── validation.py           YAML profile validation
 │   └── init_profile.py         Interactive profile creator (--init)
@@ -214,7 +212,6 @@ telegram:
   topic_id: 31
   max_alerts: 5
 
-notion: null
 ```
 
 ## Sources
@@ -295,7 +292,6 @@ Deal Hunter automatically tracks prices across runs. If a deal reappears with a 
 |----------|-------------|----------|
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token | Yes |
 | `TELEGRAM_CHAT_ID` | Telegram chat/group ID | Yes |
-| `NOTION_API_KEY_PATH` | Path to Notion API key file | No (only if using Notion) |
 
 ## Adding a New Source
 
