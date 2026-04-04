@@ -26,10 +26,13 @@ stores/README.md        Guide: "How to add a new store in 5 minutes"
 filters/base.py         Base scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting
+storage/sqlite.py       SQLite persistence layer (deals, price history, feedback)
 utils/validation.py     YAML profile validation (types, required fields, sanity checks)
 profiles/*.yaml         Product profiles (gitignored, see docs/creating-profiles.md)
 docs/creating-profiles.md  Profile creation guide
 state/*.json            Persistent state per profile (what's been seen, 14-day TTL)
+state/deals.db          SQLite database (deals, price_history, feedback tables)
+scripts/migrate_state_to_sqlite.py  One-time migration from state/*.json to SQLite
 ```
 
 ## Key Patterns
@@ -210,6 +213,7 @@ Test modules:
 - `test_scoring.py`, `test_bike_filter.py` — scoring engine
 - `test_extract_price.py` — price parser
 - `test_deal.py`, `test_dedup.py`, `test_state.py`, `test_validation.py` — core logic
+- `test_sqlite_storage.py` — SQLite persistence layer (CRUD, upsert, price history, filtering)
 
 Manual testing:
 ```bash

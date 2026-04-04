@@ -19,6 +19,7 @@ import yaml
 from dotenv import load_dotenv
 
 from filters import FILTER_REGISTRY
+from storage.sqlite import SQLiteStorage
 
 __version__ = "0.1.0"  # maintained by semantic-release
 try:
@@ -36,6 +37,7 @@ BASE_DIR = Path(__file__).parent
 PROFILES_DIR = BASE_DIR / "profiles"
 STATE_DIR = BASE_DIR / "state"
 STATE_TTL_DAYS = 14
+DB_PATH = STATE_DIR / "deals.db"
 
 load_dotenv(BASE_DIR / ".env")
 
@@ -332,7 +334,15 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
 
     telegram = TelegramNotifier(tg_token, tg_chat) if tg_token and tg_chat else None
 
+    # SQLite persistence
+    db: SQLiteStorage | None = None
+    try:
+        db = SQLiteStorage(DB_PATH)
+    except Exception as e:
+        logger.error(f"SQLite storage unavailable, continuing without persistence: {e}")
+
     alerts: list[dict] = []
+    category = profile.get("category", "")
 
     for deal in deals:
         if deal.id in seen:
@@ -349,6 +359,10 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         # Price drop detection
         price_plus = check_price_changes(deal, state, profile_name)
 
+        # Persist to SQLite
+        if db and result.score >= threshold:
+            db.upsert_deal(deal, profile_name, result.score, category)
+
         if result.score >= threshold:
             alert_plus = list(result.plus) + price_plus
             alerts.append(
@@ -359,6 +373,9 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                     "minus": result.minus,
                 }
             )
+
+    if db:
+        db.close()
 
     state["seen"] = seen
     save_state(profile_name, state)
