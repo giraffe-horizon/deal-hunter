@@ -27,12 +27,15 @@ filters/base.py         Base scoring engine (score_rules, penalties, budget, tem
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting
 storage/sqlite.py       SQLite persistence layer (deals, price history, feedback)
+health.py               Health monitoring (state tracking, --health, --watchdog)
 utils/validation.py     YAML profile validation (types, required fields, sanity checks)
 profiles/*.yaml         Product profiles (gitignored, see docs/creating-profiles.md)
 docs/creating-profiles.md  Profile creation guide
 state/*.json            Persistent state per profile (what's been seen, 14-day TTL)
+state/health.json       Health monitoring state (last run, per-source/profile results)
 state/deals.db          SQLite database (deals, price_history, feedback tables)
 scripts/migrate_state_to_sqlite.py  One-time migration from state/*.json to SQLite
+scripts/systemd/        Systemd user timer units + install script
 ```
 
 ## Key Patterns
@@ -106,6 +109,8 @@ python deal_hunter.py --profile nas_hdd           # normal run
 python deal_hunter.py --all                        # all profiles
 python deal_hunter.py --list                       # list profiles
 python deal_hunter.py --profile bikes --validate  # validate profile without running
+python deal_hunter.py --health                     # show health status of last run
+python deal_hunter.py --watchdog                   # check freshness, alert if stale
 ```
 
 ## Environment Variables
@@ -191,6 +196,21 @@ Deal Hunter automatically tracks prices of known offers. State saved in `state/<
 - Price increase -> logged, but no minus added
 - No configuration needed — works out of the box
 
+## Health Monitoring
+
+After every non-verify run, Deal Hunter writes `state/health.json` with:
+- Overall status (`ok`/`partial`/`error`), duration, version
+- Per-profile results (deals found, new alerts, errors)
+- Per-source health (consecutive failures tracked across runs)
+
+**CLI flags:**
+- `--health` — human-readable status. Exit codes: 0=ok, 1=partial, 2=error, 3=stale/missing
+- `--watchdog` — checks if last run was within 2 hours; sends Telegram alert if stale. Exit code: 0=fresh, 1=stale
+
+**Source failure alerts:** If any source has >= 3 consecutive failures, a Telegram alert is sent automatically after the run.
+
+**Systemd timers:** `scripts/systemd/install.sh` installs user-level timers (run every 30m, watchdog every 1h). The main service has `OnFailure=` to send Telegram crash alerts.
+
 ## Profile Validation
 
 `utils/validation.py` -> `validate_profile(profile) -> list[str]`
@@ -214,6 +234,7 @@ Test modules:
 - `test_extract_price.py` — price parser
 - `test_deal.py`, `test_dedup.py`, `test_state.py`, `test_validation.py` — core logic
 - `test_sqlite_storage.py` — SQLite persistence layer (CRUD, upsert, price history, filtering)
+- `test_health.py` — health monitoring (health.json, --health, --watchdog, source tracking)
 
 Manual testing:
 ```bash

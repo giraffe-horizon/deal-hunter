@@ -19,6 +19,15 @@ import yaml
 from dotenv import load_dotenv
 
 from filters import FILTER_REGISTRY
+from health import (
+    build_health_data,
+    check_watchdog,
+    get_failing_sources,
+    load_health,
+    print_health_status,
+    save_health,
+    update_sources_health,
+)
 from storage.sqlite import SQLiteStorage
 
 __version__ = "0.1.0"  # maintained by semantic-release
@@ -222,10 +231,16 @@ def _detect_category(deal, profile: dict, profile_name: str = "") -> str:
 # ──────────────── FETCH ────────────────
 
 
-def fetch_all_deals(profile: dict) -> list:
-    """Fetch deals from all configured sources."""
+def fetch_all_deals(profile: dict) -> tuple[list, dict[str, bool], list[str]]:
+    """Fetch deals from all configured sources.
+
+    Returns (deals, source_results, errors) where source_results maps
+    source_name -> True/False for health tracking.
+    """
     sources_config = profile.get("sources", {})
     all_deals = []
+    source_results: dict[str, bool] = {}
+    errors: list[str] = []
 
     for source_name, source_config in sources_config.items():
         source_class = SOURCE_REGISTRY.get(source_name)
@@ -237,12 +252,15 @@ def fetch_all_deals(profile: dict) -> list:
             source = source_class()
             deals = source.fetch_deals(source_config)
             all_deals.extend(deals)
+            source_results[source_name] = True
             logger.info(f"Source {source_name}: {len(deals)} deals fetched")
         except Exception as e:
             logger.error(f"Source {source_name} failed: {e}", exc_info=True)
+            source_results[source_name] = False
+            errors.append(f"{source_name}: {e}")
             # Graceful degradation — continue with other sources
 
-    return all_deals
+    return all_deals, source_results, errors
 
 
 def deduplicate(deals: list) -> list:
@@ -284,8 +302,10 @@ def deduplicate(deals: list) -> list:
 # ──────────────── RUN MODES ────────────────
 
 
-def run_profile(profile_name: str, verify: bool = False, validate_only: bool = False) -> None:
-    """Run a single profile."""
+def run_profile(
+    profile_name: str, verify: bool = False, validate_only: bool = False
+) -> dict | None:
+    """Run a single profile. Returns profile result dict for health tracking (None in verify/validate mode)."""
     profile = load_profile(profile_name)
 
     # Validate profile
@@ -297,20 +317,20 @@ def run_profile(profile_name: str, verify: bool = False, validate_only: bool = F
             print(f"\u274c Profile '{profile_name}' has {len(errors)} error(s):")
             for err in errors:
                 print(f"  - {err}")
-            return
+            return None
         logger.error(f"Profile '{profile_name}' has validation errors, skipping")
-        return
+        return {"status": "error", "deals_found": 0, "new_alerts": 0, "errors": [f"validation: {e}" for e in errors], "source_results": {}}
 
     if validate_only:
         print(f"\u2705 Profile '{profile_name}' is valid")
-        return
+        return None
 
     emoji = profile.get("emoji", "\U0001f50d")
     logger.info(f"{'=' * 60}")
     logger.info(f"Running profile: {profile_name} {emoji} (verify={verify})")
 
     # Fetch
-    all_deals = fetch_all_deals(profile)
+    all_deals, source_results, fetch_errors = fetch_all_deals(profile)
     unique_deals = deduplicate(all_deals)
     logger.info(f"Total unique deals: {len(unique_deals)}")
 
@@ -319,14 +339,23 @@ def run_profile(profile_name: str, verify: bool = False, validate_only: bool = F
 
     if verify:
         _run_verify(unique_deals, deal_filter, profile)
-        return
+        return None
 
     # Normal mode
-    _run_normal(unique_deals, deal_filter, profile, profile_name)
+    num_alerts = _run_normal(unique_deals, deal_filter, profile, profile_name)
+
+    status = "ok" if not fetch_errors else ("partial" if unique_deals else "error")
+    return {
+        "status": status,
+        "deals_found": len(unique_deals),
+        "new_alerts": num_alerts,
+        "errors": fetch_errors,
+        "source_results": source_results,
+    }
 
 
-def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_name: str) -> None:
-    """Normal mode — find new deals, score, and notify."""
+def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_name: str) -> int:
+    """Normal mode — find new deals, score, and notify. Returns number of alerts sent."""
     state = load_state(profile_name)
     seen = state.get("seen", {})
     now = datetime.now().isoformat()
@@ -397,7 +426,7 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
     if not alerts:
         print(f"{emoji} No new deals for profile {profile_name}.")
         logger.info(f"No new alerts for {profile_name}")
-        return
+        return 0
 
     # Sort by score descending
     alerts.sort(key=lambda x: x["score"], reverse=True)
@@ -447,6 +476,7 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         print()
 
     logger.info(f"Profile {profile_name}: {len(alerts)} alerts")
+    return len(alerts)
 
 
 def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict) -> None:
@@ -506,6 +536,68 @@ def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict) -> None:
 # ──────────────── CLI ────────────────
 
 
+def _run_with_health_tracking(profile_names: list[str], verify: bool = False) -> None:
+    """Run profiles and write health.json with results."""
+    import time as _time
+
+    start = _time.monotonic()
+    existing_health = load_health()
+
+    profile_results: dict[str, dict] = {}
+    all_source_results: dict[str, bool] = {}
+
+    for profile_name in profile_names:
+        try:
+            result = run_profile(profile_name, verify=verify)
+            if result is not None:
+                # Extract source_results before storing in profile_results
+                source_results = result.pop("source_results", {})
+                profile_results[profile_name] = result
+                # Merge source results (last write wins per source, which is fine)
+                all_source_results.update(source_results)
+        except Exception as e:
+            logger.error(f"Profile {profile_name} failed: {e}", exc_info=True)
+            profile_results[profile_name] = {
+                "status": "error",
+                "deals_found": 0,
+                "new_alerts": 0,
+                "errors": [str(e)],
+            }
+
+    # Skip health tracking for verify mode
+    if verify or not profile_results:
+        return
+
+    duration = _time.monotonic() - start
+    sources_health = update_sources_health(existing_health, all_source_results)
+    health_data = build_health_data(profile_results, sources_health, duration, __version__)
+    save_health(health_data)
+
+    # Alert on sources with consecutive failures >= threshold
+    failing_sources = get_failing_sources(sources_health)
+    if failing_sources:
+        _send_source_failure_alert(failing_sources, sources_health)
+
+
+def _send_source_failure_alert(failing_sources: list[str], sources_health: dict) -> None:
+    """Send Telegram alert for sources with too many consecutive failures."""
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not tg_token or not tg_chat:
+        return
+
+    telegram = TelegramNotifier(tg_token, tg_chat)
+    lines = []
+    for name in failing_sources:
+        data = sources_health[name]
+        count = data.get("consecutive_failures", 0)
+        last = data.get("last_success", "never")
+        lines.append(f"  • {name}: {count} consecutive failures (last success: {last})")
+
+    msg = f"⚠️ Deal Hunter: source failures detected!\n\n" + "\n".join(lines)
+    telegram._send_message(msg)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Deal Hunter \u2014 multi-source deal monitor")
     parser.add_argument("--profile", "-p", type=str, help="Profile name to run")
@@ -519,6 +611,10 @@ def main() -> None:
     parser.add_argument("--list", "-l", action="store_true", help="List available profiles")
     parser.add_argument("--validate", action="store_true", help="Validate profile without running")
     parser.add_argument("--init", action="store_true", help="Create a new profile interactively")
+    parser.add_argument("--health", action="store_true", help="Show health status of last run")
+    parser.add_argument(
+        "--watchdog", action="store_true", help="Check if last run is fresh, alert if stale"
+    )
     parser.add_argument("--version", action="version", version=f"Deal Hunter {__version__}")
 
     args = parser.parse_args()
@@ -528,6 +624,24 @@ def main() -> None:
 
         run_init()
         return
+
+    if args.health:
+        sys.exit(print_health_status())
+
+    if args.watchdog:
+        ok, message = check_watchdog()
+        if ok:
+            print("OK")
+            sys.exit(0)
+        else:
+            print(f"STALE: {message}")
+            # Send Telegram alert
+            tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+            tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+            if tg_token and tg_chat:
+                telegram = TelegramNotifier(tg_token, tg_chat)
+                telegram._send_message(f"⚠️ Deal Hunter watchdog: {message}")
+            sys.exit(1)
 
     if args.list:
         profiles = list_profiles()
@@ -548,15 +662,12 @@ def main() -> None:
         return
 
     if args.all:
-        for profile_name in list_profiles(include_disabled=False):
-            try:
-                run_profile(profile_name, verify=args.verify)
-            except Exception as e:
-                logger.error(f"Profile {profile_name} failed: {e}", exc_info=True)
+        profiles = list_profiles(include_disabled=False)
+        _run_with_health_tracking(profiles, verify=args.verify)
         return
 
     if args.profile:
-        run_profile(args.profile, verify=args.verify)
+        _run_with_health_tracking([args.profile], verify=args.verify)
         return
 
     parser.print_help()

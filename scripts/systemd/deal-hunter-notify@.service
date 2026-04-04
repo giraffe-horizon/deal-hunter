@@ -1,0 +1,7 @@
+[Unit]
+Description=Deal Hunter crash notification for %i
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/Projects/deal-hunter/.env
+ExecStart=/bin/bash -c 'curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" -d chat_id="${TELEGRAM_CHAT_ID}" -d text="❌ Deal Hunter service crashed: %i. Check logs: journalctl --user -u %i"'
