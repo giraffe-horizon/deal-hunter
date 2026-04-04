@@ -11,12 +11,14 @@
 - **beautifulsoup4** — HTML scraping
 - **pyyaml** — YAML profile parsing
 - **python-dotenv** — environment variables from `.env`
+- **python-telegram-bot** v21+ — async Telegram bot for feedback (polling)
 - No web framework — this is a CLI tool designed to run on cron
 
 ## Architecture
 
 ```
 deal_hunter.py          Orchestrator: loads profile -> sources -> scoring -> notifications
+feedback_bot.py         Standalone Telegram feedback bot (polling, inline keyboards)
 sources/base.py         Base Source class + Deal dataclass (common format)
 sources/yaml_source.py  Universal YAML-driven source engine (CSS, JSON-LD, GTM strategies)
 sources/pepper.py       Pepper.pl scraper (Vue3 JSON + HTML fallback — too complex for YAML)
@@ -35,7 +37,7 @@ state/*.json            Persistent state per profile (what's been seen, 14-day T
 state/health.json       Health monitoring state (last run, per-source/profile results)
 state/deals.db          SQLite database (deals, price_history, feedback tables)
 scripts/migrate_state_to_sqlite.py  One-time migration from state/*.json to SQLite
-scripts/systemd/        Systemd user timer units + install script
+scripts/systemd/        Systemd user timer units + bot service + install script
 ```
 
 ## Key Patterns
@@ -206,7 +208,7 @@ Deal Hunter automatically tracks prices of known offers. State saved in `state/<
 price_tracking:
   enabled: true              # default: true
   min_drop_percent: 15       # alert if price drops >= 15% (default: 10)
-  min_drop_amount: 200       # alert if price drops >= 200 PLN (default: 100, OR with percent)
+  min_drop_amount: 200       # alert if price drops >= 200 PLN (default: 200, OR with percent)
   track_increases: false     # notify on price increases (default: false)
 ```
 
@@ -231,7 +233,32 @@ After every non-verify run, Deal Hunter writes `state/health.json` with:
 
 **Source failure alerts:** If any source has >= 3 consecutive failures, a Telegram alert is sent automatically after the run.
 
-**Systemd timers:** `scripts/systemd/install.sh` installs user-level timers (run every 30m, watchdog every 1h). The main service has `OnFailure=` to send Telegram crash alerts.
+**Systemd timers:** `scripts/systemd/install.sh` installs user-level timers (run every 30m, watchdog every 1h), plus the feedback bot service. The main service has `OnFailure=` to send Telegram crash alerts.
+
+## Feedback Bot
+
+`feedback_bot.py` — standalone Telegram bot (separate process from `deal_hunter.py`) using `python-telegram-bot` v21+ async polling.
+
+**Features:**
+- Inline keyboard buttons on deal alerts: [Otwórz] [Obserwuj] [Skip]
+- Callback handler: records feedback to SQLite, updates deal status
+- Text commands: `/watch <deal_id>`, `/skip <deal_id>`, `/status`, `/watchlist`
+- Graceful shutdown on SIGTERM
+
+**How to run:**
+```bash
+source venv/bin/activate
+python feedback_bot.py
+```
+
+**Systemd:** `scripts/systemd/deal-hunter-bot.service` (Type=simple, Restart=on-failure).
+
+**Inline keyboards:** `notifiers/telegram.py` → `build_deal_keyboard(deal_link, deal_id)` generates the InlineKeyboardMarkup dict. Added to `send_alert()` and `send_price_drop_alert()`.
+
+**SQLite methods** (in `storage/sqlite.py`):
+- `update_deal_status(deal_id, status) -> bool`
+- `get_deals_by_status(status, limit=20) -> list[dict]`
+- `get_feedback_stats() -> dict`
 
 ## Profile Validation
 
@@ -259,6 +286,7 @@ Test modules:
 - `test_health.py` — health monitoring (health.json, --health, --watchdog, source tracking)
 - `test_price_drops.py` — price drop detection, thresholds, digest, Telegram formatting, validation
 - `test_verbose_scoring.py` — verbose scoring breakdown, ScoreResult.breakdown, BikeFilter entries, output format, rich fallback
+- `test_feedback_bot.py` — feedback bot: SQLite additions, callback parsing, inline keyboard, bot command handlers
 
 Manual testing:
 ```bash

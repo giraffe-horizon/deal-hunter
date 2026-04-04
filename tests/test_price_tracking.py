@@ -30,7 +30,7 @@ def test_price_drop_detected():
     state = {
         "seen": {},
         "prices": {
-            "test deal|pepper": [{"price": 10000, "ts": "2026-03-19T10:00:00"}],
+            "test:1": [{"price": 10000, "ts": "2026-03-19T10:00:00"}],
         },
     }
     deal = _make_deal(title="Test Deal", price=8000)
@@ -47,7 +47,7 @@ def test_price_increase_ignored():
     state = {
         "seen": {},
         "prices": {
-            "test deal|pepper": [{"price": 8000, "ts": "2026-03-19T10:00:00"}],
+            "test:1": [{"price": 8000, "ts": "2026-03-19T10:00:00"}],
         },
     }
     deal = _make_deal(title="Test Deal", price=10000)

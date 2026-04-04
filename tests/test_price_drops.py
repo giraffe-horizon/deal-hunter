@@ -104,7 +104,7 @@ class TestPriceTrackingConfig:
         config = get_price_tracking_config(profile)
         assert config["enabled"] is True
         assert config["min_drop_percent"] == 10
-        assert config["min_drop_amount"] == 100
+        assert config["min_drop_amount"] == 200
         assert config["track_increases"] is False
 
     def test_custom_values(self, profile_with_tracking):
@@ -126,7 +126,7 @@ class TestPriceTrackingConfig:
         config = get_price_tracking_config(profile)
         assert config["min_drop_percent"] == 20
         # Defaults for unspecified
-        assert config["min_drop_amount"] == 100
+        assert config["min_drop_amount"] == 200
         assert config["enabled"] is True
 
 
@@ -145,7 +145,7 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "canyon endurace cf 8 di2|pepper": [
+                "pepper:12345": [
                     {"price": 10499, "ts": "2026-04-01T10:00:00"}
                 ]
             },
@@ -158,7 +158,7 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "canyon endurace cf 8 di2|pepper": [
+                "pepper:12345": [
                     {"price": 12999, "ts": "2026-04-01T10:00:00"}
                 ]
             },
@@ -176,7 +176,7 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "canyon endurace cf 8 di2|pepper": [
+                "pepper:12345": [
                     {"price": 10799, "ts": "2026-04-01T10:00:00"}
                 ]
             },
@@ -196,7 +196,7 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "some bike|pepper": [
+                "test:1": [
                     {"price": 10000, "ts": "2026-04-01T10:00:00"}
                 ]
             },
@@ -214,7 +214,7 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "some bike|pepper": [
+                "test:1": [
                     {"price": 10000, "ts": "2026-04-01T10:00:00"}
                 ]
             },
@@ -235,7 +235,7 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "some bike|pepper": [
+                "test:1": [
                     {"price": 10000, "ts": "2026-04-01T10:00:00"}
                 ]
             },
@@ -249,7 +249,7 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "canyon endurace cf 8 di2|pepper": [
+                "pepper:12345": [
                     {"price": 15000, "ts": "2026-04-01T10:00:00"}
                 ]
             },
@@ -272,7 +272,7 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "canyon endurace cf 8 di2|pepper": [
+                "pepper:12345": [
                     {"price": 14000, "ts": "2026-03-01T10:00:00"},
                     {"price": 12999, "ts": "2026-04-01T10:00:00"},
                 ]
@@ -293,7 +293,7 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "some bike|pepper": [
+                "test:1": [
                     {"price": 9000, "ts": "2026-03-01T10:00:00"},
                     {"price": 12000, "ts": "2026-04-01T10:00:00"},
                 ]
@@ -316,7 +316,7 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "canyon endurace cf 8 di2|pepper": [
+                "pepper:12345": [
                     {"price": 12999, "ts": "2026-04-01T10:00:00"},
                 ]
             },
@@ -330,12 +330,81 @@ class TestCheckPriceChanges:
         state = {
             "seen": {},
             "prices": {
-                "canyon endurace cf 8 di2|pepper": [
+                "pepper:12345": [
                     {"price": 15000, "ts": "2026-04-01T10:00:00"}
                 ]
             },
         }
         result = check_price_changes(deal, state, "bikes")
+        assert result is not None
+        assert result["type"] == "drop"
+
+    def test_cross_source_no_false_drop(self, profile_with_tracking):
+        """Same product from different sources should NOT trigger false price drop."""
+        deal_a = Deal(
+            id="sprint:100", title="BMC URS TWO", price=13900,
+            link="http://sprint.pl/100", source="sprint", description="",
+            temperature=0, image_url="", published_at="",
+        )
+        deal_b = Deal(
+            id="centrumrowerowe:200", title="BMC URS TWO", price=8999,
+            link="http://cr.pl/200", source="centrumrowerowe", description="",
+            temperature=0, image_url="", published_at="",
+        )
+        state = {"seen": {}, "prices": {}}
+
+        # First source records its price
+        result_a = check_price_changes(deal_a, state, "bikes", profile_with_tracking)
+        assert result_a is None  # first time, no change
+
+        # Second source should NOT see a price drop from first source
+        result_b = check_price_changes(deal_b, state, "bikes", profile_with_tracking)
+        assert result_b is None  # first time for this deal.id too
+
+        # Each deal should have its own price history entry
+        assert "sprint:100" in state["prices"]
+        assert "centrumrowerowe:200" in state["prices"]
+
+    def test_cooldown_suppresses_rapid_drops(self, profile_with_tracking):
+        """Price drop within 24h of a previous change should be suppressed."""
+        deal = Deal(
+            id="test:1", title="Some Bike", price=8000,
+            link="http://x", source="pepper", description="",
+            temperature=0, image_url="", published_at="",
+        )
+        now = datetime.now()
+        recent_ts = (now - timedelta(hours=2)).isoformat()
+        state = {
+            "seen": {},
+            "prices": {
+                "test:1": [
+                    {"price": 12000, "ts": "2026-03-01T10:00:00"},
+                    {"price": 10000, "ts": recent_ts},  # change 2h ago
+                ]
+            },
+        }
+        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
+        # Should be suppressed — previous change was only 2h ago
+        assert result is None
+
+    def test_cooldown_allows_after_24h(self, profile_with_tracking):
+        """Price drop after 24h cooldown should be allowed."""
+        deal = Deal(
+            id="test:1", title="Some Bike", price=8000,
+            link="http://x", source="pepper", description="",
+            temperature=0, image_url="", published_at="",
+        )
+        old_ts = (datetime.now() - timedelta(hours=25)).isoformat()
+        state = {
+            "seen": {},
+            "prices": {
+                "test:1": [
+                    {"price": 12000, "ts": "2026-03-01T10:00:00"},
+                    {"price": 10000, "ts": old_ts},  # change 25h ago
+                ]
+            },
+        }
+        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
         assert result is not None
         assert result["type"] == "drop"
 

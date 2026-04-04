@@ -138,7 +138,7 @@ def get_price_tracking_config(profile: dict) -> dict:
     return {
         "enabled": pt.get("enabled", True),
         "min_drop_percent": pt.get("min_drop_percent", 10),
-        "min_drop_amount": pt.get("min_drop_amount", 100),
+        "min_drop_amount": pt.get("min_drop_amount", 200),
         "track_increases": pt.get("track_increases", False),
     }
 
@@ -163,14 +163,15 @@ def check_price_changes(
         return None
 
     pt_config = get_price_tracking_config(profile) if profile else {
-        "enabled": True, "min_drop_percent": 10, "min_drop_amount": 100, "track_increases": False,
+        "enabled": True, "min_drop_percent": 10, "min_drop_amount": 200, "track_increases": False,
     }
 
     if not pt_config["enabled"]:
         return None
 
     prices = state.get("prices", {})
-    dedup_key = f"{_normalize_title(deal.title)}|{deal.source}"
+    # Use deal.id (source:native_id) to avoid cross-source false positives
+    dedup_key = deal.id
     now = datetime.now().isoformat()
 
     history = prices.get(dedup_key, [])
@@ -196,6 +197,21 @@ def check_price_changes(
 
         # Check thresholds (OR logic)
         if drop_pct >= pt_config["min_drop_percent"] or drop_abs >= pt_config["min_drop_amount"]:
+            # Cooldown: skip if we already alerted on this deal within 24h
+            if len(history) >= 3:
+                prev_ts = history[-2].get("ts", "")
+                if prev_ts:
+                    try:
+                        prev_dt = datetime.fromisoformat(prev_ts)
+                        if (datetime.now() - prev_dt).total_seconds() < 86400:
+                            logger.debug(
+                                f"Price drop cooldown for '{deal.title[:60]}': "
+                                f"last change was {prev_ts}"
+                            )
+                            return None
+                    except (ValueError, TypeError):
+                        pass
+
             # Check if this is the lowest ever price via SQLite
             is_lowest = False
             if db:
