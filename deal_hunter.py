@@ -206,6 +206,19 @@ def get_filter(profile: dict) -> BaseFilter:
     return BaseFilter(profile)
 
 
+def _detect_category(deal, profile: dict, profile_name: str = "") -> str:
+    """Detect product category from deal title+description using profile's categories mapping."""
+    categories = profile.get("categories", {})
+    if not categories:
+        return profile_name if profile_name else ""
+
+    text = (deal.title + " " + deal.description).lower()
+    for category, keywords in categories.items():
+        if any(kw.lower() in text for kw in keywords):
+            return str(category)
+    return profile_name if profile_name else ""
+
+
 # ──────────────── FETCH ────────────────
 
 
@@ -342,40 +355,41 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         logger.error(f"SQLite storage unavailable, continuing without persistence: {e}")
 
     alerts: list[dict] = []
-    category = profile.get("category", "")
 
-    for deal in deals:
-        if deal.id in seen:
-            continue
+    try:
+        for deal in deals:
+            if deal.id in seen:
+                continue
 
-        seen[deal.id] = now
+            seen[deal.id] = now
 
-        result = deal_filter.score_deal(deal)
+            result = deal_filter.score_deal(deal)
 
-        if result.rejected:
-            logger.debug(f"Rejected: {deal.title[:60]} ({result.reject_reason})")
-            continue
+            if result.rejected:
+                logger.debug(f"Rejected: {deal.title[:60]} ({result.reject_reason})")
+                continue
 
-        # Price drop detection
-        price_plus = check_price_changes(deal, state, profile_name)
+            # Price drop detection
+            price_plus = check_price_changes(deal, state, profile_name)
 
-        # Persist to SQLite
-        if db and result.score >= threshold:
-            db.upsert_deal(deal, profile_name, result.score, category)
+            # Persist to SQLite
+            if db and result.score >= threshold:
+                category = _detect_category(deal, profile, profile_name)
+                db.upsert_deal(deal, profile_name, result.score, category)
 
-        if result.score >= threshold:
-            alert_plus = list(result.plus) + price_plus
-            alerts.append(
-                {
-                    "deal": deal,
-                    "score": result.score,
-                    "plus": alert_plus,
-                    "minus": result.minus,
-                }
-            )
-
-    if db:
-        db.close()
+            if result.score >= threshold:
+                alert_plus = list(result.plus) + price_plus
+                alerts.append(
+                    {
+                        "deal": deal,
+                        "score": result.score,
+                        "plus": alert_plus,
+                        "minus": result.minus,
+                    }
+                )
+    finally:
+        if db:
+            db.close()
 
     state["seen"] = seen
     save_state(profile_name, state)

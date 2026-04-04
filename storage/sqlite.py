@@ -61,6 +61,13 @@ class SQLiteStorage:
             logger.error(f"Failed to initialize SQLite database at {self.db_path}: {e}")
             raise
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
     def upsert_deal(
         self,
         deal,
@@ -195,6 +202,49 @@ class SQLiteStorage:
             self._conn.commit()
         except sqlite3.Error as e:
             logger.error(f"Failed to record feedback for {deal_id}: {e}")
+
+    def import_legacy_deal(
+        self,
+        deal_id: str,
+        title: str,
+        price: int,
+        source: str,
+        profile: str,
+        first_seen: str,
+        last_seen: str,
+    ) -> None:
+        """Import a deal from legacy state files. Used by the migration script."""
+        try:
+            self._conn.execute(
+                """INSERT INTO deals (id, title, price, link, source, description,
+                   image_url, profile, score, category, first_seen, last_seen, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                   last_seen = MAX(deals.last_seen, excluded.last_seen)""",
+                (deal_id, title, price, "", source, "", "", profile, 0, "",
+                 first_seen, last_seen, "active"),
+            )
+        except sqlite3.Error as e:
+            logger.error(f"Failed to import legacy deal {deal_id}: {e}")
+
+    def import_legacy_price(
+        self,
+        deal_id: str,
+        price: int,
+        recorded_at: str,
+    ) -> None:
+        """Import a price history entry from legacy state files."""
+        try:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
+                (deal_id, price, recorded_at),
+            )
+        except sqlite3.Error as e:
+            logger.error(f"Failed to import legacy price for {deal_id}: {e}")
+
+    def commit(self) -> None:
+        """Commit the current transaction."""
+        self._conn.commit()
 
     def close(self) -> None:
         """Close the database connection."""

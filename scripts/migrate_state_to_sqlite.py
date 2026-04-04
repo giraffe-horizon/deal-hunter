@@ -55,32 +55,16 @@ def migrate_state_file(db: SQLiteStorage, state_path: Path) -> dict:
     now = datetime.now().isoformat()
     for deal_id, first_seen_ts in seen.items():
         source = deal_id.split(":")[0] if ":" in deal_id else "unknown"
-        try:
-            db._conn.execute(
-                """INSERT INTO deals (id, title, price, link, source, description,
-                   image_url, profile, score, category, first_seen, last_seen, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(id) DO UPDATE SET
-                   last_seen = MAX(deals.last_seen, excluded.last_seen)""",
-                (
-                    deal_id,
-                    f"[migrated] {deal_id}",  # no title in state data
-                    0,
-                    "",
-                    source,
-                    "",
-                    "",
-                    profile_name,
-                    0,
-                    "",
-                    first_seen_ts,
-                    first_seen_ts,
-                    "active",
-                ),
-            )
-            stats["seen"] += 1
-        except Exception as e:
-            logger.warning(f"  Failed to migrate deal {deal_id}: {e}")
+        db.import_legacy_deal(
+            deal_id=deal_id,
+            title=f"[migrated] {deal_id}",
+            price=0,
+            source=source,
+            profile=profile_name,
+            first_seen=first_seen_ts,
+            last_seen=first_seen_ts,
+        )
+        stats["seen"] += 1
 
     # Migrate price history
     for price_key, history in prices.items():
@@ -91,44 +75,21 @@ def migrate_state_file(db: SQLiteStorage, state_path: Path) -> dict:
         synthetic_id = f"{source}:migrated:{hash(price_key) % 10**8}"
 
         # Ensure the deal record exists
-        try:
-            db._conn.execute(
-                """INSERT OR IGNORE INTO deals
-                   (id, title, price, link, source, description, image_url,
-                    profile, score, category, first_seen, last_seen, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    synthetic_id,
-                    f"[migrated] {parts[0][:100]}",
-                    history[-1]["price"] if history else 0,
-                    "",
-                    source,
-                    "",
-                    "",
-                    profile_name,
-                    0,
-                    "",
-                    history[0]["ts"] if history else now,
-                    history[-1]["ts"] if history else now,
-                    "active",
-                ),
-            )
-        except Exception as e:
-            logger.warning(f"  Failed to migrate price deal record: {e}")
-            continue
+        db.import_legacy_deal(
+            deal_id=synthetic_id,
+            title=f"[migrated] {parts[0][:100]}",
+            price=history[-1]["price"] if history else 0,
+            source=source,
+            profile=profile_name,
+            first_seen=history[0]["ts"] if history else now,
+            last_seen=history[-1]["ts"] if history else now,
+        )
 
         for entry in history:
-            try:
-                db._conn.execute(
-                    """INSERT OR IGNORE INTO price_history
-                       (deal_id, price, recorded_at) VALUES (?, ?, ?)""",
-                    (synthetic_id, entry["price"], entry["ts"]),
-                )
-                stats["prices"] += 1
-            except Exception as e:
-                logger.warning(f"  Failed to migrate price entry: {e}")
+            db.import_legacy_price(synthetic_id, entry["price"], entry["ts"])
+            stats["prices"] += 1
 
-    db._conn.commit()
+    db.commit()
     return stats
 
 
@@ -145,20 +106,19 @@ def main() -> None:
     logger.info(f"Found {len(state_files)} state file(s) to migrate")
     logger.info(f"Database: {DB_PATH}")
 
-    db = SQLiteStorage(DB_PATH)
-    total_seen = 0
-    total_prices = 0
+    with SQLiteStorage(DB_PATH) as db:
+        total_seen = 0
+        total_prices = 0
 
-    for state_path in state_files:
-        logger.info(f"Migrating {state_path.name}...")
-        stats = migrate_state_file(db, state_path)
-        total_seen += stats["seen"]
-        total_prices += stats["prices"]
-        logger.info(
-            f"  {stats['profile']}: {stats['seen']} deals, {stats['prices']} price entries"
-        )
+        for state_path in state_files:
+            logger.info(f"Migrating {state_path.name}...")
+            stats = migrate_state_file(db, state_path)
+            total_seen += stats["seen"]
+            total_prices += stats["prices"]
+            logger.info(
+                f"  {stats['profile']}: {stats['seen']} deals, {stats['prices']} price entries"
+            )
 
-    db.close()
     logger.info(f"Migration complete: {total_seen} deals, {total_prices} price entries")
 
 
