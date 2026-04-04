@@ -66,7 +66,11 @@ class Source(ABC):
 Sources have built-in rate limiting (`MIN_REQUEST_INTERVAL = 2s`), retry with backoff, and a `_fetch_page()` helper.
 
 ### Scoring
-`BaseFilter.score_deal(deal) -> ScoreResult(score, plus, minus, rejected, reject_reason)`
+`BaseFilter.score_deal(deal) -> ScoreResult(score, plus, minus, rejected, reject_reason, breakdown)`
+
+`breakdown` is a list of dicts: `[{rule, points, source, match, type}]` tracking every rule that fired.
+Types: `keyword`, `regex`, `penalty`, `budget`, `temperature`, `excluded`, `required_any`.
+BikeFilter adds types: `size`, `color`, `tire`, `race`.
 
 Flow:
 1. Excluded words -> hard reject
@@ -106,6 +110,8 @@ Each profile (`profiles/*.yaml`) defines:
 ```bash
 source venv/bin/activate
 python deal_hunter.py --profile bikes --verify   # test without saving state
+python deal_hunter.py --profile bikes --verify -v # verbose scoring breakdown
+python deal_hunter.py --profile bikes --verify -v --top 10  # top 10 verbose
 python deal_hunter.py --profile nas_hdd           # normal run
 python deal_hunter.py --all                        # all profiles
 python deal_hunter.py --list                       # list profiles
@@ -252,6 +258,7 @@ Test modules:
 - `test_sqlite_storage.py` — SQLite persistence layer (CRUD, upsert, price history, filtering)
 - `test_health.py` — health monitoring (health.json, --health, --watchdog, source tracking)
 - `test_price_drops.py` — price drop detection, thresholds, digest, Telegram formatting, validation
+- `test_verbose_scoring.py` — verbose scoring breakdown, ScoreResult.breakdown, BikeFilter entries, output format, rich fallback
 
 Manual testing:
 ```bash
