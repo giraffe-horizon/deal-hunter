@@ -95,6 +95,7 @@ Each profile (`profiles/*.yaml`) defines:
 - `score_threshold`, `score_threshold_alert` — thresholds
 - `currency` — currency code (default "PLN")
 - `telegram` — `{topic_id, max_alerts}`
+- `price_tracking` — optional: `{enabled, min_drop_percent, min_drop_amount, track_increases}`
 
 ### Plugin Registration
 - Sources: `sources/__init__.py` -> `SOURCE_REGISTRY` — Python sources (pepper, web) registered explicitly; YAML stores from `stores/*.yaml` auto-discovered at import time
@@ -111,6 +112,7 @@ python deal_hunter.py --list                       # list profiles
 python deal_hunter.py --profile bikes --validate  # validate profile without running
 python deal_hunter.py --health                     # show health status of last run
 python deal_hunter.py --watchdog                   # check freshness, alert if stale
+python deal_hunter.py --digest                     # weekly price drop digest from SQLite
 ```
 
 ## Environment Variables
@@ -191,10 +193,24 @@ sources:
 
 ## Price Tracking
 
-Deal Hunter automatically tracks prices of known offers. State saved in `state/<profile>_state.json` under the `"prices"` key.
-- If a deal reappears with a lower price (>10% drop or >50 PLN) -> extra plus in the alert
-- Price increase -> logged, but no minus added
-- No configuration needed — works out of the box
+Deal Hunter automatically tracks prices of known offers. State saved in `state/<profile>_state.json` under the `"prices"` key, with SQLite `price_history` as richer data source.
+
+**Configurable via profile YAML:**
+```yaml
+price_tracking:
+  enabled: true              # default: true
+  min_drop_percent: 15       # alert if price drops >= 15% (default: 10)
+  min_drop_amount: 200       # alert if price drops >= 200 PLN (default: 100, OR with percent)
+  track_increases: false     # notify on price increases (default: false)
+```
+
+**Behavior:**
+- Price drop meeting thresholds -> separate Telegram alert (sent before regular alerts)
+- Checks SQLite price_history for all-time lowest price detection
+- Falls back to state JSON if SQLite unavailable
+- Price increase -> logged, optionally notified if `track_increases: true`
+
+**Weekly digest:** `--digest` scans SQLite for all price drops in last 7 days and sends a Telegram summary.
 
 ## Health Monitoring
 
@@ -235,6 +251,7 @@ Test modules:
 - `test_deal.py`, `test_dedup.py`, `test_state.py`, `test_validation.py` — core logic
 - `test_sqlite_storage.py` — SQLite persistence layer (CRUD, upsert, price history, filtering)
 - `test_health.py` — health monitoring (health.json, --health, --watchdog, source tracking)
+- `test_price_drops.py` — price drop detection, thresholds, digest, Telegram formatting, validation
 
 Manual testing:
 ```bash

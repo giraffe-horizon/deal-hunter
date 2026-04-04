@@ -26,7 +26,7 @@ def _make_deal(**kwargs) -> Deal:
 
 
 def test_price_drop_detected():
-    """Price decrease adds bonus reason."""
+    """Price decrease returns structured dict."""
     state = {
         "seen": {},
         "prices": {
@@ -34,13 +34,16 @@ def test_price_drop_detected():
         },
     }
     deal = _make_deal(title="Test Deal", price=8000)
-    reasons = check_price_changes(deal, state, "test")
-    assert len(reasons) == 1
-    assert "price drop" in reasons[0]
+    result = check_price_changes(deal, state, "test")
+    assert result is not None
+    assert result["type"] == "drop"
+    assert result["old_price"] == 10000
+    assert result["new_price"] == 8000
+    assert result["diff_pln"] == 2000
 
 
 def test_price_increase_ignored():
-    """Price increase is logged but returns no bonus."""
+    """Price increase is logged but returns None by default."""
     state = {
         "seen": {},
         "prices": {
@@ -48,15 +51,15 @@ def test_price_increase_ignored():
         },
     }
     deal = _make_deal(title="Test Deal", price=10000)
-    reasons = check_price_changes(deal, state, "test")
-    assert reasons == []
+    result = check_price_changes(deal, state, "test")
+    assert result is None
 
 
 def test_no_previous_price():
     """First time seen — no tracking, just records price."""
     state = {"seen": {}, "prices": {}}
     deal = _make_deal(title="Brand New Deal", price=5000)
-    reasons = check_price_changes(deal, state, "test")
-    assert reasons == []
+    result = check_price_changes(deal, state, "test")
+    assert result is None
     # Price should be recorded
     assert len(state["prices"]) == 1

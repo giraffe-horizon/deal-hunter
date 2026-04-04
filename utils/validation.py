@@ -78,4 +78,25 @@ def validate_profile(profile: dict) -> list[str]:
     if "currency" in profile and not isinstance(profile["currency"], str):
         errors.append("'currency' must be a string")
 
+    # price_tracking validation
+    if "price_tracking" in profile:
+        pt = profile["price_tracking"]
+        if not isinstance(pt, dict):
+            errors.append("'price_tracking' must be a dict")
+        else:
+            if "enabled" in pt and not isinstance(pt["enabled"], bool):
+                errors.append("'price_tracking.enabled' must be a boolean")
+            if "min_drop_percent" in pt:
+                if not isinstance(pt["min_drop_percent"], (int, float)):
+                    errors.append("'price_tracking.min_drop_percent' must be a number")
+                elif pt["min_drop_percent"] < 0 or pt["min_drop_percent"] > 100:
+                    errors.append("'price_tracking.min_drop_percent' must be between 0 and 100")
+            if "min_drop_amount" in pt:
+                if not isinstance(pt["min_drop_amount"], (int, float)):
+                    errors.append("'price_tracking.min_drop_amount' must be a number")
+                elif pt["min_drop_amount"] < 0:
+                    errors.append("'price_tracking.min_drop_amount' must be non-negative")
+            if "track_increases" in pt and not isinstance(pt["track_increases"], bool):
+                errors.append("'price_tracking.track_increases' must be a boolean")
+
     return errors

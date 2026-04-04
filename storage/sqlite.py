@@ -2,7 +2,7 @@
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -241,6 +241,106 @@ class SQLiteStorage:
             )
         except sqlite3.Error as e:
             logger.error(f"Failed to import legacy price for {deal_id}: {e}")
+
+    def get_lowest_price(self, deal_id: str) -> int | None:
+        """Get the lowest price ever recorded for a deal."""
+        try:
+            row = self._conn.execute(
+                "SELECT MIN(price) as min_price FROM price_history WHERE deal_id = ?",
+                (deal_id,),
+            ).fetchone()
+            return row["min_price"] if row and row["min_price"] is not None else None
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get lowest price for {deal_id}: {e}")
+            return None
+
+    def get_previous_price(self, deal_id: str) -> int | None:
+        """Get the most recent price before the current one."""
+        try:
+            rows = self._conn.execute(
+                "SELECT price FROM price_history WHERE deal_id = ? ORDER BY recorded_at DESC LIMIT 2",
+                (deal_id,),
+            ).fetchall()
+            # rows[0] is current, rows[1] is previous
+            if len(rows) >= 2:
+                return rows[1]["price"]
+            return None
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get previous price for {deal_id}: {e}")
+            return None
+
+    def get_price_drops(
+        self,
+        profile: str | None = None,
+        days: int = 7,
+        min_drop_percent: float = 0,
+    ) -> list[dict]:
+        """Get deals that had price drops in the last N days.
+
+        Returns list of dicts with deal info + drop details.
+        """
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        try:
+            # Find deals where a newer price_history entry is lower than an older one
+            query = """
+                SELECT d.*, ph_new.price as new_price, ph_new.recorded_at as drop_date
+                FROM deals d
+                JOIN price_history ph_new ON d.id = ph_new.deal_id
+                WHERE ph_new.recorded_at >= ?
+            """
+            params: list = [cutoff]
+
+            if profile is not None:
+                query += " AND d.profile = ?"
+                params.append(profile)
+
+            query += " ORDER BY ph_new.recorded_at DESC"
+
+            rows = self._conn.execute(query, params).fetchall()
+
+            results = []
+            seen_deals: set[str] = set()
+            for row in rows:
+                deal_id = row["id"]
+                if deal_id in seen_deals:
+                    continue
+
+                new_price = row["new_price"]
+                # Get the price entry just before this one
+                prev = self._conn.execute(
+                    """SELECT price FROM price_history
+                       WHERE deal_id = ? AND recorded_at < ?
+                       ORDER BY recorded_at DESC LIMIT 1""",
+                    (deal_id, row["drop_date"]),
+                ).fetchone()
+
+                if not prev or prev["price"] <= new_price:
+                    continue
+
+                old_price = prev["price"]
+                diff_pln = old_price - new_price
+                diff_percent = (diff_pln / old_price) * 100 if old_price > 0 else 0
+
+                if diff_percent < min_drop_percent:
+                    continue
+
+                lowest = self.get_lowest_price(deal_id)
+                is_lowest = lowest is not None and new_price <= lowest
+
+                seen_deals.add(deal_id)
+                results.append({
+                    **dict(row),
+                    "old_price": old_price,
+                    "new_price": new_price,
+                    "diff_pln": diff_pln,
+                    "diff_percent": round(diff_percent, 1),
+                    "is_lowest_ever": is_lowest,
+                })
+
+            return results
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get price drops: {e}")
+            return []
 
     def commit(self) -> None:
         """Commit the current transaction."""

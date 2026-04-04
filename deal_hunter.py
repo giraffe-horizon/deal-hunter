@@ -132,10 +132,42 @@ def _normalize_title(title: str) -> str:
     return text.strip()
 
 
-def check_price_changes(deal, state: dict, profile_name: str) -> list[str]:
-    """Check if price dropped for a known deal. Returns extra plus reasons."""
+def get_price_tracking_config(profile: dict) -> dict:
+    """Get price tracking config with defaults."""
+    pt = profile.get("price_tracking", {})
+    return {
+        "enabled": pt.get("enabled", True),
+        "min_drop_percent": pt.get("min_drop_percent", 10),
+        "min_drop_amount": pt.get("min_drop_amount", 100),
+        "track_increases": pt.get("track_increases", False),
+    }
+
+
+def check_price_changes(
+    deal,
+    state: dict,
+    profile_name: str,
+    profile: dict | None = None,
+    db: "SQLiteStorage | None" = None,
+) -> dict | None:
+    """Check if price changed for a known deal.
+
+    Returns a structured dict on significant change:
+        {type: 'drop'|'increase', old_price, new_price, diff_pln, diff_percent, is_lowest_ever}
+    Returns None if no significant change.
+
+    The state JSON price tracking always runs (backwards compat).
+    If db (SQLiteStorage) is available, also checks for lowest-ever price.
+    """
     if deal.price <= 0:
-        return []
+        return None
+
+    pt_config = get_price_tracking_config(profile) if profile else {
+        "enabled": True, "min_drop_percent": 10, "min_drop_amount": 100, "track_increases": False,
+    }
+
+    if not pt_config["enabled"]:
+        return None
 
     prices = state.get("prices", {})
     dedup_key = f"{_normalize_title(deal.title)}|{deal.source}"
@@ -147,13 +179,13 @@ def check_price_changes(deal, state: dict, profile_name: str) -> list[str]:
         # First time seeing this deal — record price
         prices[dedup_key] = [{"price": deal.price, "ts": now}]
         state["prices"] = prices
-        return []
+        return None
 
     last_price = history[-1]["price"]
     if deal.price == last_price:
-        return []
+        return None
 
-    # Price changed — append
+    # Price changed — append to state JSON
     history.append({"price": deal.price, "ts": now})
     prices[dedup_key] = history[-10:]  # Keep last 10 entries
     state["prices"] = prices
@@ -162,14 +194,52 @@ def check_price_changes(deal, state: dict, profile_name: str) -> list[str]:
         drop_abs = last_price - deal.price
         drop_pct = (drop_abs / last_price) * 100 if last_price > 0 else 0
 
-        if drop_pct > 10 or drop_abs > 50:
-            reason = f"price drop {drop_abs} PLN ({last_price} -> {deal.price})"
-            logger.info(f"Price drop detected for '{deal.title[:60]}': {reason}")
-            return [reason]
+        # Check thresholds (OR logic)
+        if drop_pct >= pt_config["min_drop_percent"] or drop_abs >= pt_config["min_drop_amount"]:
+            # Check if this is the lowest ever price via SQLite
+            is_lowest = False
+            if db:
+                try:
+                    lowest = db.get_lowest_price(deal.id)
+                    if lowest is None or deal.price <= lowest:
+                        is_lowest = True
+                except Exception:
+                    pass
+            else:
+                # Fallback: check state JSON history
+                all_prices = [h["price"] for h in history]
+                if deal.price <= min(all_prices):
+                    is_lowest = True
+
+            result = {
+                "type": "drop",
+                "old_price": last_price,
+                "new_price": deal.price,
+                "diff_pln": drop_abs,
+                "diff_percent": round(drop_pct, 1),
+                "is_lowest_ever": is_lowest,
+            }
+            logger.info(
+                f"Price drop detected for '{deal.title[:60]}': "
+                f"{drop_abs} PLN ({last_price} -> {deal.price})"
+            )
+            return result
     else:
+        increase_abs = deal.price - last_price
+        increase_pct = (increase_abs / last_price) * 100 if last_price > 0 else 0
         logger.info(f"Price increased for '{deal.title[:60]}': {last_price} -> {deal.price}")
 
-    return []
+        if pt_config["track_increases"]:
+            return {
+                "type": "increase",
+                "old_price": last_price,
+                "new_price": deal.price,
+                "diff_pln": increase_abs,
+                "diff_percent": round(increase_pct, 1),
+                "is_lowest_ever": False,
+            }
+
+    return None
 
 
 # ──────────────── PROFILE ────────────────
@@ -385,10 +455,15 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         logger.error(f"SQLite storage unavailable, continuing without persistence: {e}")
 
     alerts: list[dict] = []
+    price_drop_alerts: list[dict] = []
 
     try:
         for deal in deals:
             if deal.id in seen:
+                # Even for seen deals, check price changes
+                price_change = check_price_changes(deal, state, profile_name, profile, db)
+                if price_change and price_change["type"] == "drop":
+                    price_drop_alerts.append({"deal": deal, "price_change": price_change})
                 continue
 
             seen[deal.id] = now
@@ -399,8 +474,8 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                 logger.debug(f"Rejected: {deal.title[:60]} ({result.reject_reason})")
                 continue
 
-            # Price drop detection
-            price_plus = check_price_changes(deal, state, profile_name)
+            # Price drop detection for new deals too
+            price_change = check_price_changes(deal, state, profile_name, profile, db)
 
             # Persist to SQLite
             if db and result.score >= threshold:
@@ -408,7 +483,12 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                 db.upsert_deal(deal, profile_name, result.score, category)
 
             if result.score >= threshold:
-                alert_plus = list(result.plus) + price_plus
+                alert_plus = list(result.plus)
+                if price_change and price_change["type"] == "drop":
+                    alert_plus.append(
+                        f"price drop {price_change['diff_pln']} PLN "
+                        f"({price_change['old_price']} -> {price_change['new_price']})"
+                    )
                 alerts.append(
                     {
                         "deal": deal,
@@ -424,10 +504,38 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
     state["seen"] = seen
     save_state(profile_name, state)
 
-    if not alerts:
+    # Send price drop alerts first (higher priority)
+    if telegram and price_drop_alerts:
+        for pda in price_drop_alerts:
+            telegram.send_price_drop_alert(
+                pda["deal"],
+                pda["price_change"],
+                topic_id=tg_topic,
+                emoji=emoji,
+                currency=currency,
+            )
+        logger.info(f"Sent {len(price_drop_alerts)} price drop alerts for {profile_name}")
+
+    # Console output for price drops
+    for pda in price_drop_alerts:
+        d = pda["deal"]
+        pc = pda["price_change"]
+        old_str = f"{pc['old_price']:,} {currency}".replace(",", " ")
+        new_str = f"{pc['new_price']:,} {currency}".replace(",", " ")
+        print(f"{emoji} \U0001f4c9 PRICE DROP: {d.title[:60]}")
+        print(f"  {old_str} -> {new_str} (-{pc['diff_percent']:.0f}%, -{pc['diff_pln']} {currency})")
+        if pc.get("is_lowest_ever"):
+            print(f"  \U0001f525 Najnizsza cena w historii!")
+        print(f"  {d.link}")
+        print()
+
+    if not alerts and not price_drop_alerts:
         print(f"{emoji} No new deals for profile {profile_name}.")
         logger.info(f"No new alerts for {profile_name}")
         return 0
+
+    if not alerts:
+        return len(price_drop_alerts)
 
     # Sort by score descending
     alerts.sort(key=lambda x: x["score"], reverse=True)
@@ -476,8 +584,9 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         print(f"  LINK: {d.link}")
         print()
 
-    logger.info(f"Profile {profile_name}: {len(alerts)} alerts")
-    return len(alerts)
+    total_alerts = len(alerts) + len(price_drop_alerts)
+    logger.info(f"Profile {profile_name}: {len(alerts)} new deal alerts, {len(price_drop_alerts)} price drop alerts")
+    return total_alerts
 
 
 def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict) -> None:
@@ -535,6 +644,49 @@ def _run_verify(deals: list, deal_filter: BaseFilter, profile: dict) -> None:
 
 
 # ──────────────── CLI ────────────────
+
+
+def run_digest() -> None:
+    """Generate and send weekly price digest from SQLite price_history."""
+    db: SQLiteStorage | None = None
+    try:
+        db = SQLiteStorage(DB_PATH)
+    except Exception as e:
+        logger.error(f"SQLite unavailable, cannot generate digest: {e}")
+        print("Error: SQLite database unavailable for digest generation.")
+        sys.exit(1)
+
+    try:
+        drops = db.get_price_drops(days=7)
+    finally:
+        db.close()
+
+    if not drops:
+        print("No price drops in the last 7 days.")
+        return
+
+    # Console output
+    print(f"\n{'=' * 60}")
+    print(f"  \U0001f4ca WEEKLY PRICE DIGEST — {len(drops)} drops")
+    print(f"{'=' * 60}\n")
+
+    for d in drops:
+        old_str = f"{d['old_price']:,} PLN".replace(",", " ")
+        new_str = f"{d['new_price']:,} PLN".replace(",", " ")
+        lowest = " \U0001f525" if d.get("is_lowest_ever") else ""
+        print(f"  \U0001f4c9 {d['title'][:60]}: {old_str} -> {new_str} (-{d['diff_percent']}%){lowest}")
+
+    # Send Telegram digest
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if tg_token and tg_chat:
+        topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
+        topic_id = int(topic_id_str) if topic_id_str else None
+        telegram = TelegramNotifier(tg_token, tg_chat)
+        telegram.send_digest(drops, topic_id=topic_id)
+        print(f"\nDigest sent to Telegram ({len(drops)} drops).")
+    else:
+        print("\nTelegram not configured — digest printed to console only.")
 
 
 def _run_with_health_tracking(profile_names: list[str], verify: bool = False) -> None:
@@ -618,6 +770,9 @@ def main() -> None:
     parser.add_argument(
         "--watchdog", action="store_true", help="Check if last run is fresh, alert if stale"
     )
+    parser.add_argument(
+        "--digest", action="store_true", help="Send weekly price drop digest from SQLite"
+    )
     parser.add_argument("--version", action="version", version=f"Deal Hunter {__version__}")
 
     args = parser.parse_args()
@@ -647,6 +802,10 @@ def main() -> None:
                 telegram = TelegramNotifier(tg_token, tg_chat)
                 telegram.send_text(f"⚠️ Deal Hunter watchdog: {message}", topic_id=topic_id)
             sys.exit(1)
+
+    if args.digest:
+        run_digest()
+        return
 
     if args.list:
         profiles = list_profiles()

@@ -97,6 +97,66 @@ class TelegramNotifier:
 
         self._send_message(msg, topic_id=topic_id, disable_preview=True)
 
+    def send_price_drop_alert(
+        self,
+        deal,
+        price_change: dict,
+        topic_id: int | None = None,
+        emoji: str = "\U0001f50d",
+        currency: str = "PLN",
+    ) -> None:
+        """Send a price drop alert (messages in Polish for end users)."""
+        old_str = f"{price_change['old_price']:,} {currency}".replace(",", " ")
+        new_str = f"{price_change['new_price']:,} {currency}".replace(",", " ")
+        diff_pln = price_change["diff_pln"]
+        diff_pct = price_change["diff_percent"]
+        diff_pln_str = f"{diff_pln:,}".replace(",", " ")
+
+        safe_title = html.escape(deal.title)
+        safe_link = html.escape(deal.link)
+        safe_source = html.escape(deal.source)
+
+        msg = f"{emoji} \U0001f4c9 <b>SPADEK CENY!</b>\n"
+        msg += f"<b>{safe_title}</b>\n"
+        msg += f"{html.escape(old_str)} \u2192 <b>{html.escape(new_str)}</b> (-{diff_pct:.0f}%, -{html.escape(diff_pln_str)} {html.escape(currency)})\n"
+
+        if price_change.get("is_lowest_ever"):
+            msg += "\U0001f525 <b>Najni\u017csza cena w historii!</b>\n"
+
+        msg += f'\n\U0001f517 <a href="{safe_link}">Link do oferty</a> | \u0179r\u00f3d\u0142o: {safe_source}'
+
+        self._send_message(msg, topic_id=topic_id)
+
+    def send_digest(
+        self,
+        drops: list[dict],
+        topic_id: int | None = None,
+        emoji: str = "\U0001f4ca",
+        currency: str = "PLN",
+    ) -> None:
+        """Send weekly price digest (messages in Polish for end users)."""
+        if not drops:
+            return
+
+        msg = f"{emoji} <b>Tygodniowy przegl\u0105d cen ({len(drops)} spadk\u00f3w)</b>\n\n"
+
+        for drop in drops:
+            safe_title = html.escape(drop["title"][:80])
+            old_str = f"{drop['old_price']:,}".replace(",", " ")
+            new_str = f"{drop['new_price']:,}".replace(",", " ")
+            diff_pct = drop["diff_percent"]
+
+            msg += f"\U0001f4c9 {safe_title}: {html.escape(old_str)} \u2192 {html.escape(new_str)} {html.escape(currency)} (-{diff_pct:.0f}%)"
+            if drop.get("is_lowest_ever"):
+                msg += " \U0001f525"
+            msg += "\n"
+
+            if len(msg) > 3500:
+                msg += f"\n... i wi\u0119cej spadk\u00f3w"
+                break
+
+        self._send_message(msg, topic_id=topic_id, disable_preview=True)
+
     def send_text(self, text: str, topic_id: int | None = None) -> None:
         """Send a plain text message, optionally to a specific topic."""
         self._send_message(text, topic_id=topic_id)
