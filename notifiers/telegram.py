@@ -1,12 +1,29 @@
 """Telegram notifier with retry and rate limiting."""
 
 import html
+import json
 import logging
 import time
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+def build_deal_keyboard(deal_link: str, deal_id: str) -> dict:
+    """Build inline keyboard for a deal alert.
+
+    Returns Telegram InlineKeyboardMarkup dict.
+    """
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "\U0001f517 Otwórz", "url": deal_link},
+                {"text": "\u2b50 Obserwuj", "callback_data": f"watch:{deal_id}"},
+                {"text": "\U0001f44e Skip", "callback_data": f"skip:{deal_id}"},
+            ]
+        ]
+    }
 
 
 class TelegramNotifier:
@@ -62,7 +79,8 @@ class TelegramNotifier:
         safe_source = html.escape(deal.source)
         msg += f'\n\U0001f517 <a href="{safe_link}">LINK DO OKAZJI</a> | \u0179r\u00f3d\u0142o: {safe_source}'
 
-        self._send_message(msg, topic_id=topic_id)
+        keyboard = build_deal_keyboard(deal.link, deal.id)
+        self._send_message(msg, topic_id=topic_id, reply_markup=keyboard)
 
     def send_summary(
         self,
@@ -125,7 +143,8 @@ class TelegramNotifier:
 
         msg += f'\n\U0001f517 <a href="{safe_link}">Link do oferty</a> | \u0179r\u00f3d\u0142o: {safe_source}'
 
-        self._send_message(msg, topic_id=topic_id)
+        keyboard = build_deal_keyboard(deal.link, deal.id)
+        self._send_message(msg, topic_id=topic_id, reply_markup=keyboard)
 
     def send_digest(
         self,
@@ -157,12 +176,63 @@ class TelegramNotifier:
 
         self._send_message(msg, topic_id=topic_id, disable_preview=True)
 
+    def send_photo(
+        self,
+        photo_path: str,
+        caption: str = "",
+        topic_id: int | None = None,
+    ) -> None:
+        """Send a photo via Telegram sendPhoto (multipart/form-data upload)."""
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
+        data = {"chat_id": self.chat_id}
+        if caption:
+            data["caption"] = caption
+            data["parse_mode"] = "HTML"
+        if topic_id:
+            data["message_thread_id"] = str(topic_id)
+
+        for attempt in range(1, 4):
+            try:
+                time.sleep(1.5)  # Rate limiting
+                with open(photo_path, "rb") as f:
+                    resp = requests.post(
+                        url, data=data, files={"photo": f}, timeout=30
+                    )
+                if resp.status_code == 200:
+                    logger.info(f"Telegram: sent photo {photo_path}")
+                    return
+                elif resp.status_code == 429:
+                    try:
+                        retry_after = resp.json().get("parameters", {}).get("retry_after", 30)
+                    except (ValueError, KeyError):
+                        retry_after = 30
+                    logger.warning(
+                        f"Telegram: rate limited on photo, waiting {retry_after}s (attempt {attempt}/3)"
+                    )
+                    if attempt < 3:
+                        time.sleep(retry_after)
+                        continue
+                else:
+                    logger.error(f"Telegram sendPhoto: HTTP {resp.status_code}: {resp.text[:200]}")
+                    if attempt < 3:
+                        continue
+            except Exception as e:
+                logger.error(f"Telegram sendPhoto: exception (attempt {attempt}/3): {e}")
+                if attempt < 3:
+                    continue
+
+        logger.error("Telegram: failed to send photo after 3 attempts")
+
     def send_text(self, text: str, topic_id: int | None = None) -> None:
         """Send a plain text message, optionally to a specific topic."""
         self._send_message(text, topic_id=topic_id)
 
     def _send_message(
-        self, text: str, topic_id: int | None = None, disable_preview: bool = False
+        self,
+        text: str,
+        topic_id: int | None = None,
+        disable_preview: bool = False,
+        reply_markup: dict | None = None,
     ) -> None:
         """Send message with retry and rate limiting."""
         payload = {
@@ -173,6 +243,8 @@ class TelegramNotifier:
         }
         if topic_id:
             payload["message_thread_id"] = topic_id
+        if reply_markup:
+            payload["reply_markup"] = json.dumps(reply_markup)
 
         for attempt in range(1, 4):
             try:

@@ -12,6 +12,7 @@
 - **pyyaml** — YAML profile parsing
 - **python-dotenv** — environment variables from `.env`
 - **python-telegram-bot** v21+ — async Telegram bot for feedback (polling)
+- **matplotlib** >= 3.8 — optional, price history charts (lazy-imported)
 - No web framework — this is a CLI tool designed to run on cron
 
 ## Architecture
@@ -27,7 +28,8 @@ stores/*.yaml           Declarative store definitions (auto-discovered, no Pytho
 stores/README.md        Guide: "How to add a new store in 5 minutes"
 filters/base.py         Base scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
-notifiers/telegram.py   Telegram Bot API with retry + rate limiting
+notifiers/telegram.py   Telegram Bot API with retry + rate limiting + photo upload
+visualization/charts.py Price history charts (matplotlib, lazy-imported)
 storage/sqlite.py       SQLite persistence layer (deals, price history, feedback)
 health.py               Health monitoring (state tracking, --health, --watchdog)
 utils/validation.py     YAML profile validation (types, required fields, sanity checks)
@@ -121,6 +123,8 @@ python deal_hunter.py --profile bikes --validate  # validate profile without run
 python deal_hunter.py --health                     # show health status of last run
 python deal_hunter.py --watchdog                   # check freshness, alert if stale
 python deal_hunter.py --digest                     # weekly price drop digest from SQLite
+python deal_hunter.py --price-chart "pepper:12345" # price history chart -> Telegram
+python deal_hunter.py --trend-chart bikes          # trend chart for profile -> Telegram
 ```
 
 ## Environment Variables
@@ -218,7 +222,25 @@ price_tracking:
 - Falls back to state JSON if SQLite unavailable
 - Price increase -> logged, optionally notified if `track_increases: true`
 
-**Weekly digest:** `--digest` scans SQLite for all price drops in last 7 days and sends a Telegram summary.
+**Weekly digest:** `--digest` scans SQLite for all price drops in last 7 days and sends a Telegram summary + bar chart (if matplotlib installed).
+
+## Price History Charts
+
+`visualization/charts.py` — matplotlib-based chart generation (lazy-imported, Agg backend).
+
+**Functions:**
+- `generate_price_chart(deal_id, db)` — line chart of price over time, red dot = lowest, green dot = highest
+- `generate_digest_chart(drops)` — bar chart of top 10 biggest price drops (colored by severity)
+- `generate_trend_chart(profile, db, days=30)` — average price trend with min/max range fill
+
+**CLI:**
+- `--price-chart DEAL_ID` — generate + send to Telegram
+- `--trend-chart PROFILE` — generate + send to Telegram
+- `--digest` also generates + sends a bar chart after the text digest
+
+**Telegram:** `TelegramNotifier.send_photo(photo_path, caption, topic_id)` — multipart/form-data upload via sendPhoto.
+
+**Charts are Polish-labeled** (titles, axis labels).
 
 ## Health Monitoring
 
@@ -287,6 +309,7 @@ Test modules:
 - `test_price_drops.py` — price drop detection, thresholds, digest, Telegram formatting, validation
 - `test_verbose_scoring.py` — verbose scoring breakdown, ScoreResult.breakdown, BikeFilter entries, output format, rich fallback
 - `test_feedback_bot.py` — feedback bot: SQLite additions, callback parsing, inline keyboard, bot command handlers
+- `test_charts.py` — price history charts: generate_price_chart, generate_digest_chart, generate_trend_chart, lazy import, send_photo
 
 Manual testing:
 ```bash

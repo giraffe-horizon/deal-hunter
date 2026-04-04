@@ -859,6 +859,89 @@ def run_digest() -> None:
     telegram.send_digest(drops, topic_id=topic_id)
     print(f"\nDigest sent to Telegram ({len(drops)} drops).")
 
+    # Generate and send digest bar chart
+    try:
+        from visualization.charts import generate_digest_chart
+        chart_path = generate_digest_chart(drops)
+        telegram.send_photo(
+            str(chart_path),
+            caption="📊 Największe spadki cen (ostatni tydzień)",
+            topic_id=topic_id,
+        )
+        print(f"Digest chart sent to Telegram.")
+    except ImportError:
+        logger.info("matplotlib not installed — skipping digest chart")
+    except Exception as e:
+        logger.warning(f"Failed to generate digest chart: {e}")
+
+
+def run_price_chart(deal_id: str) -> None:
+    """Generate a price history chart for a deal and send to Telegram."""
+    from visualization.charts import generate_price_chart
+
+    db: SQLiteStorage | None = None
+    try:
+        db = SQLiteStorage(DB_PATH)
+    except Exception as e:
+        logger.error(f"SQLite unavailable: {e}")
+        print("Error: SQLite database unavailable.")
+        sys.exit(1)
+
+    try:
+        chart_path = generate_price_chart(deal_id, db)
+    except (ValueError, ImportError) as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+    finally:
+        db.close()
+
+    print(f"Chart saved to {chart_path}")
+
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if tg_token and tg_chat:
+        topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
+        topic_id = int(topic_id_str) if topic_id_str else None
+        telegram = TelegramNotifier(tg_token, tg_chat)
+        telegram.send_photo(str(chart_path), caption=f"📈 Historia cen: {deal_id}", topic_id=topic_id)
+        print("Chart sent to Telegram.")
+    else:
+        print("Telegram not configured — chart not sent.")
+
+
+def run_trend_chart(profile_name: str) -> None:
+    """Generate a trend chart for a profile and send to Telegram."""
+    from visualization.charts import generate_trend_chart
+
+    db: SQLiteStorage | None = None
+    try:
+        db = SQLiteStorage(DB_PATH)
+    except Exception as e:
+        logger.error(f"SQLite unavailable: {e}")
+        print("Error: SQLite database unavailable.")
+        sys.exit(1)
+
+    try:
+        chart_path = generate_trend_chart(profile_name, db)
+    except (ValueError, ImportError) as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+    finally:
+        db.close()
+
+    print(f"Chart saved to {chart_path}")
+
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if tg_token and tg_chat:
+        topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
+        topic_id = int(topic_id_str) if topic_id_str else None
+        telegram = TelegramNotifier(tg_token, tg_chat)
+        telegram.send_photo(str(chart_path), caption=f"📊 Trend cenowy: {profile_name}", topic_id=topic_id)
+        print("Chart sent to Telegram.")
+    else:
+        print("Telegram not configured — chart not sent.")
+
 
 def _run_with_health_tracking(
     profile_names: list[str], verify: bool = False,
@@ -958,6 +1041,14 @@ def main() -> None:
     parser.add_argument(
         "--digest", action="store_true", help="Send weekly price drop digest from SQLite"
     )
+    parser.add_argument(
+        "--price-chart", type=str, metavar="DEAL_ID",
+        help="Generate price history chart for a deal and send to Telegram",
+    )
+    parser.add_argument(
+        "--trend-chart", type=str, metavar="PROFILE",
+        help="Generate trend chart for a profile and send to Telegram",
+    )
     parser.add_argument("--version", action="version", version=f"Deal Hunter {__version__}")
 
     args = parser.parse_args()
@@ -990,6 +1081,14 @@ def main() -> None:
 
     if args.digest:
         run_digest()
+        return
+
+    if args.price_chart:
+        run_price_chart(args.price_chart)
+        return
+
+    if args.trend_chart:
+        run_trend_chart(args.trend_chart)
         return
 
     if args.list:

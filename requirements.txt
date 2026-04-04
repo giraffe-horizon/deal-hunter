@@ -1,4 +1,6 @@
 beautifulsoup4==4.14.3
+matplotlib>=3.8  # optional: price history charts (visualization/charts.py)
 python-dotenv==1.2.2
+python-telegram-bot>=21.0
 PyYAML==6.0.3
 requests==2.32.5
