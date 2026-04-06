@@ -1,6 +1,20 @@
 # CHANGELOG
 
 
+## v0.4.1 (2026-04-06)
+
+### Bug Fixes
+
+- Resolve all ruff lint and format errors
+  ([`3718b7d`](https://github.com/giraffe-horizon/deal-hunter/commit/3718b7d69c40512977ea7ecf222aca6d05ca9e61))
+
+- Remove unused imports (Path, Text, html, struct) - Remove f-string prefixes on strings without
+  placeholders - Remove unused variable price_str - Fix import sorting in visualization/charts.py -
+  Auto-format 13 files
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.4.0 (2026-04-06)
 
 ### Bug Fixes
