@@ -182,16 +182,16 @@ GET    /api/profiles/<name>/run/status  # SSE stream logu
 
 ## Podsumowanie
 
-| Faza | Feature | Effort | Priorytet |
-|------|---------|--------|-----------|
-| A.1 | Scoring Tuner | L (10h) | Wysoki |
-| A.2 | Deduplikacja cross-source | M (6h) | Wysoki |
-| A.3 | Quiet Hours | S (4h) | Średni |
-| B.1 | x-kom / Morele stores | S (3h) | Średni |
-| B.2 | Allegro RSS source | M (5h) | Średni |
-| C.1 | Watchlist z price alertem | M (6h) | Wysoki |
-| C.2 | Porównywarka | M (6h) | Niski |
-| C.4 | Zarządzanie profilami (full CRUD) | XL (20h) | Wysoki |
+| Faza | Feature | Effort | Priorytet | Status |
+|------|---------|--------|-----------|--------|
+| A.1 | Scoring Tuner | L (10h) | Wysoki | |
+| A.2 | Deduplikacja cross-source | M (6h) | Wysoki | |
+| A.3 | Quiet Hours | S (4h) | Średni | ✅ Done |
+| B.1 | x-kom / Morele stores | S (3h) | Średni | ✅ Done |
+| B.2 | Allegro RSS source | M (5h) | Średni | ✅ Done |
+| C.1 | Watchlist z price alertem | M (6h) | Wysoki | |
+| C.2 | Porównywarka | M (6h) | Niski | |
+| C.4 | Zarządzanie profilami (full CRUD) | XL (20h) | Wysoki | |
 
 **Szacowany łączny effort:** ~60h
 **Rekomendowana kolejność:** A.3 → A.2 → C.1 → B.1 → B.2 → C.4 → A.1 → C.2

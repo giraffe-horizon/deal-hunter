@@ -618,15 +618,17 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         if is_quiet_hours(profile):
             if db:
                 for pda in price_drop_alerts[:max_alerts]:
-                    payload = json.dumps({
-                        "deal_id": pda["deal"].id,
-                        "title": pda["deal"].title,
-                        "link": pda["deal"].link,
-                        "old_price": pda["price_change"]["old_price"],
-                        "new_price": pda["price_change"]["new_price"],
-                        "diff_pln": pda["price_change"]["diff_pln"],
-                        "diff_percent": pda["price_change"]["diff_percent"],
-                    })
+                    payload = json.dumps(
+                        {
+                            "deal_id": pda["deal"].id,
+                            "title": pda["deal"].title,
+                            "link": pda["deal"].link,
+                            "old_price": pda["price_change"]["old_price"],
+                            "new_price": pda["price_change"]["new_price"],
+                            "diff_pln": pda["price_change"]["diff_pln"],
+                            "diff_percent": pda["price_change"]["diff_percent"],
+                        }
+                    )
                     db.queue_alert(profile_name, "price_drop", payload)
                 logger.info(
                     f"Queued {min(len(price_drop_alerts), max_alerts)} price drop alerts (quiet hours)"
@@ -675,15 +677,17 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         if is_quiet_hours(profile):
             if db:
                 for a in alerts[:max_alerts]:
-                    payload = json.dumps({
-                        "deal_id": a["deal"].id,
-                        "title": a["deal"].title,
-                        "price": a["deal"].price,
-                        "link": a["deal"].link,
-                        "score": a["score"],
-                        "plus": a["plus"][:6],
-                        "minus": a["minus"][:4],
-                    })
+                    payload = json.dumps(
+                        {
+                            "deal_id": a["deal"].id,
+                            "title": a["deal"].title,
+                            "price": a["deal"].price,
+                            "link": a["deal"].link,
+                            "score": a["score"],
+                            "plus": a["plus"][:6],
+                            "minus": a["minus"][:4],
+                        }
+                    )
                     db.queue_alert(profile_name, "deal", payload)
                 logger.info(f"Queued {min(len(alerts), max_alerts)} deal alerts (quiet hours)")
         else:

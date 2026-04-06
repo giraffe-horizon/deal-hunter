@@ -1,11 +1,13 @@
 """Tests for quiet hours alert queuing."""
 
 import json
-from pathlib import Path
+from datetime import datetime
+from unittest.mock import patch
 
 import pytest
 
 from storage.sqlite import SQLiteStorage
+from utils.validation import validate_profile
 
 
 @pytest.fixture
@@ -71,11 +73,6 @@ class TestAlertQueue:
         assert json.loads(pending[1]["payload"])["id"] == "second"
 
 
-from unittest.mock import patch
-from datetime import datetime
-import os
-
-
 class TestIsQuietHours:
     """Tests for is_quiet_hours() time checking logic."""
 
@@ -119,7 +116,9 @@ class TestIsQuietHours:
         with patch("deal_hunter.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 4, 6, 23, 30)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
-            with patch.dict("os.environ", {"QUIET_HOURS_START": "22:00", "QUIET_HOURS_END": "07:00"}):
+            with patch.dict(
+                "os.environ", {"QUIET_HOURS_START": "22:00", "QUIET_HOURS_END": "07:00"}
+            ):
                 assert is_quiet_hours(profile) is True
 
     def test_profile_overrides_env(self):
@@ -129,7 +128,9 @@ class TestIsQuietHours:
         with patch("deal_hunter.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 4, 6, 22, 30)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
-            with patch.dict("os.environ", {"QUIET_HOURS_START": "22:00", "QUIET_HOURS_END": "07:00"}):
+            with patch.dict(
+                "os.environ", {"QUIET_HOURS_START": "22:00", "QUIET_HOURS_END": "07:00"}
+            ):
                 assert is_quiet_hours(profile) is False
 
     def test_same_day_quiet_hours(self):
@@ -165,24 +166,36 @@ class TestQuietHoursIntegration:
 
     def test_flush_pending_alerts_sends_and_marks(self, db):
         """flush_pending_alerts should send queued alerts and mark them sent."""
-        db.queue_alert("bikes", "deal", json.dumps({
-            "deal_id": "pepper:123",
-            "title": "Test Deal",
-            "price": 5000,
-            "link": "https://example.com",
-            "score": 85,
-            "plus": ["keyword1"],
-            "minus": [],
-        }))
-        db.queue_alert("bikes", "price_drop", json.dumps({
-            "deal_id": "pepper:456",
-            "title": "Drop Deal",
-            "old_price": 10000,
-            "new_price": 8000,
-            "diff_pln": 2000,
-            "diff_percent": 20.0,
-            "link": "https://example.com/2",
-        }))
+        db.queue_alert(
+            "bikes",
+            "deal",
+            json.dumps(
+                {
+                    "deal_id": "pepper:123",
+                    "title": "Test Deal",
+                    "price": 5000,
+                    "link": "https://example.com",
+                    "score": 85,
+                    "plus": ["keyword1"],
+                    "minus": [],
+                }
+            ),
+        )
+        db.queue_alert(
+            "bikes",
+            "price_drop",
+            json.dumps(
+                {
+                    "deal_id": "pepper:456",
+                    "title": "Drop Deal",
+                    "old_price": 10000,
+                    "new_price": 8000,
+                    "diff_pln": 2000,
+                    "diff_percent": 20.0,
+                    "link": "https://example.com/2",
+                }
+            ),
+        )
 
         pending = db.get_pending_alerts()
         assert len(pending) == 2
@@ -204,9 +217,6 @@ class TestQuietHoursIntegration:
         db.mark_alerts_sent([p["id"] for p in to_send])
         remaining = db.get_pending_alerts()
         assert len(remaining) == 3
-
-
-from utils.validation import validate_profile
 
 
 class TestQuietHoursValidation:

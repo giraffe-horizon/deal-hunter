@@ -2,7 +2,7 @@
 
 ## Project
 
-**Deal Hunter** — universal multi-source deal monitor. Scans various sources (Pepper.pl, Ceneo.pl, Proshop.pl, any website via generic web scraper), scores offers using a YAML-driven scoring engine (with regex support), tracks price changes, and sends alerts to Telegram.
+**Deal Hunter** — universal multi-source deal monitor. Scans various sources (Pepper.pl, Ceneo.pl, Proshop.pl, x-kom.pl, Morele.net, RSS/Atom feeds, any website via generic web scraper), scores offers using a YAML-driven scoring engine (with regex support), tracks price changes, and sends alerts to Telegram. Supports quiet hours with alert queuing.
 
 ## Tech Stack
 
@@ -24,6 +24,7 @@ feedback_bot.py         Standalone Telegram feedback bot (polling, inline keyboa
 sources/base.py         Base Source class + Deal dataclass (common format)
 sources/yaml_source.py  Universal YAML-driven source engine (CSS, JSON-LD, GTM strategies)
 sources/pepper.py       Pepper.pl scraper (Vue3 JSON + HTML fallback — too complex for YAML)
+sources/rss.py          Generic RSS/Atom feed parser (Allegro, etc. — stdlib xml.etree)
 sources/web.py          Generic web scraper (configurable CSS selectors from profile YAML)
 stores/*.yaml           Declarative store definitions (auto-discovered, no Python needed)
 stores/README.md        Guide: "How to add a new store in 5 minutes"
@@ -33,7 +34,7 @@ dashboard.py            Web dashboard: FastAPI app, routes, API endpoints
 dashboard/templates/    Jinja2 templates (base, deals, deal_detail, health, price_trends)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting + photo upload
 visualization/charts.py Price history charts (matplotlib, lazy-imported)
-storage/sqlite.py       SQLite persistence layer (deals, price history, feedback)
+storage/sqlite.py       SQLite persistence layer (deals, price history, feedback, alert queue)
 health.py               Health monitoring (state tracking, --health, --watchdog)
 utils/validation.py     YAML profile validation (types, required fields, sanity checks)
 profiles/*.yaml         Product profiles (gitignored, see docs/creating-profiles.md)
@@ -140,6 +141,8 @@ File `.env` (not committed):
 ```
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
+QUIET_HOURS_START=22:00    # optional, global default
+QUIET_HOURS_END=07:00      # optional, global default
 ```
 
 ## Adding a New Source
@@ -231,6 +234,33 @@ price_tracking:
 
 **Weekly digest:** `--digest` scans SQLite for all price drops in last 7 days and sends a Telegram summary + bar chart (if matplotlib installed).
 
+## Quiet Hours
+
+Configurable quiet hours suppress Telegram alerts during specified time windows. Alerts are queued in SQLite (`alert_queue` table) and flushed when quiet hours end.
+
+**Config:**
+- `.env`: `QUIET_HOURS_START=22:00`, `QUIET_HOURS_END=07:00` (global default)
+- Profile YAML override: `quiet_hours: {start: "23:00", end: "06:00"}`
+- `--watchdog` and `--digest` ignore quiet hours
+- Flush sends up to `max_alerts` queued alerts per profile
+
+**SQLite methods:** `queue_alert()`, `get_pending_alerts()`, `mark_alerts_sent()`
+
+## RSS/Atom Source
+
+`sources/rss.py` — generic RSS/Atom feed parser using stdlib `xml.etree.ElementTree`.
+
+**Profile YAML usage:**
+```yaml
+sources:
+  rss:
+    feeds:
+      - url: "https://allegro.pl/rss/listing?string=rower+endurance"
+        source_name: "allegro"
+```
+
+Auto-detects RSS 2.0 vs Atom format. Price extracted via currency-aware regex (zł, PLN, EUR).
+
 ## Price History Charts
 
 `visualization/charts.py` — matplotlib-based chart generation (lazy-imported, Agg backend).
@@ -317,6 +347,9 @@ Test modules:
 - `test_verbose_scoring.py` — verbose scoring breakdown, ScoreResult.breakdown, BikeFilter entries, output format, rich fallback
 - `test_feedback_bot.py` — feedback bot: SQLite additions, callback parsing, inline keyboard, bot command handlers
 - `test_charts.py` — price history charts: generate_price_chart, generate_digest_chart, generate_trend_chart, lazy import, send_photo
+- `test_quiet_hours.py` — quiet hours: alert queue CRUD, is_quiet_hours() time logic, env/profile config, flush integration, validation
+- `test_rss_source.py` — RSS source: RSS 2.0/Atom parsing, price extraction, multi-feed, malformed XML
+- `test_xkom_morele.py` — x-kom and morele.net store definitions: fixture parsing, selectors, registration
 
 Manual testing:
 ```bash
@@ -327,8 +360,9 @@ python deal_hunter.py --profile nas_hdd --verify
 ## Known Limitations
 
 - Ceneo and Proshop scrape HTML — layout changes require parser updates
-- No Allegro (requires API key + OAuth)
-- No OLX, Morele, x-kom (to be added)
+- Allegro supported via public RSS feeds only (no OAuth API)
+- x-kom.pl blocked by Cloudflare — store YAML exists but live scraping may fail
+- No OLX (to be added)
 - Pepper may block after many requests — hence rate limiting
 - Cross-source dedup is simple (title+price) — may miss variants of the same product
 

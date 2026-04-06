@@ -44,7 +44,6 @@ class TestXkomStore:
             assert deal.link, f"Deal link should not be empty: {deal}"
 
     def test_xkom_parses_three_products(self):
-        from sources import SOURCE_REGISTRY
         from sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("xkom")
@@ -181,8 +180,9 @@ class TestMoreleStore:
         )
 
     def test_morele_store_parses_fixture(self):
-        from sources import SOURCE_REGISTRY
         from unittest.mock import patch
+
+        from sources import SOURCE_REGISTRY
 
         source_cls = SOURCE_REGISTRY["morele"]
         source = source_cls()

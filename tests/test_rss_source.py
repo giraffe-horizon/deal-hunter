@@ -3,8 +3,6 @@
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 

@@ -88,17 +88,19 @@ class RssSource(Source):
             id_hash = hashlib.md5(guid.encode()).hexdigest()[:12]
             deal_id = f"{source_name}:{id_hash}"
 
-            deals.append(Deal(
-                id=deal_id,
-                title=title,
-                price=price,
-                link=link,
-                source=source_name,
-                description=description,
-                temperature=0,
-                image_url="",
-                published_at=pub_date,
-            ))
+            deals.append(
+                Deal(
+                    id=deal_id,
+                    title=title,
+                    price=price,
+                    link=link,
+                    source=source_name,
+                    description=description,
+                    temperature=0,
+                    image_url="",
+                    published_at=pub_date,
+                )
+            )
 
         return deals
 
@@ -125,16 +127,18 @@ class RssSource(Source):
             id_hash = hashlib.md5(entry_id.encode()).hexdigest()[:12]
             deal_id = f"{source_name}:{id_hash}"
 
-            deals.append(Deal(
-                id=deal_id,
-                title=title,
-                price=price,
-                link=link,
-                source=source_name,
-                description=summary,
-                temperature=0,
-                image_url="",
-                published_at=published,
-            ))
+            deals.append(
+                Deal(
+                    id=deal_id,
+                    title=title,
+                    price=price,
+                    link=link,
+                    source=source_name,
+                    description=summary,
+                    temperature=0,
+                    image_url="",
+                    published_at=published,
+                )
+            )
 
         return deals
