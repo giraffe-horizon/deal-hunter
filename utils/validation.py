@@ -117,4 +117,17 @@ def validate_profile(profile: dict) -> list[str]:
                     if not isinstance(val, str) or not _re.match(r"^\d{2}:\d{2}$", val):
                         errors.append(f"'quiet_hours.{key}' must be in HH:MM format")
 
+    # dedup config
+    dedup = profile.get("dedup")
+    if dedup is not None:
+        if not isinstance(dedup, dict):
+            errors.append("dedup must be a dict")
+        else:
+            pt = dedup.get("price_tolerance")
+            if pt is not None and (not isinstance(pt, (int, float)) or pt < 0 or pt > 1):
+                errors.append("dedup.price_tolerance must be a number between 0 and 1")
+            ts = dedup.get("title_similarity")
+            if ts is not None and (not isinstance(ts, (int, float)) or ts < 0 or ts > 1):
+                errors.append("dedup.title_similarity must be a number between 0 and 1")
+
     return errors
