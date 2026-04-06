@@ -947,3 +947,31 @@ class TestProfilePages:
         """GET /profiles/{name}/edit/yaml returns 404 for missing profile."""
         response = client.get("/profiles/nonexistent_xyz/edit/yaml")
         assert response.status_code == 404
+
+    def test_profile_create_page_loads(self, client):
+        """GET /profiles/new returns 200."""
+        response = client.get("/profiles/new")
+        assert response.status_code == 200
+        assert "New" in response.text or "Create" in response.text
+
+    def test_api_create_profile(self, client):
+        """POST /api/profiles creates a new profile."""
+        response = client.post(
+            "/api/profiles",
+            json={
+                "name": "test_create_profile",
+                "emoji": "\U0001f50d",
+                "sources": {"pepper": {"urls": ["https://pepper.pl/search?q=test"]}},
+                "budget": {"min": 100, "max": 5000},
+                "score_threshold": 50,
+                "telegram": {"topic_id": None, "max_alerts": 5},
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        # Clean up: delete the created file if it exists
+        import os
+        profile_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "profiles", "test_create_profile.yaml")
+        if os.path.exists(profile_path):
+            os.unlink(profile_path)
+        assert data.get("ok") is True

@@ -464,6 +464,47 @@ async def api_update_profile_yaml(request: Request, name: str):
     return JSONResponse({"ok": True})
 
 
+@app.get("/profiles/new", response_class=HTMLResponse)
+async def profile_create_page(request: Request):
+    """Profile create page."""
+    from sources import SOURCE_REGISTRY
+
+    available_sources = sorted(SOURCE_REGISTRY.keys())
+    return templates.TemplateResponse(
+        request,
+        "profile_create.html",
+        {"available_sources": available_sources},
+    )
+
+
+@app.post("/api/profiles")
+async def api_create_profile(request: Request):
+    """Create a new profile."""
+    import yaml as _yaml
+    from utils.validation import validate_profile as _validate
+
+    body = await request.json()
+    name = body.get("name", "")
+
+    if not name or not name.replace("-", "").replace("_", "").isalnum():
+        return JSONResponse({"errors": ["Invalid profile name. Use lowercase letters, numbers, hyphens, underscores."]})
+
+    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    if profile_path.exists():
+        return JSONResponse({"errors": [f"Profile '{name}' already exists."]})
+
+    errors = _validate(body)
+    if errors:
+        return JSONResponse({"errors": errors})
+
+    profile_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(profile_path, "w", encoding="utf-8") as f:
+        _yaml.dump(body, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+    return JSONResponse({"ok": True})
+
+
 @app.get("/profiles/{name}", response_class=HTMLResponse)
 async def profile_detail_page(request: Request, name: str):
     """Profile detail page (read-only view)."""

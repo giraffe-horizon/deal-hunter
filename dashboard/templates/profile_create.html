@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% set active_page = "profiles" %}
+{% block title %}New Profile — DealMonitor{% endblock %}
+{% block page_title %}
+<div class="flex items-center gap-2 text-sm font-label text-on-surface-variant min-w-0">
+    <a href="/profiles" class="hover:text-primary transition-colors flex-shrink-0">Profiles</a>
+    <span class="material-symbols-outlined text-[16px] flex-shrink-0">chevron_right</span>
+    <span class="text-on-surface">New Profile</span>
+</div>
+{% endblock %}
+{% block content %}
+
+<div id="create-errors" class="mb-4"></div>
+
+<form id="create-form" class="space-y-6">
+
+    <!-- Basic Info -->
+    <div class="bg-surface-container-low rounded-card p-6">
+        <h2 class="font-headline text-lg font-semibold text-on-surface mb-4">Basic Info</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm text-on-surface-variant mb-1" for="field-name">Name <span class="text-error">*</span></label>
+                <input id="field-name" name="name" type="text" required
+                       pattern="[a-z0-9_-]+"
+                       placeholder="e.g. bikes, nas_hdd"
+                       class="w-full px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary">
+                <p class="text-xs text-on-surface-variant mt-1">Lowercase letters, numbers, hyphens, underscores only.</p>
+            </div>
+            <div>
+                <label class="block text-sm text-on-surface-variant mb-1" for="field-emoji">Emoji</label>
+                <input id="field-emoji" name="emoji" type="text"
+                       value="🔍"
+                       class="w-full px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary">
+            </div>
+            <div>
+                <label class="block text-sm text-on-surface-variant mb-1" for="field-budget-min">Budget Min (PLN)</label>
+                <input id="field-budget-min" name="budget_min" type="number" min="0"
+                       value="0"
+                       class="w-full px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary">
+            </div>
+            <div>
+                <label class="block text-sm text-on-surface-variant mb-1" for="field-budget-max">Budget Max (PLN)</label>
+                <input id="field-budget-max" name="budget_max" type="number" min="0"
+                       value="10000"
+                       class="w-full px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary">
+            </div>
+        </div>
+    </div>
+
+    <!-- Sources -->
+    <div class="bg-surface-container-low rounded-card p-6">
+        <h2 class="font-headline text-lg font-semibold text-on-surface mb-4">Sources</h2>
+        <p class="text-sm text-on-surface-variant mb-4">Select one or more sources and provide a search URL or query for each.</p>
+        {% for source_name in available_sources %}
+        <div class="mb-3 p-3 rounded-lg bg-surface-container">
+            <label class="flex items-center gap-2 mb-2">
+                <input type="checkbox" name="source_{{ source_name }}" class="rounded"
+                       onchange="this.closest('.mb-3').querySelector('.source-config').classList.toggle('hidden', !this.checked)">
+                <span class="text-sm font-medium text-on-surface">{{ source_name }}</span>
+            </label>
+            <div class="source-config hidden ml-6">
+                <input type="text" name="source_{{ source_name }}_url" placeholder="Search URL or query"
+                       class="w-full px-3 py-2 bg-surface-container-high text-on-surface rounded-card text-sm border-0 focus:ring-2 focus:ring-primary">
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Scoring -->
+    <div class="bg-surface-container-low rounded-card p-6">
+        <h2 class="font-headline text-lg font-semibold text-on-surface mb-4">Scoring</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            <div>
+                <label class="block text-sm text-on-surface-variant mb-1" for="field-score-threshold">Score Threshold</label>
+                <input id="field-score-threshold" name="score_threshold" type="number"
+                       value="50"
+                       class="w-full px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary">
+            </div>
+            <div>
+                <label class="block text-sm text-on-surface-variant mb-1" for="field-score-alert">Score Alert Threshold</label>
+                <input id="field-score-alert" name="score_threshold_alert" type="number"
+                       placeholder="Optional"
+                       class="w-full px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary">
+            </div>
+        </div>
+
+        <!-- Score Rules -->
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-medium text-on-surface">Score Rules</h3>
+                <button type="button" onclick="addScoreRule()"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 bg-secondary-container text-on-secondary-container rounded-card text-xs font-medium hover:opacity-90 transition-opacity">
+                    <span class="material-symbols-outlined text-[14px]">add</span>Add Rule
+                </button>
+            </div>
+            <div id="score-rules-list" class="space-y-2">
+                <!-- Dynamic rows added by JS -->
+            </div>
+            <p class="text-xs text-on-surface-variant mt-2">Keyword: points. Use <code class="bg-surface-container px-1 rounded">r/pattern/</code> for regex.</p>
+        </div>
+    </div>
+
+    <!-- Telegram -->
+    <div class="bg-surface-container-low rounded-card p-6">
+        <h2 class="font-headline text-lg font-semibold text-on-surface mb-4">Telegram</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm text-on-surface-variant mb-1" for="field-topic-id">Topic ID</label>
+                <input id="field-topic-id" name="telegram_topic_id" type="number"
+                       placeholder="Optional"
+                       class="w-full px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary">
+            </div>
+            <div>
+                <label class="block text-sm text-on-surface-variant mb-1" for="field-max-alerts">Max Alerts</label>
+                <input id="field-max-alerts" name="telegram_max_alerts" type="number" min="1" max="50"
+                       value="5"
+                       class="w-full px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary">
+            </div>
+        </div>
+    </div>
+
+    <!-- Submit -->
+    <div class="flex items-center gap-3">
+        <button type="submit"
+                class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+            <span class="material-symbols-outlined text-[18px]">add_circle</span>Create Profile
+        </button>
+        <a href="/profiles"
+           class="inline-flex items-center gap-2 px-5 py-2.5 bg-surface-container-high text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-highest transition-colors">
+            Cancel
+        </a>
+    </div>
+
+</form>
+
+<script>
+function showErrors(containerId, errors) {
+    var container = document.getElementById(containerId);
+    while (container.firstChild) container.removeChild(container.firstChild);
+    if (!errors || !errors.length) return;
+    var wrapper = document.createElement('div');
+    wrapper.className = 'bg-error-container/20 text-error rounded-card p-4 text-sm';
+    errors.forEach(function(e) {
+        var item = document.createElement('div');
+        item.textContent = '\u2022 ' + e;
+        wrapper.appendChild(item);
+    });
+    container.appendChild(wrapper);
+}
+
+function addScoreRule(key, val) {
+    var list = document.getElementById('score-rules-list');
+
+    var row = document.createElement('div');
+    row.className = 'flex items-center gap-2';
+
+    var keyInput = document.createElement('input');
+    keyInput.type = 'text';
+    keyInput.name = 'score_rule_key[]';
+    keyInput.placeholder = 'keyword';
+    keyInput.value = key || '';
+    keyInput.className = 'flex-1 px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary';
+
+    var valInput = document.createElement('input');
+    valInput.type = 'number';
+    valInput.name = 'score_rule_val[]';
+    valInput.placeholder = 'pts';
+    valInput.value = val || '';
+    valInput.className = 'w-24 px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary';
+
+    var delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'p-2 text-on-surface-variant hover:text-error transition-colors';
+    delBtn.addEventListener('click', function() { row.remove(); });
+
+    var icon = document.createElement('span');
+    icon.className = 'material-symbols-outlined text-[18px]';
+    icon.textContent = 'delete';
+    delBtn.appendChild(icon);
+
+    row.appendChild(keyInput);
+    row.appendChild(valInput);
+    row.appendChild(delBtn);
+    list.appendChild(row);
+}
+
+document.getElementById('create-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var form = new FormData(this);
+    var data = {
+        name: form.get('name'),
+        emoji: form.get('emoji') || '\ud83d\udd0d',
+        budget: {min: parseInt(form.get('budget_min')), max: parseInt(form.get('budget_max'))},
+        score_threshold: parseInt(form.get('score_threshold')),
+        telegram: {
+            topic_id: form.get('telegram_topic_id') ? parseInt(form.get('telegram_topic_id')) : null,
+            max_alerts: parseInt(form.get('telegram_max_alerts')) || 5,
+        },
+        sources: {},
+    };
+    var alertThresh = form.get('score_threshold_alert');
+    if (alertThresh) data.score_threshold_alert = parseInt(alertThresh);
+
+    // Build sources
+    for (var pair of form.entries()) {
+        if (pair[0].startsWith('source_') && !pair[0].endsWith('_url') && pair[1] === 'on') {
+            var srcName = pair[0].replace('source_', '');
+            var url = form.get('source_' + srcName + '_url');
+            if (url) {
+                if (srcName === 'rss') {
+                    data.sources[srcName] = {feeds: [{url: url}]};
+                } else {
+                    data.sources[srcName] = {urls: [url]};
+                }
+            } else {
+                data.sources[srcName] = {};
+            }
+        }
+    }
+
+    // Score rules
+    var keys = form.getAll('score_rule_key[]');
+    var vals = form.getAll('score_rule_val[]');
+    if (keys.length) {
+        data.score_rules = {};
+        keys.forEach(function(k, i) { if (k.trim()) data.score_rules[k.trim()] = parseInt(vals[i]) || 0; });
+    }
+
+    fetch('/api/profiles', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(result) {
+        if (result.errors) {
+            showErrors('create-errors', result.errors);
+        } else {
+            location.href = '/profiles/' + data.name;
+        }
+    })
+    .catch(function(err) {
+        showErrors('create-errors', ['Create failed: ' + err.message]);
+    });
+});
+</script>
+
+{% endblock %}
