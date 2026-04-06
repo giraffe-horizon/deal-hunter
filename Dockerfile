@@ -15,11 +15,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY deal_hunter.py .
+COPY feedback_bot.py .
 COPY sources/ sources/
 COPY filters/ filters/
 COPY notifiers/ notifiers/
 COPY utils/ utils/
 COPY stores/ stores/
+COPY storage/ storage/
+COPY visualization/ visualization/
 COPY examples/ examples/
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
