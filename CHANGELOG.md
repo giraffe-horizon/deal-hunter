@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v0.5.2 (2026-04-06)
+
+### Bug Fixes
+
+- Resolve ruff lint errors in dashboard and tests
+  ([`d8b7007`](https://github.com/giraffe-horizon/deal-hunter/commit/d8b700714ddd8fd35536da4cb9a6d1aa57cc2922))
+
+Sort imports per ruff I001, remove unused pytest import and dead helper function.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.5.1 (2026-04-06)
 
 ### Bug Fixes
