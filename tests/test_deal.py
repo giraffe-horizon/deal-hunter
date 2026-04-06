@@ -59,3 +59,37 @@ class TestDealPostInit:
     def test_regular_price_set(self):
         deal = _make_deal(regular_price=200)
         assert deal.regular_price == 200
+
+
+def test_deal_alt_links_default_empty():
+    """Deal.alt_links defaults to empty list."""
+    deal = Deal(
+        id="test:1",
+        title="Test Deal",
+        price=10000,
+        link="https://example.com",
+        source="pepper",
+        description="",
+        temperature=0,
+        image_url="",
+        published_at="",
+    )
+    assert deal.alt_links == []
+
+
+def test_deal_alt_links_populated():
+    """Deal.alt_links can be populated with source dicts."""
+    deal = Deal(
+        id="test:1",
+        title="Test Deal",
+        price=10000,
+        link="https://example.com",
+        source="pepper",
+        description="",
+        temperature=0,
+        image_url="",
+        published_at="",
+        alt_links=[{"source": "ceneo", "link": "https://ceneo.pl/123", "price": 10200}],
+    )
+    assert len(deal.alt_links) == 1
+    assert deal.alt_links[0]["source"] == "ceneo"
