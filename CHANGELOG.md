@@ -1,6 +1,28 @@
 # CHANGELOG
 
 
+## v0.6.0 (2026-04-06)
+
+### Code Style
+
+- Apply ruff format to dashboard and storage tests
+  ([`0975837`](https://github.com/giraffe-horizon/deal-hunter/commit/0975837c23d7102c5648940be7cd36768bd68332))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- Make dashboard responsive and sync version with app
+  ([`c858b2d`](https://github.com/giraffe-horizon/deal-hunter/commit/c858b2d52b74d26a4ed890382d44f67d45bb5454))
+
+Add mobile-responsive layout: off-canvas sidebar with hamburger toggle, overlay backdrop, responsive
+  padding, hidden table columns on small screens, full-width filter dropdowns, stacking action
+  buttons, and responsive pagination. Dashboard version now reads from pyproject.toml via
+  importlib.metadata instead of being hardcoded, displayed in sidebar.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.5.2 (2026-04-06)
 
 ### Bug Fixes

@@ -31,7 +31,7 @@ from health import (
 )
 from storage.sqlite import SQLiteStorage
 
-__version__ = "0.5.2"  # maintained by semantic-release
+__version__ = "0.6.0"  # maintained by semantic-release
 try:
     __version__ = importlib.metadata.version("deal-hunter")
 except importlib.metadata.PackageNotFoundError:
