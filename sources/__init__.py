@@ -9,6 +9,7 @@ import logging
 
 from .base import Deal, Source
 from .pepper import PepperSource
+from .rss import RssSource
 from .web import WebSource
 from .yaml_source import YamlSource, load_all_store_definitions, make_yaml_source_class
 
@@ -18,6 +19,7 @@ __all__ = [
     "Deal",
     "Source",
     "PepperSource",
+    "RssSource",
     "WebSource",
     "YamlSource",
     "SOURCE_REGISTRY",
@@ -26,6 +28,7 @@ __all__ = [
 # Python-only sources
 SOURCE_REGISTRY: dict[str, type[Source]] = {
     "pepper": PepperSource,
+    "rss": RssSource,
     "web": WebSource,
 }
 

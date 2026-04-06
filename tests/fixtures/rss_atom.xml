@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Deals Feed</title>
+  <link href="https://example.com/deals"/>
+  <entry>
+    <title>Laptop Dell XPS - 5 499 zł</title>
+    <link href="https://example.com/deals/laptop-dell-xps"/>
+    <id>https://example.com/deals/laptop-dell-xps</id>
+    <published>2026-04-06T10:00:00Z</published>
+    <summary>Laptop Dell XPS 15, 16GB RAM, 512GB SSD</summary>
+  </entry>
+  <entry>
+    <title>Monitor LG UltraFine</title>
+    <link href="https://example.com/deals/monitor-lg"/>
+    <id>https://example.com/deals/monitor-lg</id>
+    <published>2026-04-05T14:00:00Z</published>
+    <summary>Cena: 1 899 zł. Monitor LG 27UK850</summary>
+  </entry>
+</feed>
