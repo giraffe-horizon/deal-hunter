@@ -30,8 +30,8 @@ stores/*.yaml           Declarative store definitions (auto-discovered, no Pytho
 stores/README.md        Guide: "How to add a new store in 5 minutes"
 filters/base.py         Base scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
-dashboard.py            Web dashboard: FastAPI app, routes, API endpoints (deals, profiles CRUD, watchlist)
-dashboard/templates/    Jinja2 templates (base, deals, deal_detail, health, price_trends, profiles, watchlist)
+dashboard.py            Web dashboard: FastAPI app, routes, API endpoints (deals, profiles CRUD, watchlist, scoring tuner, comparator)
+dashboard/templates/    Jinja2 templates (base, deals, deal_detail, health, price_trends, profiles, watchlist, tuner, compare)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting + photo upload
 visualization/charts.py Price history charts (matplotlib, lazy-imported)
 storage/sqlite.py       SQLite persistence layer (deals, price history, feedback, alert queue, watchlist)
@@ -351,6 +351,7 @@ Test modules:
 - `test_rss_source.py` — RSS source: RSS 2.0/Atom parsing, price extraction, multi-feed, malformed XML
 - `test_xkom_morele.py` — x-kom and morele.net store definitions: fixture parsing, selectors, registration
 - `test_watchlist.py` — watchlist: SQLite CRUD, trigger logic, Telegram alert format
+- `test_dashboard.py` — dashboard: format_pln, helpers, deals page, watchlist page, profiles CRUD, comparator, scoring tuner
 
 Manual testing:
 ```bash
