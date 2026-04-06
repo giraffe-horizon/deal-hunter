@@ -75,6 +75,19 @@ class TelegramNotifier:
             safe_minus = [html.escape(m) for m in minus[:4]]
             msg += f"\u26a0\ufe0f {', '.join(safe_minus)}\n"
 
+        # Cross-source alt_links
+        if hasattr(deal, "alt_links") and deal.alt_links:
+            alt_parts = []
+            for alt in deal.alt_links:
+                alt_source = html.escape(alt["source"])
+                alt_link = html.escape(alt["link"])
+                alt_price_str = f'{alt["price"]:,} {currency}'.replace(",", " ") if alt.get("price") else ""
+                if alt_price_str:
+                    alt_parts.append(f'<a href="{alt_link}">{alt_source}</a> ({html.escape(alt_price_str)})')
+                else:
+                    alt_parts.append(f'<a href="{alt_link}">{alt_source}</a>')
+            msg += f"\n\U0001f517 Też w: {' | '.join(alt_parts)}\n"
+
         safe_link = html.escape(deal.link)
         safe_source = html.escape(deal.source)
         msg += f'\n\U0001f517 <a href="{safe_link}">LINK DO OKAZJI</a> | \u0179r\u00f3d\u0142o: {safe_source}'
@@ -140,6 +153,15 @@ class TelegramNotifier:
 
         if price_change.get("is_lowest_ever"):
             msg += "\U0001f525 <b>Najni\u017csza cena w historii!</b>\n"
+
+        # Cross-source alt_links
+        if hasattr(deal, "alt_links") and deal.alt_links:
+            alt_parts = []
+            for alt in deal.alt_links:
+                alt_source = html.escape(alt["source"])
+                alt_link = html.escape(alt["link"])
+                alt_parts.append(f'<a href="{alt_link}">{alt_source}</a>')
+            msg += f"\n\U0001f517 Też w: {' | '.join(alt_parts)}\n"
 
         msg += f'\n\U0001f517 <a href="{safe_link}">Link do oferty</a> | \u0179r\u00f3d\u0142o: {safe_source}'
 

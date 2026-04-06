@@ -189,3 +189,74 @@ def test_normalize_title_empty():
 
 def test_normalize_title_unicode():
     assert _normalize_title("Słuchawki ANC — super!") == "słuchawki anc super"
+
+
+from unittest.mock import patch
+
+
+def test_telegram_alert_with_alt_links():
+    """send_alert includes alt_links in message when present."""
+    from notifiers.telegram import TelegramNotifier
+
+    notifier = TelegramNotifier("fake-token", "fake-chat")
+    deal = _make_deal(
+        id="pepper:1",
+        title="Canyon Endurace CF 7",
+        price=9000,
+        source="pepper",
+        link="https://pepper.pl/1",
+        alt_links=[
+            {"source": "ceneo", "link": "https://ceneo.pl/2", "price": 9200},
+            {"source": "morele", "link": "https://morele.net/3", "price": 8900},
+        ],
+    )
+    with patch.object(notifier, "_send_message") as mock_send:
+        notifier.send_alert(deal, 85, "ZNALAZŁEM OKAZJĘ", ["keyword1"], [])
+        msg = mock_send.call_args[0][0]
+        assert "Też w:" in msg
+        assert "ceneo" in msg
+        assert "morele" in msg
+
+
+def test_telegram_alert_without_alt_links():
+    """send_alert omits 'Też w:' section when alt_links is empty."""
+    from notifiers.telegram import TelegramNotifier
+
+    notifier = TelegramNotifier("fake-token", "fake-chat")
+    deal = _make_deal(
+        id="pepper:1",
+        title="Canyon Endurace CF 7",
+        price=9000,
+        source="pepper",
+        link="https://pepper.pl/1",
+    )
+    with patch.object(notifier, "_send_message") as mock_send:
+        notifier.send_alert(deal, 85, "ZNALAZŁEM OKAZJĘ", ["keyword1"], [])
+        msg = mock_send.call_args[0][0]
+        assert "Też w:" not in msg
+
+
+def test_telegram_price_drop_with_alt_links():
+    """send_price_drop_alert includes alt_links when present."""
+    from notifiers.telegram import TelegramNotifier
+
+    notifier = TelegramNotifier("fake-token", "fake-chat")
+    deal = _make_deal(
+        id="pepper:1",
+        title="Canyon Endurace CF 7",
+        price=8500,
+        source="pepper",
+        link="https://pepper.pl/1",
+        alt_links=[{"source": "ceneo", "link": "https://ceneo.pl/2", "price": 8700}],
+    )
+    price_change = {
+        "old_price": 9000,
+        "new_price": 8500,
+        "diff_pln": 500,
+        "diff_percent": 5.6,
+    }
+    with patch.object(notifier, "_send_message") as mock_send:
+        notifier.send_price_drop_alert(deal, price_change)
+        msg = mock_send.call_args[0][0]
+        assert "Też w:" in msg
+        assert "ceneo" in msg
