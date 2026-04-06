@@ -1,6 +1,36 @@
 # CHANGELOG
 
 
+## v0.3.0 (2026-04-06)
+
+### Bug Fixes
+
+- Sqlite transaction safety, encoding, systemd env, and defensive parsing
+  ([`3d5982c`](https://github.com/giraffe-horizon/deal-hunter/commit/3d5982c13cea9a41983ae4e872f8ca8497e294bf))
+
+- Remove mid-transaction commit from record_price() to make upsert_deal atomic - Add
+  encoding="utf-8" to all state/health file open() calls (prevents Polish character corruption in
+  non-UTF-8 locales like cron/Docker) - Add EnvironmentFile to bot systemd service for consistency -
+  Log database close errors at debug level instead of silently swallowing - Guard against empty YAML
+  profile (yaml.safe_load returns None) - Extract _parse_topic_id() helper for safe
+  TELEGRAM_TOPIC_ID parsing (catches ValueError on non-numeric values)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- Add Telegram feedback bot with inline keyboard support
+  ([`625f47f`](https://github.com/giraffe-horizon/deal-hunter/commit/625f47f8ad8fb1c9c12442d4d14514ba6e5a1162))
+
+Standalone polling bot (feedback_bot.py) with inline keyboard buttons on deal alerts (Watch/Skip),
+  text commands (/status, /watchlist), SQLite storage methods, systemd service, and comprehensive
+  tests.
+
+Also includes scoring breakdown improvements in filters and project roadmap.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.2.0 (2026-04-06)
 
 ### Bug Fixes
