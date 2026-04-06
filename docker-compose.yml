@@ -22,6 +22,7 @@ services:
     env_file: .env
     environment:
       - TZ=${TZ:-Europe/Warsaw}
+    entrypoint: ["tini", "--"]
     command: ["python", "feedback_bot.py"]
     volumes:
       - ./profiles:/app/profiles
