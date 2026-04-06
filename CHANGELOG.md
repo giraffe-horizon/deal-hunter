@@ -1,6 +1,16 @@
 # CHANGELOG
 
 
+## v0.4.2 (2026-04-06)
+
+### Bug Fixes
+
+- Resolve mypy no-any-return errors in health, storage, yaml_source
+  ([`1138b21`](https://github.com/giraffe-horizon/deal-hunter/commit/1138b21532f5ff34fe0113e754c4840d9a38c7af))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.4.1 (2026-04-06)
 
 ### Bug Fixes
