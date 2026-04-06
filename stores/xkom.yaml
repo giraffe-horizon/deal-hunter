@@ -1,0 +1,23 @@
+name: xkom
+type: search
+base_url: "https://www.x-kom.pl"
+search_url: "https://www.x-kom.pl/szukaj?q={query}"
+search_url_category: "https://www.x-kom.pl/g/{category}?q={query}"
+
+# NOTE: x-kom.pl uses React client-side rendering and is protected by Cloudflare.
+# Simple HTTP requests receive a Cloudflare challenge page, not product HTML.
+# These selectors are based on x-kom.pl's known DOM structure and work against
+# pre-rendered HTML (e.g. SSR snapshots, test fixtures), but live scraping
+# requires a JavaScript-capable browser (Playwright/Selenium).
+
+strategies:
+  - css
+
+selectors:
+  products: "li[data-product-id], [data-product-id]"
+  title: "[class*='ProductCard'] h3, [class*='ProductTitle'], h3"
+  price: "[class*='Price__value'], [class*='price__value']"
+  link: "a[class*='ProductCard__link']@href, a[href*='/p/']@href"
+  image: "img[class*='ProductImage']@src, img[class*='product']@src, img@src"
+  regular_price: "[class*='OldPrice'] span, [class*='old-price'] span, [class*='RegularPrice']"
+  id: "@data-product-id, @data-id"
