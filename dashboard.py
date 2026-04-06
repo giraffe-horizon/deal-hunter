@@ -661,6 +661,152 @@ async def api_run_profile(name: str):
     )
 
 
+def _score_deals_with_profile(deals: list[dict], profile_data: dict) -> list[dict]:
+    """Score a list of deal dicts using the given profile config. Returns enriched dicts."""
+    from filters.base import BaseFilter
+    from sources.base import Deal
+
+    scorer = BaseFilter(profile_data)
+    scored = []
+    for d in deals:
+        deal_obj = Deal(
+            id=d["id"],
+            title=d["title"],
+            price=d["price"] or 0,
+            link=d["link"] or "",
+            source=d["source"] or "",
+            description=d["description"] or "",
+            temperature=0,
+            image_url=d["image_url"] or "",
+            published_at="",
+        )
+        result = scorer.score_deal(deal_obj)
+        scored.append(
+            {
+                **d,
+                "new_score": result.score,
+                "diff": result.score - (d["score"] or 0),
+                "breakdown": result.breakdown,
+                "rejected": result.rejected,
+                "reject_reason": result.reject_reason,
+            }
+        )
+    scored.sort(key=lambda x: x["new_score"], reverse=True)
+    return scored
+
+
+@app.get("/tuner", response_class=HTMLResponse)
+async def tuner_index(request: Request):
+    """Scoring Tuner index — profile selector."""
+    profiles = _get_profiles()
+    return templates.TemplateResponse(
+        request,
+        "tuner.html",
+        {
+            "active_page": "tuner",
+            "profiles": profiles,
+            "selected_profile": None,
+            "deals": [],
+            "profile_data": None,
+        },
+    )
+
+
+@app.get("/tuner/{profile}", response_class=HTMLResponse)
+async def tuner_profile(request: Request, profile: str, db: SQLiteStorage = Depends(get_db)):
+    """Scoring Tuner for a specific profile — loads and scores 50 deals."""
+    profile_data = safe_load_profile(profile)
+    if profile_data is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    deals = db.get_deals(profile=profile, limit=50)
+    scored = _score_deals_with_profile(deals, profile_data)
+    return templates.TemplateResponse(
+        request,
+        "tuner.html",
+        {
+            "active_page": "tuner",
+            "profiles": _get_profiles(),
+            "selected_profile": profile,
+            "deals": scored,
+            "profile_data": profile_data,
+        },
+    )
+
+
+@app.post("/api/tuner/{profile}/simulate")
+async def tuner_simulate(request: Request, profile: str, db: SQLiteStorage = Depends(get_db)):
+    """Re-score deals with modified rules and return JSON results."""
+    body = await request.json()
+    profile_data = safe_load_profile(profile)
+    if profile_data is None:
+        return JSONResponse({"error": "Profile not found"}, status_code=404)
+    modified = dict(profile_data)
+    for key in (
+        "score_rules",
+        "penalties",
+        "budget",
+        "score_threshold",
+        "score_threshold_alert",
+        "excluded_words",
+        "required_any",
+    ):
+        if key in body:
+            modified[key] = body[key]
+    deals = db.get_deals(profile=profile, limit=50)
+    scored = _score_deals_with_profile(deals, modified)
+    results = []
+    for s in scored:
+        results.append(
+            {
+                "id": s["id"],
+                "title": s["title"],
+                "price": s["price"],
+                "current_score": s["score"],
+                "new_score": s["new_score"],
+                "diff": s["diff"],
+                "rejected": s["rejected"],
+                "reject_reason": s["reject_reason"],
+                "breakdown": s["breakdown"],
+            }
+        )
+    return JSONResponse({"results": results})
+
+
+@app.post("/api/tuner/{profile}/save")
+async def tuner_save(request: Request, profile: str):
+    """Save modified scoring rules to the profile YAML file."""
+    body = await request.json()
+    profile_data = safe_load_profile(profile)
+    if profile_data is None:
+        return JSONResponse({"error": "Profile not found"}, status_code=404)
+    for key in (
+        "score_rules",
+        "penalties",
+        "budget",
+        "score_threshold",
+        "score_threshold_alert",
+        "excluded_words",
+        "required_any",
+    ):
+        if key in body:
+            profile_data[key] = body[key]
+    from utils.validation import validate_profile
+
+    errors = validate_profile(profile_data)
+    if errors:
+        return JSONResponse({"ok": False, "errors": errors}, status_code=400)
+    import yaml as _yaml_save
+
+    profile_path = BASE_DIR / "profiles" / f"{profile}.yaml"
+    profile_path.write_text(
+        _yaml_save.dump(
+            profile_data, allow_unicode=True, default_flow_style=False, sort_keys=False
+        ),
+        encoding="utf-8",
+    )
+    return JSONResponse({"ok": True})
+
+
 @app.get("/api/profiles")
 async def api_profiles_list():
     """JSON list of profiles."""

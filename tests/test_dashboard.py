@@ -1053,3 +1053,36 @@ class TestComparePage:
         response = client.get("/deals")
         assert response.status_code == 200
         assert "compare-bar" in response.text
+
+
+# ──────────────── E2E tests: Scoring Tuner ────────────────
+
+
+class TestTunerPage:
+    def test_tuner_index_loads(self, client):
+        response = client.get("/tuner")
+        assert response.status_code == 200
+        assert "Scoring Tuner" in response.text
+
+    def test_tuner_in_sidebar(self, client):
+        response = client.get("/tuner")
+        assert response.status_code == 200
+        assert 'href="/tuner"' in response.text
+
+    def test_tuner_profile_not_found(self, client):
+        response = client.get("/tuner/nonexistent_profile_xyz")
+        assert response.status_code == 404
+
+    def test_tuner_simulate_not_found(self, client):
+        response = client.post(
+            "/api/tuner/nonexistent_profile_xyz/simulate",
+            json={"score_rules": {"test": 10}},
+        )
+        assert response.status_code == 404
+
+    def test_tuner_save_not_found(self, client):
+        response = client.post(
+            "/api/tuner/nonexistent_profile_xyz/save",
+            json={"score_rules": {"test": 10}},
+        )
+        assert response.status_code == 404

@@ -1,0 +1,484 @@
+{% extends "base.html" %}
+{% set active_page = "tuner" %}
+{% block title %}Scoring Tuner — DealMonitor{% endblock %}
+{% block page_title %}Scoring Tuner{% endblock %}
+{% block content %}
+
+{% if not selected_profile %}
+{# ── Profile selector ── #}
+{% if profiles %}
+<div class="mb-6">
+    <p class="text-sm text-on-surface-variant mb-4">Select a profile to tune its scoring rules against existing deals.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for name in profiles %}
+    <a href="/tuner/{{ name }}" class="bg-surface-container-low rounded-card p-6 hover:bg-surface-container transition-colors block group">
+        <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-[32px] text-primary group-hover:text-primary-dim transition-colors">labs</span>
+            <div>
+                <h3 class="font-headline text-base font-semibold text-on-surface">{{ name }}</h3>
+                <p class="text-xs text-on-surface-variant mt-0.5">Tune scoring rules</p>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="bg-surface-container-low rounded-card p-12 text-center">
+    <span class="material-symbols-outlined text-[48px] text-outline-variant mb-4 block">labs</span>
+    <h2 class="font-headline text-lg font-semibold text-on-surface mb-2">No profiles found</h2>
+    <p class="text-sm text-on-surface-variant mb-4">Create a profile first to use the Scoring Tuner.</p>
+    <a href="/profiles/new" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+        <span class="material-symbols-outlined text-[18px]">add</span>
+        Create Profile
+    </a>
+</div>
+{% endif %}
+
+{% else %}
+{# ── Tuner editor + results ── #}
+
+{# Error/status container #}
+<div id="tuner-errors"></div>
+
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+    {# ── Left column: editor ── #}
+    <div class="space-y-4">
+
+        {# Profile selector #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <label class="block text-xs font-medium text-on-surface-variant mb-2 uppercase tracking-wider">Profile</label>
+            <select onchange="if(this.value) window.location='/tuner/'+this.value"
+                    class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                {% for name in profiles %}
+                <option value="{{ name }}" {% if name == selected_profile %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {# Score Rules #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-headline text-sm font-semibold text-on-surface">Score Rules</h3>
+                <button type="button" onclick="addRuleRow('score-rules-body','rule-keyword','rule-points')"
+                        class="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-dim font-medium">
+                    <span class="material-symbols-outlined text-[16px]">add</span>Add
+                </button>
+            </div>
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th class="text-left text-xs text-on-surface-variant font-medium pb-2 pr-2">Keyword</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium pb-2 pr-2">Points</th>
+                        <th class="pb-2"></th>
+                    </tr>
+                </thead>
+                <tbody id="score-rules-body">
+                    {% if profile_data and profile_data.score_rules %}
+                    {% for keyword, points in profile_data.score_rules.items() %}
+                    <tr>
+                        <td class="py-1 pr-2">
+                            <input type="text" class="rule-keyword w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                   value="{{ keyword }}">
+                        </td>
+                        <td class="py-1 pr-2">
+                            <input type="number" class="rule-points w-20 bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                   value="{{ points }}">
+                        </td>
+                        <td class="py-1">
+                            <button type="button" onclick="this.closest('tr').remove()"
+                                    class="text-error hover:text-error/80 text-sm">Remove</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Penalties #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-headline text-sm font-semibold text-on-surface">Penalties</h3>
+                <button type="button" onclick="addRuleRow('penalties-body','penalty-keyword','penalty-points')"
+                        class="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-dim font-medium">
+                    <span class="material-symbols-outlined text-[16px]">add</span>Add
+                </button>
+            </div>
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th class="text-left text-xs text-on-surface-variant font-medium pb-2 pr-2">Keyword</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium pb-2 pr-2">Points</th>
+                        <th class="pb-2"></th>
+                    </tr>
+                </thead>
+                <tbody id="penalties-body">
+                    {% if profile_data and profile_data.penalties %}
+                    {% for keyword, points in profile_data.penalties.items() %}
+                    <tr>
+                        <td class="py-1 pr-2">
+                            <input type="text" class="penalty-keyword w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                   value="{{ keyword }}">
+                        </td>
+                        <td class="py-1 pr-2">
+                            <input type="number" class="penalty-points w-20 bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                   value="{{ points }}">
+                        </td>
+                        <td class="py-1">
+                            <button type="button" onclick="this.closest('tr').remove()"
+                                    class="text-error hover:text-error/80 text-sm">Remove</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Budget #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <h3 class="font-headline text-sm font-semibold text-on-surface mb-3">Budget</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-on-surface-variant mb-1">Min (PLN)</label>
+                    <input type="number" id="budget-min"
+                           value="{{ profile_data.budget.min if profile_data and profile_data.budget else 0 }}"
+                           class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </div>
+                <div>
+                    <label class="block text-xs text-on-surface-variant mb-1">Max (PLN)</label>
+                    <input type="number" id="budget-max"
+                           value="{{ profile_data.budget.max if profile_data and profile_data.budget else 999999 }}"
+                           class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </div>
+            </div>
+        </div>
+
+        {# Thresholds #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <h3 class="font-headline text-sm font-semibold text-on-surface mb-3">Thresholds</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-on-surface-variant mb-1">Score Threshold</label>
+                    <input type="number" id="score-threshold"
+                           value="{{ profile_data.score_threshold if profile_data else 50 }}"
+                           class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </div>
+                <div>
+                    <label class="block text-xs text-on-surface-variant mb-1">Alert Threshold</label>
+                    <input type="number" id="score-threshold-alert"
+                           value="{{ profile_data.score_threshold_alert if profile_data else 100 }}"
+                           class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </div>
+            </div>
+        </div>
+
+        {# Excluded Words #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <label class="block text-xs font-medium text-on-surface-variant mb-2 uppercase tracking-wider">Excluded Words</label>
+            <textarea id="excluded-words" rows="3"
+                      placeholder="word1, word2, ..."
+                      class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none">{% if profile_data and profile_data.excluded_words %}{{ profile_data.excluded_words | join(', ') }}{% endif %}</textarea>
+            <p class="text-xs text-on-surface-variant mt-1">Comma-separated. Deals matching any of these are hard-rejected.</p>
+        </div>
+
+        {# Required Any #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <label class="block text-xs font-medium text-on-surface-variant mb-2 uppercase tracking-wider">Required Any</label>
+            <textarea id="required-any" rows="3"
+                      placeholder="word1, word2, ..."
+                      class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none">{% if profile_data and profile_data.required_any %}{{ profile_data.required_any | join(', ') }}{% endif %}</textarea>
+            <p class="text-xs text-on-surface-variant mt-1">Comma-separated. At least one must match, or deal is rejected.</p>
+        </div>
+
+        {# Action buttons #}
+        <div class="flex gap-3">
+            <button type="button" onclick="simulate()"
+                    class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+                <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                Simulate
+            </button>
+            <button type="button" onclick="saveProfile()"
+                    class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-surface-container-high text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-highest transition-colors">
+                <span class="material-symbols-outlined text-[18px]">save</span>
+                Save Profile
+            </button>
+        </div>
+
+    </div>{# end left column #}
+
+    {# ── Right column: results ── #}
+    <div class="bg-surface-container-low rounded-card overflow-hidden">
+        <div class="px-4 py-3 border-b border-outline-variant/30">
+            <h3 class="font-headline text-sm font-semibold text-on-surface">Results (top 50 deals)</h3>
+            <p class="text-xs text-on-surface-variant mt-0.5">Click Simulate to re-score with modified rules.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-surface-container">
+                        <th class="text-left text-xs text-on-surface-variant font-medium py-2 pl-4 pr-2">Title</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium py-2 pr-2">Price</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium py-2 pr-2">Cur.</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium py-2 pr-2">New</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium py-2 pr-4">Diff</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body">
+                    {% for deal in deals %}
+                    <tr class="hover:bg-surface-container transition-colors border-b border-outline-variant/10">
+                        <td class="py-2 pl-4 pr-2 max-w-[180px]">
+                            <a href="/deals/{{ deal.id | urlencode }}" class="text-sm text-primary hover:underline line-clamp-1 block truncate"
+                               title="{{ deal.title }}">{{ deal.title }}</a>
+                        </td>
+                        <td class="py-2 pr-2 whitespace-nowrap">
+                            <span class="text-sm font-headline font-semibold text-on-surface">{{ deal.price | format_pln }}</span>
+                        </td>
+                        <td class="py-2 pr-2">
+                            <span class="text-sm text-on-surface-variant">{{ deal.score if deal.score is not none else '—' }}</span>
+                        </td>
+                        <td class="py-2 pr-2">
+                            {% if deal.rejected %}
+                            <span class="text-sm font-headline font-bold text-error">REJ</span>
+                            {% elif deal.new_score >= 70 %}
+                            <span class="text-sm font-headline font-bold text-tertiary">{{ deal.new_score }}</span>
+                            {% elif deal.new_score >= 40 %}
+                            <span class="text-sm font-headline font-bold text-[#b8860b]">{{ deal.new_score }}</span>
+                            {% else %}
+                            <span class="text-sm font-headline font-bold text-error">{{ deal.new_score }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2 pr-4">
+                            {% if not deal.rejected %}
+                            {% if deal.diff > 0 %}
+                            <span class="text-sm font-headline font-bold text-tertiary">+{{ deal.diff }}</span>
+                            {% elif deal.diff < 0 %}
+                            <span class="text-sm font-headline font-bold text-error">{{ deal.diff }}</span>
+                            {% else %}
+                            <span class="text-sm font-headline font-bold text-on-surface-variant">0</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-sm text-on-surface-variant">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="py-8 text-center text-sm text-on-surface-variant">
+                            No deals found for this profile. Run the hunter first.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>{# end right column #}
+
+</div>{# end grid #}
+
+<script>
+async function simulate() {
+    const rules = collectRules();
+    const errDiv = document.getElementById('tuner-errors');
+    errDiv.replaceChildren();
+
+    try {
+        const resp = await fetch('/api/tuner/{{ selected_profile }}/simulate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(rules),
+        });
+        const data = await resp.json();
+        if (data.error) {
+            showError(data.error);
+            return;
+        }
+        renderResults(data.results);
+    } catch(e) {
+        showError('Simulation failed: ' + e.message);
+    }
+}
+
+function showError(msg) {
+    const errDiv = document.getElementById('tuner-errors');
+    const container = document.createElement('div');
+    container.className = 'bg-error-container/20 text-error rounded-card p-4 text-sm mb-4';
+    const item = document.createElement('div');
+    item.textContent = msg;
+    container.appendChild(item);
+    errDiv.appendChild(container);
+}
+
+function renderResults(results) {
+    const tbody = document.getElementById('results-body');
+    tbody.replaceChildren();
+    results.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-surface-container transition-colors border-b border-outline-variant/10';
+
+        // Title cell
+        const tdTitle = document.createElement('td');
+        tdTitle.className = 'py-2 pl-4 pr-2 max-w-[180px]';
+        const titleLink = document.createElement('a');
+        titleLink.href = '/deals/' + encodeURIComponent(r.id);
+        titleLink.className = 'text-sm text-primary hover:underline line-clamp-1 block truncate';
+        titleLink.title = r.title;
+        titleLink.textContent = r.title;
+        tdTitle.appendChild(titleLink);
+        tr.appendChild(tdTitle);
+
+        // Price cell
+        const tdPrice = document.createElement('td');
+        tdPrice.className = 'py-2 pr-2 whitespace-nowrap';
+        const priceSpan = document.createElement('span');
+        priceSpan.className = 'text-sm font-headline font-semibold text-on-surface';
+        priceSpan.textContent = r.price ? r.price.toLocaleString('pl-PL') + ' zl' : '0 zl';
+        tdPrice.appendChild(priceSpan);
+        tr.appendChild(tdPrice);
+
+        // Current score cell
+        const tdCurrent = document.createElement('td');
+        tdCurrent.className = 'py-2 pr-2';
+        const currentSpan = document.createElement('span');
+        currentSpan.className = 'text-sm text-on-surface-variant';
+        currentSpan.textContent = r.current_score ?? '\u2014';
+        tdCurrent.appendChild(currentSpan);
+        tr.appendChild(tdCurrent);
+
+        // New score cell
+        const tdNew = document.createElement('td');
+        tdNew.className = 'py-2 pr-2';
+        const newSpan = document.createElement('span');
+        const scoreClass = r.rejected ? 'text-error' :
+            r.new_score >= 70 ? 'text-tertiary' :
+            r.new_score >= 40 ? 'text-[#b8860b]' : 'text-error';
+        newSpan.className = 'text-sm font-headline font-bold ' + scoreClass;
+        newSpan.textContent = r.rejected ? 'REJ' : r.new_score;
+        tdNew.appendChild(newSpan);
+        tr.appendChild(tdNew);
+
+        // Diff cell
+        const tdDiff = document.createElement('td');
+        tdDiff.className = 'py-2 pr-4';
+        const diffSpan = document.createElement('span');
+        const diffClass = r.diff > 0 ? 'text-tertiary' : r.diff < 0 ? 'text-error' : 'text-on-surface-variant';
+        diffSpan.className = 'text-sm font-headline font-bold ' + diffClass;
+        diffSpan.textContent = r.rejected ? '\u2014' : (r.diff > 0 ? '+' : '') + r.diff;
+        tdDiff.appendChild(diffSpan);
+        tr.appendChild(tdDiff);
+
+        tbody.appendChild(tr);
+    });
+}
+
+function collectRules() {
+    const rules = {};
+    // Score rules
+    const scoreRules = {};
+    document.querySelectorAll('#score-rules-body tr').forEach(tr => {
+        const keyword = tr.querySelector('.rule-keyword')?.value?.trim();
+        const points = parseInt(tr.querySelector('.rule-points')?.value) || 0;
+        if (keyword) scoreRules[keyword] = points;
+    });
+    rules.score_rules = scoreRules;
+    // Penalties
+    const penalties = {};
+    document.querySelectorAll('#penalties-body tr').forEach(tr => {
+        const keyword = tr.querySelector('.penalty-keyword')?.value?.trim();
+        const points = parseInt(tr.querySelector('.penalty-points')?.value) || 0;
+        if (keyword) penalties[keyword] = points;
+    });
+    rules.penalties = penalties;
+    // Budget
+    rules.budget = {
+        min: parseInt(document.getElementById('budget-min')?.value) || 0,
+        max: parseInt(document.getElementById('budget-max')?.value) || 999999,
+    };
+    // Thresholds
+    rules.score_threshold = parseInt(document.getElementById('score-threshold')?.value) || 50;
+    rules.score_threshold_alert = parseInt(document.getElementById('score-threshold-alert')?.value) || 100;
+    // Excluded words
+    const excludedText = document.getElementById('excluded-words')?.value || '';
+    rules.excluded_words = excludedText.split(',').map(s => s.trim()).filter(Boolean);
+    // Required any
+    const requiredText = document.getElementById('required-any')?.value || '';
+    rules.required_any = requiredText.split(',').map(s => s.trim()).filter(Boolean);
+    return rules;
+}
+
+function addRuleRow(tbodyId, keywordClass, pointsClass) {
+    const tbody = document.getElementById(tbodyId);
+    const tr = document.createElement('tr');
+
+    const tdKeyword = document.createElement('td');
+    tdKeyword.className = 'py-1 pr-2';
+    const inputKeyword = document.createElement('input');
+    inputKeyword.type = 'text';
+    inputKeyword.className = keywordClass + ' w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30';
+    inputKeyword.placeholder = 'keyword';
+    tdKeyword.appendChild(inputKeyword);
+    tr.appendChild(tdKeyword);
+
+    const tdPoints = document.createElement('td');
+    tdPoints.className = 'py-1 pr-2';
+    const inputPoints = document.createElement('input');
+    inputPoints.type = 'number';
+    inputPoints.className = pointsClass + ' w-20 bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30';
+    inputPoints.value = '0';
+    tdPoints.appendChild(inputPoints);
+    tr.appendChild(tdPoints);
+
+    const tdAction = document.createElement('td');
+    tdAction.className = 'py-1';
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'text-error hover:text-error/80 text-sm';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = () => tr.remove();
+    tdAction.appendChild(removeBtn);
+    tr.appendChild(tdAction);
+
+    tbody.appendChild(tr);
+}
+
+async function saveProfile() {
+    const rules = collectRules();
+    const errDiv = document.getElementById('tuner-errors');
+    errDiv.replaceChildren();
+
+    try {
+        const resp = await fetch('/api/tuner/{{ selected_profile }}/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(rules),
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+            if (data.errors) {
+                const container = document.createElement('div');
+                container.className = 'bg-error-container/20 text-error rounded-card p-4 text-sm mb-4';
+                data.errors.forEach(e => {
+                    const item = document.createElement('div');
+                    item.textContent = '\u2022 ' + e;
+                    container.appendChild(item);
+                });
+                errDiv.appendChild(container);
+            }
+            return;
+        }
+        // Show success
+        const successDiv = document.createElement('div');
+        successDiv.className = 'bg-tertiary-container/20 text-tertiary rounded-card p-4 text-sm mb-4';
+        successDiv.textContent = 'Profile saved successfully.';
+        errDiv.appendChild(successDiv);
+        setTimeout(() => successDiv.remove(), 3000);
+    } catch(e) {
+        showError('Save failed: ' + e.message);
+    }
+}
+</script>
+
+{% endif %}
+{% endblock %}
