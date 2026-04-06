@@ -1041,3 +1041,15 @@ class TestComparePage:
     def test_compare_page_with_ids(self, client):
         response = client.get("/compare?ids=test:1,test:2")
         assert response.status_code == 200
+
+    def test_deals_table_has_checkboxes(self, client):
+        """Deals page includes compare checkboxes."""
+        response = client.get("/deals")
+        assert response.status_code == 200
+        assert "compare-cb" in response.text
+
+    def test_deals_page_has_compare_bar(self, client):
+        """Deals page includes floating compare bar."""
+        response = client.get("/deals")
+        assert response.status_code == 200
+        assert "compare-bar" in response.text

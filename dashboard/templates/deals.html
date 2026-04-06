@@ -124,4 +124,48 @@
     </div>
 </div>
 
+<!-- Floating Compare Bar -->
+<div id="compare-bar" class="hidden fixed bottom-0 left-0 lg:left-64 right-0 z-20 bg-primary-container border-t border-surface-variant/30 px-6 py-3">
+    <div class="flex items-center justify-between max-w-7xl mx-auto">
+        <span class="text-sm font-label text-on-primary-container">
+            <span id="compare-count">0</span> deals selected
+        </span>
+        <div class="flex items-center gap-3">
+            <button onclick="clearCompare()" class="text-sm font-label text-on-primary-container/70 hover:text-on-primary-container">
+                Clear
+            </button>
+            <button onclick="goCompare()" id="compare-btn"
+                    class="px-4 py-2 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+                Compare
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateCompareBar() {
+    const checked = document.querySelectorAll('.compare-cb:checked');
+    const bar = document.getElementById('compare-bar');
+    const countEl = document.getElementById('compare-count');
+    const btn = document.getElementById('compare-btn');
+    if (!bar || !countEl || !btn) return;
+    countEl.textContent = checked.length;
+    bar.classList.toggle('hidden', checked.length === 0);
+    btn.disabled = checked.length < 2 || checked.length > 5;
+    btn.classList.toggle('opacity-50', checked.length < 2 || checked.length > 5);
+}
+
+function clearCompare() {
+    document.querySelectorAll('.compare-cb:checked').forEach(cb => { cb.checked = false; });
+    updateCompareBar();
+}
+
+function goCompare() {
+    const ids = Array.from(document.querySelectorAll('.compare-cb:checked')).map(cb => cb.value);
+    if (ids.length >= 2 && ids.length <= 5) {
+        window.location = '/compare?ids=' + ids.join(',');
+    }
+}
+</script>
+
 {% endblock %}

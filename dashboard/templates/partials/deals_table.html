@@ -1,6 +1,7 @@
 <table class="w-full">
     <thead>
         <tr class="text-left text-xs font-label text-on-surface-variant uppercase tracking-wider">
+            <th class="pb-3 pl-4 w-8"></th>
             <th class="pb-3 pl-4">Title</th>
             <th class="pb-3">Price</th>
             <th class="pb-3 hidden sm:table-cell">Source</th>
@@ -14,7 +15,11 @@
             {% for deal in deals %}
             <tr class="hover:bg-surface-container transition-colors cursor-pointer"
                 onclick="window.location='/deals/{{ deal.id | urlencode }}'">
-                <td class="py-3 pl-4 pr-2">
+                <td class="py-3 pl-4 pr-1 w-8" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="compare-cb rounded border-outline-variant text-primary focus:ring-primary/30"
+                           value="{{ deal.id }}" onchange="updateCompareBar()">
+                </td>
+                <td class="py-3 pl-2 pr-2">
                     <span class="text-sm font-medium text-on-surface line-clamp-1">{{ deal.title }}</span>
                 </td>
                 <td class="py-3 pr-2">
@@ -52,7 +57,7 @@
             {% endfor %}
         {% else %}
             <tr>
-                <td colspan="6" class="py-16 text-center">
+                <td colspan="7" class="py-16 text-center">
                     <span class="material-symbols-outlined text-[40px] text-outline-variant mb-3 block">search_off</span>
                     <p class="text-on-surface-variant text-sm">No deals found</p>
                 </td>
