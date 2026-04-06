@@ -194,6 +194,15 @@ class SQLiteStorage:
             logger.error(f"Failed to query deals: {e}")
             return []
 
+    def get_deals_by_ids(self, ids: list[str]) -> list[dict]:
+        """Fetch multiple deals by their IDs."""
+        if not ids:
+            return []
+        placeholders = ",".join("?" for _ in ids)
+        query = f"SELECT * FROM deals WHERE id IN ({placeholders})"
+        rows = self._conn.execute(query, ids).fetchall()
+        return [dict(row) for row in rows]
+
     def count_deals(
         self,
         profile: str | None = None,

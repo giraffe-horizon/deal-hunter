@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% set active_page = "deals" %}
+{% block title %}Compare Deals — DealMonitor{% endblock %}
+{% block page_title %}
+<div class="flex items-center gap-2 text-sm font-label text-on-surface-variant min-w-0">
+    <a href="/deals" class="hover:text-primary transition-colors flex-shrink-0">Deals Explorer</a>
+    <span class="material-symbols-outlined text-[16px] flex-shrink-0">chevron_right</span>
+    <span class="text-on-surface flex-shrink-0">Compare</span>
+</div>
+{% endblock %}
+{% block content %}
+
+{% if not deals %}
+<!-- Empty state -->
+<div class="bg-surface-container-low rounded-card p-12 text-center">
+    <span class="material-symbols-outlined text-[48px] text-outline-variant mb-4 block">compare_arrows</span>
+    <h2 class="font-headline text-xl font-semibold text-on-surface mb-2">No Deals to Compare</h2>
+    <p class="text-sm text-on-surface-variant mb-6">Select deals from the Deals Explorer to compare them side by side.</p>
+    <a href="/deals"
+       class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+        <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+        Back to Deals
+    </a>
+</div>
+{% else %}
+
+<!-- Share link -->
+<div class="bg-surface-container-low rounded-card p-4 mb-6 flex flex-wrap items-center gap-3">
+    <span class="material-symbols-outlined text-[20px] text-on-surface-variant flex-shrink-0">link</span>
+    <span class="text-xs font-label text-on-surface-variant uppercase tracking-wider flex-shrink-0">Share link</span>
+    <input type="text" readonly
+           value="{{ request.url }}"
+           class="flex-1 min-w-0 text-xs font-mono bg-surface-container text-on-surface-variant px-3 py-1.5 rounded-lg border-0 focus:ring-2 focus:ring-primary"
+           onclick="this.select()">
+    <button onclick="navigator.clipboard.writeText('{{ request.url }}').then(() => this.textContent = 'Copied!')"
+            class="text-xs font-label px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest transition-colors flex-shrink-0">
+        Copy
+    </button>
+</div>
+
+<!-- Compute best price and highest score for highlighting -->
+{% set prices = deals | map(attribute='price') | list %}
+{% set scores = deals | map(attribute='score') | list %}
+{% set best_price = prices | min %}
+{% set best_score = scores | max %}
+
+<!-- Comparison grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 {% if deals | length == 3 %}lg:grid-cols-3{% elif deals | length == 4 %}lg:grid-cols-4{% elif deals | length >= 5 %}lg:grid-cols-5{% endif %} gap-4">
+    {% for deal in deals %}
+    {% set is_best_price = deal.price == best_price and deal.price is not none %}
+    {% set is_best_score = deal.score == best_score and deal.score is not none %}
+    <div class="bg-surface-container-low rounded-card p-6 flex flex-col gap-4 {% if is_best_price %}ring-2 ring-tertiary/40{% endif %}">
+
+        <!-- Title -->
+        <div>
+            <h3 class="font-headline text-base font-semibold text-on-surface leading-snug line-clamp-3">
+                <a href="/deals/{{ deal.id | urlencode }}" class="hover:text-primary transition-colors">
+                    {{ deal.title }}
+                </a>
+            </h3>
+        </div>
+
+        <!-- Price -->
+        <div class="{% if is_best_price %}bg-tertiary-container/20 rounded-lg px-3 py-2 -mx-1{% endif %}">
+            <div class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Price</div>
+            <div class="font-headline text-2xl font-bold {% if is_best_price %}text-tertiary{% else %}text-primary{% endif %}">
+                {{ deal.price | format_pln }}
+            </div>
+            {% if is_best_price %}
+            <div class="text-xs font-label text-tertiary mt-0.5 flex items-center gap-1">
+                <span class="material-symbols-outlined text-[14px]">local_offer</span>
+                Best price
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Score -->
+        <div class="{% if is_best_score %}bg-primary-container/20 rounded-lg px-3 py-2 -mx-1{% endif %}">
+            <div class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Score</div>
+            {% if deal.score is not none %}
+                {% if deal.score >= 70 %}
+                    <span class="font-headline text-xl font-bold text-tertiary">{{ deal.score }}</span>
+                {% elif deal.score >= 40 %}
+                    <span class="font-headline text-xl font-bold text-[#b8860b]">{{ deal.score }}</span>
+                {% else %}
+                    <span class="font-headline text-xl font-bold text-error">{{ deal.score }}</span>
+                {% endif %}
+            {% else %}
+                <span class="text-sm text-on-surface-variant">&mdash;</span>
+            {% endif %}
+            {% if is_best_score %}
+            <div class="text-xs font-label text-primary mt-0.5 flex items-center gap-1">
+                <span class="material-symbols-outlined text-[14px]">emoji_events</span>
+                Highest score
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Badges -->
+        <div class="flex flex-wrap gap-1.5">
+            <span class="text-xs font-label px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant">{{ deal.source }}</span>
+            {% if deal.profile %}
+            <a href="/deals?profile={{ deal.profile }}"
+               class="text-xs font-label px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors">
+                {{ deal.profile }}
+            </a>
+            {% endif %}
+            {% if deal.status == 'watching' %}
+                <span class="text-xs font-label px-2.5 py-1 rounded-full bg-primary-container text-primary">Watching</span>
+            {% elif deal.status == 'rejected' %}
+                <span class="text-xs font-label px-2.5 py-1 rounded-full bg-error-container/30 text-error">Rejected</span>
+            {% else %}
+                <span class="text-xs font-label px-2.5 py-1 rounded-full bg-tertiary-container/30 text-tertiary">Active</span>
+            {% endif %}
+        </div>
+
+        <!-- Metadata -->
+        <dl class="space-y-2 text-sm">
+            <div class="flex items-center justify-between gap-2">
+                <dt class="text-xs font-label text-on-surface-variant uppercase tracking-wider">First seen</dt>
+                <dd class="text-xs text-on-surface">{{ deal.first_seen[:10] if deal.first_seen else '—' }}</dd>
+            </div>
+            {% if lowest_prices[deal.id] is not none %}
+            <div class="flex items-center justify-between gap-2">
+                <dt class="text-xs font-label text-on-surface-variant uppercase tracking-wider">Lowest ever</dt>
+                <dd class="text-xs font-headline font-semibold text-tertiary">{{ lowest_prices[deal.id] | format_pln }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+
+        <!-- Sparkline -->
+        <div>
+            <div class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-2">Price trend</div>
+            {% if price_histories[deal.id] %}
+            <div class="h-16 relative">
+                <canvas data-sparkline="{{ deal.id }}" class="w-full h-full"></canvas>
+            </div>
+            {% else %}
+            <div class="h-16 flex items-center justify-center rounded-lg bg-surface-container">
+                <span class="text-xs text-on-surface-variant">No history</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Open link -->
+        <a href="{{ deal.link }}" target="_blank" rel="noopener noreferrer"
+           class="mt-auto inline-flex items-center justify-center gap-2 px-3 py-2 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+            <span class="material-symbols-outlined text-[16px]">open_in_new</span>
+            Open Deal
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+(function() {
+    const histories = {{ price_histories | tojson }};
+    document.querySelectorAll('[data-sparkline]').forEach(el => {
+        const dealId = el.dataset.sparkline;
+        const history = histories[dealId] || [];
+        if (!history.length) return;
+        const prices = history.map(h => h.price);
+        new Chart(el, {
+            type: 'line',
+            data: {
+                labels: history.map(h => h.recorded_at.slice(0, 10)),
+                datasets: [{
+                    data: prices,
+                    borderColor: '#005db5',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    fill: false,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                scales: { x: { display: false }, y: { display: false } },
+            }
+        });
+    });
+})();
+</script>
+
+{% endif %}
+{% endblock %}

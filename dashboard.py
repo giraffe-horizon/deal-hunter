@@ -274,6 +274,28 @@ def deal_detail_page(
     )
 
 
+@app.get("/compare", response_class=HTMLResponse)
+async def compare_deals(request: Request, ids: str = "", db: SQLiteStorage = Depends(get_db)):
+    deal_ids = [i.strip() for i in ids.split(",") if i.strip()] if ids else []
+    deal_ids = deal_ids[:5]  # max 5
+    deals = db.get_deals_by_ids(deal_ids) if deal_ids else []
+    price_histories = {}
+    lowest_prices = {}
+    for deal in deals:
+        price_histories[deal["id"]] = db.get_price_history(deal["id"])
+        lowest_prices[deal["id"]] = db.get_lowest_price(deal["id"])
+    return templates.TemplateResponse(
+        request,
+        "compare.html",
+        {
+            "active_page": "deals",
+            "deals": deals,
+            "price_histories": price_histories,
+            "lowest_prices": lowest_prices,
+        },
+    )
+
+
 @app.get("/api/price-history/{deal_id}")
 def api_price_history(deal_id: str, db: SQLiteStorage = Depends(get_db)):
     history = db.get_price_history(deal_id)

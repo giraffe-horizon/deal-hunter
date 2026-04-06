@@ -1028,3 +1028,16 @@ class TestProfilePages:
         """POST /api/profiles/{name}/run returns 404 for missing profile."""
         response = client.post("/api/profiles/nonexistent_xyz/run")
         assert response.status_code == 404
+
+
+# ──────────────── E2E tests: Compare page ────────────────
+
+
+class TestComparePage:
+    def test_compare_page_empty(self, client):
+        response = client.get("/compare")
+        assert response.status_code == 200
+
+    def test_compare_page_with_ids(self, client):
+        response = client.get("/compare?ids=test:1,test:2")
+        assert response.status_code == 200

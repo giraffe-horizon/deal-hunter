@@ -500,3 +500,34 @@ class TestGetDealsWithPagination:
         self._insert_three_deals(db)
         results = db.get_deals()
         assert len(results) == 3
+
+
+class TestGetDealsByIds:
+    @pytest.fixture
+    def sample_deal(self):
+        return Deal(
+            id="pepper:11111",
+            title="Sample Deal",
+            price=5000,
+            link="https://example.com/11111",
+            source="pepper",
+            description="A sample deal",
+            temperature=0,
+            image_url="",
+            published_at="2026-04-01T10:00:00",
+        )
+
+    def test_get_deals_by_ids_empty(self, db):
+        result = db.get_deals_by_ids([])
+        assert result == []
+
+    def test_get_deals_by_ids_found(self, db, sample_deal):
+        db.upsert_deal(sample_deal, profile="bikes", score=80, category="test")
+        result = db.get_deals_by_ids([sample_deal.id])
+        assert len(result) == 1
+        assert result[0]["id"] == sample_deal.id
+
+    def test_get_deals_by_ids_partial(self, db, sample_deal):
+        db.upsert_deal(sample_deal, profile="bikes", score=80, category="test")
+        result = db.get_deals_by_ids([sample_deal.id, "nonexistent:999"])
+        assert len(result) == 1
