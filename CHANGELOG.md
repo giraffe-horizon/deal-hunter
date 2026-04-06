@@ -1,6 +1,88 @@
 # CHANGELOG
 
 
+## v0.7.0 (2026-04-06)
+
+### Chores
+
+- Lint fixes + docs update for Wave 1 (A.3, B.1, B.2)
+  ([`2e2590b`](https://github.com/giraffe-horizon/deal-hunter/commit/2e2590b08fdee3bc68b4bdc8354df321b7a280ad))
+
+Fix ruff lint/format issues across Wave 1 files. Update CLAUDE.md with quiet hours, RSS source,
+  x-kom/morele docs. Mark A.3, B.1, B.2 as done in ROADMAP-v2.md.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Documentation
+
+- Add Roadmap v2.0 design spec
+  ([`3aa5fd7`](https://github.com/giraffe-horizon/deal-hunter/commit/3aa5fd72a636835b0c9b142279d93aa65a6de379))
+
+Complete design specification for 8 features across 4 waves: A.3 Quiet Hours, B.1 x-kom/Morele, B.2
+  Allegro RSS, A.2 Dedup, C.1 Watchlist, C.4 Profile Management, A.1 Scoring Tuner, C.2 Comparator.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add Wave 1 implementation plan (quiet hours + new sources)
+  ([`38d0e4d`](https://github.com/giraffe-horizon/deal-hunter/commit/38d0e4d9947c1f3320ad5201faa6e31b8b130759))
+
+Detailed task-by-task plan for A.3 Quiet Hours, B.1 x-kom/Morele stores, and B.2 Allegro RSS source.
+  8 tasks with TDD steps.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- Add morele.net YAML store definition
+  ([`e08cced`](https://github.com/giraffe-horizon/deal-hunter/commit/e08cced8618a4d5a8f3ce93174135efc7de51441))
+
+Selectors verified against live morele.net response (CSS-rendered HTML, no Cloudflare blocking).
+  Includes HTML fixture with 3 products and 11 tests covering registration, parsing, prices, links,
+  IDs, and images.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add RSS/Atom feed source for Allegro and generic RSS
+  ([`4602812`](https://github.com/giraffe-horizon/deal-hunter/commit/4602812d420df99a046f457d950a55d0b5d2f411))
+
+Implements RssSource parsing RSS 2.0 and Atom feeds into Deal objects using stdlib
+  xml.etree.ElementTree. Registered as 'rss' in SOURCE_REGISTRY. Includes a _find_price helper that
+  locates price tokens with currency symbols before delegating to extract_price, avoiding false
+  positives from model/year numbers embedded in titles and descriptions.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add x-kom.pl YAML store definition
+  ([`9ede776`](https://github.com/giraffe-horizon/deal-hunter/commit/9ede7767bf4771640dce77388b48dff9afb74d6a))
+
+NOTE: x-kom.pl is behind Cloudflare + uses React CSR, so live HTTP scraping receives a challenge
+  page. Store definition and selectors are based on x-kom.pl's known DOM structure and verified
+  against a hand-crafted HTML fixture. Includes 11 tests covering registration, parsing, prices,
+  links, IDs, images, and regular/old prices.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **quiet-hours**: Add alert_queue table and SQLite methods
+  ([`37df95e`](https://github.com/giraffe-horizon/deal-hunter/commit/37df95ec35ce7951d468b170712bd4f183accc0e))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **quiet-hours**: Add is_quiet_hours() time logic
+  ([`5c04ccf`](https://github.com/giraffe-horizon/deal-hunter/commit/5c04ccf47f464b1a7b6511c7b996e5cdf075892d))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **quiet-hours**: Add validation and .env.example
+  ([`e7afcdf`](https://github.com/giraffe-horizon/deal-hunter/commit/e7afcdf01340b49934972a533ae83ff993567984))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **quiet-hours**: Integrate alert queuing into run flow
+  ([`0d31b8e`](https://github.com/giraffe-horizon/deal-hunter/commit/0d31b8e6d61ccdc9e11ba8d96d702d974bd99827))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.6.1 (2026-04-06)
 
 ### Bug Fixes
