@@ -383,9 +383,7 @@ async def add_to_watchlist_api(
     target_price = int(form.get("target_price", 0))
     if deal_id and target_price > 0:
         db.add_to_watchlist(deal_id, target_price)
-    return HTMLResponse(
-        '<span class="text-sm text-tertiary font-medium">\u2713 Target set</span>'
-    )
+    return HTMLResponse('<span class="text-sm text-tertiary font-medium">\u2713 Target set</span>')
 
 
 @app.delete("/api/watchlist/{deal_id:path}")

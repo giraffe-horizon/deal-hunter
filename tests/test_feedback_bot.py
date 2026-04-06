@@ -314,12 +314,21 @@ async def test_cmd_target_adds_to_watchlist(tmp_path):
     db = SQLiteStorage(db_path)
 
     # Seed a deal
-    deal = type("Deal", (), {
-        "id": "pepper:123", "title": "Test Deal", "price": 10000,
-        "link": "https://example.com", "source": "pepper",
-        "description": "", "image_url": "", "published_at": "",
-        "regular_price": 0,
-    })()
+    deal = type(
+        "Deal",
+        (),
+        {
+            "id": "pepper:123",
+            "title": "Test Deal",
+            "price": 10000,
+            "link": "https://example.com",
+            "source": "pepper",
+            "description": "",
+            "image_url": "",
+            "published_at": "",
+            "regular_price": 0,
+        },
+    )()
     db.upsert_deal(deal, profile="test", score=80, category="test")
 
     from feedback_bot import cmd_target

@@ -34,7 +34,7 @@ dashboard.py            Web dashboard: FastAPI app, routes, API endpoints
 dashboard/templates/    Jinja2 templates (base, deals, deal_detail, health, price_trends)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting + photo upload
 visualization/charts.py Price history charts (matplotlib, lazy-imported)
-storage/sqlite.py       SQLite persistence layer (deals, price history, feedback, alert queue)
+storage/sqlite.py       SQLite persistence layer (deals, price history, feedback, alert queue, watchlist)
 health.py               Health monitoring (state tracking, --health, --watchdog)
 utils/validation.py     YAML profile validation (types, required fields, sanity checks)
 profiles/*.yaml         Product profiles (gitignored, see docs/creating-profiles.md)
@@ -301,7 +301,7 @@ After every non-verify run, Deal Hunter writes `state/health.json` with:
 **Features:**
 - Inline keyboard buttons on deal alerts: [Otwórz] [Obserwuj] [Skip]
 - Callback handler: records feedback to SQLite, updates deal status
-- Text commands: `/watch <deal_id>`, `/skip <deal_id>`, `/status`, `/watchlist`
+- Text commands: `/watch <deal_id>`, `/skip <deal_id>`, `/status`, `/watchlist`, `/target <deal_id> <price>`
 - Graceful shutdown on SIGTERM
 
 **How to run:**
@@ -350,6 +350,7 @@ Test modules:
 - `test_quiet_hours.py` — quiet hours: alert queue CRUD, is_quiet_hours() time logic, env/profile config, flush integration, validation
 - `test_rss_source.py` — RSS source: RSS 2.0/Atom parsing, price extraction, multi-feed, malformed XML
 - `test_xkom_morele.py` — x-kom and morele.net store definitions: fixture parsing, selectors, registration
+- `test_watchlist.py` — watchlist: SQLite CRUD, trigger logic, Telegram alert format
 
 Manual testing:
 ```bash
@@ -364,7 +365,7 @@ python deal_hunter.py --profile nas_hdd --verify
 - x-kom.pl blocked by Cloudflare — store YAML exists but live scraping may fail
 - No OLX (to be added)
 - Pepper may block after many requests — hence rate limiting
-- Cross-source dedup is simple (title+price) — may miss variants of the same product
+- Cross-source dedup uses fuzzy title matching (0.85 threshold) + price tolerance (±5%); configurable per profile via `dedup:` config
 
 ## Git Workflow
 

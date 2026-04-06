@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -76,8 +77,20 @@ def test_different_price_not_deduped():
 def test_merge_populates_alt_links():
     """Merged duplicate adds source info to winner's alt_links."""
     deals = [
-        _make_deal(id="pepper:1", title="Canyon Endurace CF 7", price=9000, source="pepper", link="https://pepper.pl/1"),
-        _make_deal(id="ceneo:2", title="Canyon Endurace CF 7", price=9000, source="ceneo", link="https://ceneo.pl/2"),
+        _make_deal(
+            id="pepper:1",
+            title="Canyon Endurace CF 7",
+            price=9000,
+            source="pepper",
+            link="https://pepper.pl/1",
+        ),
+        _make_deal(
+            id="ceneo:2",
+            title="Canyon Endurace CF 7",
+            price=9000,
+            source="ceneo",
+            link="https://ceneo.pl/2",
+        ),
     ]
     result = deduplicate(deals)
     assert len(result) == 1
@@ -90,8 +103,20 @@ def test_merge_populates_alt_links():
 def test_merge_price_tolerance():
     """Deals within 5% price tolerance are merged."""
     deals = [
-        _make_deal(id="pepper:1", title="Canyon Endurace CF 7", price=10000, source="pepper", link="https://pepper.pl/1"),
-        _make_deal(id="ceneo:2", title="Canyon Endurace CF 7", price=10300, source="ceneo", link="https://ceneo.pl/2"),
+        _make_deal(
+            id="pepper:1",
+            title="Canyon Endurace CF 7",
+            price=10000,
+            source="pepper",
+            link="https://pepper.pl/1",
+        ),
+        _make_deal(
+            id="ceneo:2",
+            title="Canyon Endurace CF 7",
+            price=10300,
+            source="ceneo",
+            link="https://ceneo.pl/2",
+        ),
     ]
     result = deduplicate(deals)
     assert len(result) == 1
@@ -111,9 +136,23 @@ def test_merge_price_outside_tolerance():
 def test_merge_three_sources():
     """3 sources for same product -> 1 winner with 2 alt_links."""
     deals = [
-        _make_deal(id="pepper:1", title="WD Red 4TB", price=500, source="pepper", link="https://pepper.pl/1"),
-        _make_deal(id="ceneo:2", title="WD Red 4TB", price=510, source="ceneo", link="https://ceneo.pl/2"),
-        _make_deal(id="morele:3", title="WD Red 4TB", price=490, source="morele", link="https://morele.net/3"),
+        _make_deal(
+            id="pepper:1",
+            title="WD Red 4TB",
+            price=500,
+            source="pepper",
+            link="https://pepper.pl/1",
+        ),
+        _make_deal(
+            id="ceneo:2", title="WD Red 4TB", price=510, source="ceneo", link="https://ceneo.pl/2"
+        ),
+        _make_deal(
+            id="morele:3",
+            title="WD Red 4TB",
+            price=490,
+            source="morele",
+            link="https://morele.net/3",
+        ),
     ]
     result = deduplicate(deals)
     assert len(result) == 1
@@ -123,8 +162,16 @@ def test_merge_three_sources():
 def test_merge_keeps_first_as_winner():
     """First deal encountered is the winner."""
     deals = [
-        _make_deal(id="pepper:1", title="Product X", price=1000, source="pepper", link="https://pepper.pl/1"),
-        _make_deal(id="ceneo:2", title="Product X", price=1000, source="ceneo", link="https://ceneo.pl/2"),
+        _make_deal(
+            id="pepper:1",
+            title="Product X",
+            price=1000,
+            source="pepper",
+            link="https://pepper.pl/1",
+        ),
+        _make_deal(
+            id="ceneo:2", title="Product X", price=1000, source="ceneo", link="https://ceneo.pl/2"
+        ),
     ]
     result = deduplicate(deals)
     assert result[0].source == "pepper"
@@ -189,9 +236,6 @@ def test_normalize_title_empty():
 
 def test_normalize_title_unicode():
     assert _normalize_title("Słuchawki ANC — super!") == "słuchawki anc super"
-
-
-from unittest.mock import patch
 
 
 def test_telegram_alert_with_alt_links():

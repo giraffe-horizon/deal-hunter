@@ -565,9 +565,7 @@ class SQLiteStorage:
 
     def remove_from_watchlist(self, deal_id: str) -> bool:
         """Remove a deal from the watchlist. Returns True if found and removed."""
-        cursor = self._conn.execute(
-            "DELETE FROM watchlist WHERE deal_id = ?", (deal_id,)
-        )
+        cursor = self._conn.execute("DELETE FROM watchlist WHERE deal_id = ?", (deal_id,))
         self._conn.commit()
         return cursor.rowcount > 0
 

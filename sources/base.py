@@ -35,7 +35,9 @@ class Deal:
     image_url: str
     published_at: str  # ISO datetime or ""
     regular_price: int = 0  # original/regular price before discount
-    alt_links: list[dict] = field(default_factory=list)  # [{"source": "...", "link": "...", "price": N}]
+    alt_links: list[dict] = field(
+        default_factory=list
+    )  # [{"source": "...", "link": "...", "price": N}]
 
     def __post_init__(self):
         if not self.title or not self.title.strip():

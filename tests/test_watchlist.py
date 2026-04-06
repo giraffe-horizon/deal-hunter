@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -21,12 +22,21 @@ def db(tmp_path):
 
 def _seed_deal(db, deal_id="pepper:123", price=10000):
     """Insert a deal for foreign key reference."""
-    deal = type("Deal", (), {
-        "id": deal_id, "title": "Test Deal", "price": price,
-        "link": "https://example.com", "source": "pepper",
-        "description": "", "image_url": "", "published_at": "",
-        "regular_price": 0,
-    })()
+    deal = type(
+        "Deal",
+        (),
+        {
+            "id": deal_id,
+            "title": "Test Deal",
+            "price": price,
+            "link": "https://example.com",
+            "source": "pepper",
+            "description": "",
+            "image_url": "",
+            "published_at": "",
+            "regular_price": 0,
+        },
+    )()
     db.upsert_deal(deal, profile="bikes", score=80, category="test")
 
 
@@ -110,9 +120,6 @@ class TestWatchlistCRUD:
         assert trigger is None
 
 
-from unittest.mock import MagicMock, patch
-
-
 class TestWatchlistTelegram:
     """Tests for watchlist Telegram alert."""
 
@@ -121,15 +128,19 @@ class TestWatchlistTelegram:
         from notifiers.telegram import TelegramNotifier
 
         notifier = TelegramNotifier("fake-token", "fake-chat")
-        deal = type("Deal", (), {
-            "id": "pepper:123",
-            "title": "Canyon Endurace CF 7",
-            "price": 8499,
-            "link": "https://pepper.pl/123",
-            "source": "pepper",
-            "regular_price": 0,
-            "alt_links": [],
-        })()
+        deal = type(
+            "Deal",
+            (),
+            {
+                "id": "pepper:123",
+                "title": "Canyon Endurace CF 7",
+                "price": 8499,
+                "link": "https://pepper.pl/123",
+                "source": "pepper",
+                "regular_price": 0,
+                "alt_links": [],
+            },
+        )()
         with patch.object(notifier, "_send_message") as mock_send:
             notifier.send_watchlist_alert(deal, target_price=9000, current_price=8499)
             msg = mock_send.call_args[0][0]
@@ -141,15 +152,19 @@ class TestWatchlistTelegram:
         from notifiers.telegram import TelegramNotifier
 
         notifier = TelegramNotifier("fake-token", "fake-chat")
-        deal = type("Deal", (), {
-            "id": "pepper:123",
-            "title": "Test Deal",
-            "price": 7000,
-            "link": "https://example.com",
-            "source": "pepper",
-            "regular_price": 0,
-            "alt_links": [],
-        })()
+        deal = type(
+            "Deal",
+            (),
+            {
+                "id": "pepper:123",
+                "title": "Test Deal",
+                "price": 7000,
+                "link": "https://example.com",
+                "source": "pepper",
+                "regular_price": 0,
+                "alt_links": [],
+            },
+        )()
         with patch.object(notifier, "_send_message") as mock_send:
             notifier.send_watchlist_alert(deal, target_price=8000, current_price=7000)
             mock_send.assert_called_once()

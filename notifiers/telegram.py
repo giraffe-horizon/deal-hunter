@@ -81,9 +81,13 @@ class TelegramNotifier:
             for alt in deal.alt_links:
                 alt_source = html.escape(alt["source"])
                 alt_link = html.escape(alt["link"])
-                alt_price_str = f'{alt["price"]:,} {currency}'.replace(",", " ") if alt.get("price") else ""
+                alt_price_str = (
+                    f"{alt['price']:,} {currency}".replace(",", " ") if alt.get("price") else ""
+                )
                 if alt_price_str:
-                    alt_parts.append(f'<a href="{alt_link}">{alt_source}</a> ({html.escape(alt_price_str)})')
+                    alt_parts.append(
+                        f'<a href="{alt_link}">{alt_source}</a> ({html.escape(alt_price_str)})'
+                    )
                 else:
                     alt_parts.append(f'<a href="{alt_link}">{alt_source}</a>')
             msg += f"\n\U0001f517 Też w: {' | '.join(alt_parts)}\n"

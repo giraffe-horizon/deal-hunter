@@ -185,11 +185,11 @@ GET    /api/profiles/<name>/run/status  # SSE stream logu
 | Faza | Feature | Effort | Priorytet | Status |
 |------|---------|--------|-----------|--------|
 | A.1 | Scoring Tuner | L (10h) | Wysoki | |
-| A.2 | Deduplikacja cross-source | M (6h) | Wysoki | |
+| A.2 | Deduplikacja cross-source | M (6h) | Wysoki | ✅ Done |
 | A.3 | Quiet Hours | S (4h) | Średni | ✅ Done |
 | B.1 | x-kom / Morele stores | S (3h) | Średni | ✅ Done |
 | B.2 | Allegro RSS source | M (5h) | Średni | ✅ Done |
-| C.1 | Watchlist z price alertem | M (6h) | Wysoki | |
+| C.1 | Watchlist z price alertem | M (6h) | Wysoki | ✅ Done |
 | C.2 | Porównywarka | M (6h) | Niski | |
 | C.4 | Zarządzanie profilami (full CRUD) | XL (20h) | Wysoki | |
 
