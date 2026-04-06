@@ -1,6 +1,67 @@
 # CHANGELOG
 
 
+## v0.9.0 (2026-04-06)
+
+### Chores
+
+- Lint fixes + docs update for Wave 3 (C.4 Profile Management)
+  ([`08827bc`](https://github.com/giraffe-horizon/deal-hunter/commit/08827bc5664fadf6738d0444fefb46050f156a4d))
+
+Fix ruff lint/format issues. Update CLAUDE.md with profile CRUD in dashboard description. Mark C.4
+  as done in ROADMAP-v2.md.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **profiles**: Add delete, toggle, and manual run
+  ([`ad82939`](https://github.com/giraffe-horizon/deal-hunter/commit/ad8293988bbcf5c5e00234e06eb1c238de1af4b2))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **profiles**: Add form-based profile editor with update API
+  ([`1306529`](https://github.com/giraffe-horizon/deal-hunter/commit/1306529e7ec8d3c79d93498c844155dd9371f291))
+
+Adds GET /profiles/{name}/edit page with form sections for Basic, Scoring (dynamic rules/penalties),
+  Filters, and Telegram config. Adds PUT /api/profiles/{name} that validates and writes YAML,
+  preserving sources and advanced fields not exposed in the form.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **profiles**: Add profile create page and API
+  ([`3091455`](https://github.com/giraffe-horizon/deal-hunter/commit/30914556709cd76fa449cd9f5dd3f273179c9707))
+
+- Add GET /profiles/new page (before /{name} to avoid route conflict) - Add POST /api/profiles
+  endpoint with validation and YAML persistence - Add profile_create.html template with sources,
+  scoring, and Telegram sections - Use safe DOM methods (no innerHTML) for error display - Add 2 new
+  tests in TestProfilePages (create page + API)
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **profiles**: Add profile list page and sidebar nav
+  ([`12104fa`](https://github.com/giraffe-horizon/deal-hunter/commit/12104fad8b5a3bf443883100e87a504849c0ddfc))
+
+Adds GET /profiles HTML page and GET /api/profiles JSON endpoint, inserts Profiles link into the
+  sidebar between Watchlist and System Health, and covers both with three new TestProfilePages
+  tests.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **profiles**: Add raw YAML editor with CodeMirror
+  ([`e011a1c`](https://github.com/giraffe-horizon/deal-hunter/commit/e011a1c79bdcd416b81deccbfd472c91ccc47d03))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **profiles**: Add read-only profile detail page
+  ([`3169cd9`](https://github.com/giraffe-horizon/deal-hunter/commit/3169cd9b26dc58b2d106f9f51507291d3042a8fb))
+
+Adds GET /profiles/{name} route with a Jinja2 template showing Basic Info, Scoring rules/penalties,
+  Sources, and Filters & Telegram sections. Returns 404 via HTTPException for unknown profiles.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+
 ## v0.8.0 (2026-04-06)
 
 ### Chores
