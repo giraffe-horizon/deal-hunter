@@ -90,8 +90,11 @@
 </head>
 <body class="bg-background text-on-surface min-h-screen">
     <div class="flex min-h-screen">
+        <!-- Sidebar overlay (mobile) -->
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black/40 z-30 hidden lg:hidden" onclick="toggleSidebar()"></div>
+
         <!-- Sidebar -->
-        <aside class="w-64 bg-surface-container-low flex flex-col fixed h-full z-10">
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-surface-container-low flex flex-col transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-in-out">
             <!-- Branding -->
             <div class="p-6 pb-4">
                 <h1 class="font-headline text-xl font-bold text-primary">DealMonitor</h1>
@@ -114,20 +117,44 @@
                 </a>
             </nav>
 
+            <!-- Version -->
+            <div class="px-6 py-4">
+                <p class="text-xs text-on-surface-variant font-label">v{{ app_version }}</p>
+            </div>
         </aside>
 
         <!-- Main Content -->
-        <main class="flex-1 ml-64">
+        <main class="flex-1 lg:ml-64">
             <!-- Header -->
-            <header class="sticky top-0 z-10 bg-surface/80 backdrop-blur-xl px-8 py-4">
-                <h2 class="font-headline text-lg font-semibold">{% block page_title %}Dashboard{% endblock %}</h2>
+            <header class="sticky top-0 z-20 bg-surface/80 backdrop-blur-xl px-4 sm:px-8 py-4 flex items-center gap-3">
+                <button onclick="toggleSidebar()" class="lg:hidden text-on-surface-variant hover:text-on-surface">
+                    <span class="material-symbols-outlined text-[24px]">menu</span>
+                </button>
+                <h2 class="font-headline text-lg font-semibold min-w-0">{% block page_title %}Dashboard{% endblock %}</h2>
             </header>
 
             <!-- Page Content -->
-            <div class="px-8 py-6">
+            <div class="px-4 sm:px-8 py-6">
                 {% block content %}{% endblock %}
             </div>
         </main>
     </div>
+
+    <script>
+    function toggleSidebar() {
+        var sidebar = document.getElementById('sidebar');
+        var overlay = document.getElementById('sidebar-overlay');
+        var isOpen = !sidebar.classList.contains('-translate-x-full');
+        if (isOpen) {
+            sidebar.classList.add('-translate-x-full');
+            overlay.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        } else {
+            sidebar.classList.remove('-translate-x-full');
+            overlay.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+        }
+    }
+    </script>
 </body>
 </html>

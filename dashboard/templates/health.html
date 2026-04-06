@@ -82,8 +82,8 @@
                 <tr class="text-left text-xs text-on-surface-variant font-label uppercase tracking-wider">
                     <th class="pb-3 pr-4">Source</th>
                     <th class="pb-3 pr-4">Status</th>
-                    <th class="pb-3 pr-4">Consecutive Failures</th>
-                    <th class="pb-3">Last Success</th>
+                    <th class="pb-3 pr-4 hidden sm:table-cell">Consecutive Failures</th>
+                    <th class="pb-3 hidden sm:table-cell">Last Success</th>
                 </tr>
             </thead>
             <tbody class="font-body">
@@ -102,8 +102,8 @@
                         <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-surface-container-high text-on-surface-variant">{{ s_status }}</span>
                         {% endif %}
                     </td>
-                    <td class="py-3 pr-4">{{ source_data.consecutive_failures | default(0) }}</td>
-                    <td class="py-3">{{ source_data.last_success | default("Never") }}</td>
+                    <td class="py-3 pr-4 hidden sm:table-cell">{{ source_data.consecutive_failures | default(0) }}</td>
+                    <td class="py-3 hidden sm:table-cell">{{ source_data.last_success | default("Never") }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -126,8 +126,8 @@
                     <th class="pb-3 pr-4">Profile</th>
                     <th class="pb-3 pr-4">Status</th>
                     <th class="pb-3 pr-4">Deals Found</th>
-                    <th class="pb-3 pr-4">New Alerts</th>
-                    <th class="pb-3">Errors</th>
+                    <th class="pb-3 pr-4 hidden sm:table-cell">New Alerts</th>
+                    <th class="pb-3 hidden sm:table-cell">Errors</th>
                 </tr>
             </thead>
             <tbody class="font-body">
@@ -147,8 +147,8 @@
                         {% endif %}
                     </td>
                     <td class="py-3 pr-4">{{ result.deals_found | default(0) }}</td>
-                    <td class="py-3 pr-4">{{ result.new_alerts | default(0) }}</td>
-                    <td class="py-3">
+                    <td class="py-3 pr-4 hidden sm:table-cell">{{ result.new_alerts | default(0) }}</td>
+                    <td class="py-3 hidden sm:table-cell">
                         {% set errs = result.errors | default([]) %}
                         {% if errs %}
                         <span class="text-error">{{ errs | length }} error{{ "s" if errs | length > 1 }}</span>

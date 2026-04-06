@@ -57,8 +57,8 @@
             <thead>
                 <tr class="text-on-surface-variant text-left border-b border-outline-variant/30">
                     <th class="pb-3 pr-4 font-medium">Title</th>
-                    <th class="pb-3 pr-4 font-medium">Source</th>
-                    <th class="pb-3 pr-4 font-medium text-right">Previous Price</th>
+                    <th class="pb-3 pr-4 font-medium hidden sm:table-cell">Source</th>
+                    <th class="pb-3 pr-4 font-medium text-right hidden md:table-cell">Previous Price</th>
                     <th class="pb-3 pr-4 font-medium text-right">Current Price</th>
                     <th class="pb-3 pr-4 font-medium text-right">Drop %</th>
                     <th class="pb-3 font-medium text-right">Drop Amount</th>
@@ -77,8 +77,8 @@
                         </span>
                         {% endif %}
                     </td>
-                    <td class="py-3 pr-4 text-on-surface-variant capitalize">{{ drop.source }}</td>
-                    <td class="py-3 pr-4 text-right text-on-surface-variant line-through">{{ drop.old_price | format_pln }}</td>
+                    <td class="py-3 pr-4 text-on-surface-variant capitalize hidden sm:table-cell">{{ drop.source }}</td>
+                    <td class="py-3 pr-4 text-right text-on-surface-variant line-through hidden md:table-cell">{{ drop.old_price | format_pln }}</td>
                     <td class="py-3 pr-4 text-right font-medium">{{ drop.new_price | format_pln }}</td>
                     <td class="py-3 pr-4 text-right font-medium text-error">-{{ drop.diff_percent }}%</td>
                     <td class="py-3 text-right font-medium text-error">-{{ drop.diff_pln | format_pln }}</td>
@@ -108,7 +108,7 @@
         <div class="space-y-3">
             {% for cat, count in categories.items() %}
             <div class="flex items-center gap-3">
-                <span class="text-sm font-body text-on-surface w-36 truncate" title="{{ cat }}">{{ cat }}</span>
+                <span class="text-sm font-body text-on-surface w-24 sm:w-36 truncate" title="{{ cat }}">{{ cat }}</span>
                 <div class="flex-1 bg-surface-container rounded-full h-6 overflow-hidden">
                     <div class="h-full rounded-full flex items-center px-3
                                 {% if loop.index0 % 4 == 0 %}bg-primary{% elif loop.index0 % 4 == 1 %}bg-secondary{% elif loop.index0 % 4 == 2 %}bg-tertiary{% else %}bg-outline{% endif %}"

@@ -1,5 +1,6 @@
 """Deal Hunter Web Dashboard — FastAPI application."""
 
+import importlib.metadata
 import math
 from pathlib import Path
 
@@ -15,7 +16,14 @@ DB_PATH = BASE_DIR / "state" / "deals.db"
 DEALS_PER_PAGE = 50
 SCORE_THRESHOLD = 70
 
-app = FastAPI(title="Deal Hunter Dashboard")
+try:
+    APP_VERSION = importlib.metadata.version("deal-hunter")
+except importlib.metadata.PackageNotFoundError:
+    from deal_hunter import __version__
+
+    APP_VERSION = __version__
+
+app = FastAPI(title="Deal Hunter Dashboard", version=APP_VERSION)
 templates = Jinja2Templates(directory=str(BASE_DIR / "dashboard" / "templates"))
 
 
@@ -28,6 +36,7 @@ def format_pln(value: int | None) -> str:
 
 
 templates.env.filters["format_pln"] = format_pln
+templates.env.globals["app_version"] = APP_VERSION
 
 
 def get_db():

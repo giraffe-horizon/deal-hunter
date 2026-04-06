@@ -3,8 +3,8 @@
         <tr class="text-left text-xs font-label text-on-surface-variant uppercase tracking-wider">
             <th class="pb-3 pl-4">Title</th>
             <th class="pb-3">Price</th>
-            <th class="pb-3">Source</th>
-            <th class="pb-3">Profile</th>
+            <th class="pb-3 hidden sm:table-cell">Source</th>
+            <th class="pb-3 hidden sm:table-cell">Profile</th>
             <th class="pb-3">Score</th>
             <th class="pb-3 pr-4">Status</th>
         </tr>
@@ -20,10 +20,10 @@
                 <td class="py-3 pr-2">
                     <span class="text-sm font-headline font-semibold text-on-surface">{{ deal.price | format_pln }}</span>
                 </td>
-                <td class="py-3 pr-2">
+                <td class="py-3 pr-2 hidden sm:table-cell">
                     <span class="text-xs font-label px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant">{{ deal.source }}</span>
                 </td>
-                <td class="py-3 pr-2">
+                <td class="py-3 pr-2 hidden sm:table-cell">
                     <span class="text-xs font-label px-2 py-1 rounded-full bg-primary-container text-on-primary-container">{{ deal.profile }}</span>
                 </td>
                 <td class="py-3 pr-2">
@@ -63,7 +63,7 @@
 
 {% if total_pages is defined and total_pages > 1 %}
 {% set fp = filter_params | default("") %}
-<div class="flex items-center justify-between px-4 py-3 bg-surface-container-low">
+<div class="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 bg-surface-container-low">
     <p class="text-xs font-label text-on-surface-variant">
         {{ total_filtered }} deals &middot; page {{ page }} of {{ total_pages }}
     </p>

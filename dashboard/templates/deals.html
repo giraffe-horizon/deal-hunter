@@ -58,7 +58,7 @@
                 hx-get="/deals"
                 hx-target="#deals-table"
                 hx-include="#deal-filters"
-                class="bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                class="w-full sm:w-auto bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">All Profiles</option>
             {% for p in profiles %}
             <option value="{{ p }}" {% if selected_profile == p %}selected{% endif %}>{{ p }}</option>
@@ -69,7 +69,7 @@
                 hx-get="/deals"
                 hx-target="#deals-table"
                 hx-include="#deal-filters"
-                class="bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                class="w-full sm:w-auto bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">All Sources</option>
             {% for s in sources %}
             <option value="{{ s }}" {% if selected_source == s %}selected{% endif %}>{{ s }}</option>
@@ -80,7 +80,7 @@
                 hx-get="/deals"
                 hx-target="#deals-table"
                 hx-include="#deal-filters"
-                class="bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                class="w-full sm:w-auto bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">All Scores</option>
             <option value="70" {% if selected_min_score == 70 %}selected{% endif %}>70+</option>
             <option value="50" {% if selected_min_score == 50 %}selected{% endif %}>50+</option>
@@ -91,7 +91,7 @@
                 hx-get="/deals"
                 hx-target="#deals-table"
                 hx-include="#deal-filters"
-                class="bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                class="w-full sm:w-auto bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">All Categories</option>
             {% for c in categories %}
             <option value="{{ c }}" {% if selected_category == c %}selected{% endif %}>{{ c }}</option>
@@ -102,7 +102,7 @@
                 hx-get="/deals"
                 hx-target="#deals-table"
                 hx-include="#deal-filters"
-                class="bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                class="w-full sm:w-auto bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">All Statuses</option>
             <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active</option>
             <option value="watching" {% if selected_status == 'watching' %}selected{% endif %}>Watching</option>
@@ -110,7 +110,7 @@
         </select>
 
         <a href="/deals"
-           class="ml-auto text-xs font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1">
+           class="w-full sm:w-auto sm:ml-auto text-xs font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1 justify-center sm:justify-start">
             <span class="material-symbols-outlined text-[16px]">filter_list_off</span>
             Clear Filters
         </a>
@@ -119,7 +119,7 @@
 
 <!-- Deals Table -->
 <div class="bg-surface-container-low rounded-card overflow-hidden">
-    <div id="deals-table">
+    <div id="deals-table" class="overflow-x-auto">
         {% include "partials/deals_table.html" %}
     </div>
 </div>
