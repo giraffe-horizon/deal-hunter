@@ -403,11 +403,28 @@ def fetch_all_deals(profile: dict) -> tuple[list, dict[str, bool], list[str]]:
     return all_deals, source_results, errors
 
 
-def deduplicate(deals: list) -> list:
-    """Deduplicate deals by ID, then by normalized title+price with fuzzy matching."""
+def deduplicate(deals: list, dedup_config: dict | None = None) -> list:
+    """Deduplicate deals by ID, then merge cross-source duplicates by fuzzy title + price tolerance.
+
+    When duplicates are found, the first deal is kept as the winner and later
+    duplicates' source info is added to the winner's alt_links.
+
+    Args:
+        deals: List of Deal objects.
+        dedup_config: Optional config dict with keys:
+            enabled (bool): If False, only ID dedup. Default True.
+            price_tolerance (float): Max price diff ratio for merge. Default 0.05 (5%).
+            title_similarity (float): Min SequenceMatcher ratio. Default 0.85.
+    """
+    config = dedup_config or {}
+    enabled = config.get("enabled", True)
+    price_tolerance = config.get("price_tolerance", 0.05)
+    title_similarity = config.get("title_similarity", 0.85)
+
     seen_ids: set[str] = set()
     unique: list = []
-    seen_keys: list[tuple[str, int]] = []
+    # Each entry: (normalized_title, price, index_in_unique)
+    seen_keys: list[tuple[str, int, int]] = []
 
     for d in deals:
         if d.id in seen_ids:
@@ -415,26 +432,37 @@ def deduplicate(deals: list) -> list:
         seen_ids.add(d.id)
 
         norm_title = _normalize_title(d.title)[:60]
-        dedup_key = (norm_title, d.price)
 
-        # Exact match
-        is_dup = False
-        for existing_key in seen_keys:
-            if existing_key == dedup_key:
-                is_dup = True
-                break
-            # Fuzzy match: same price + similar title
-            if existing_key[1] == d.price and d.price > 0:
-                ratio = SequenceMatcher(None, existing_key[0], norm_title).ratio()
-                if ratio > 0.7:
-                    is_dup = True
-                    break
-
-        if is_dup:
+        if not enabled:
+            unique.append(d)
             continue
 
-        seen_keys.append(dedup_key)
-        unique.append(d)
+        # Find matching existing deal to merge with
+        merged = False
+        for i, (existing_title, existing_price, unique_idx) in enumerate(seen_keys):
+            # Exact title+price match (only when price > 0)
+            if d.price > 0 and (norm_title, d.price) == (existing_title, existing_price):
+                unique[unique_idx].alt_links.append(
+                    {"source": d.source, "link": d.link, "price": d.price}
+                )
+                merged = True
+                break
+
+            # Fuzzy match: similar title + price within tolerance
+            if d.price > 0 and existing_price > 0:
+                price_diff = abs(d.price - existing_price) / max(d.price, existing_price)
+                if price_diff <= price_tolerance:
+                    ratio = SequenceMatcher(None, existing_title, norm_title).ratio()
+                    if ratio >= title_similarity:
+                        unique[unique_idx].alt_links.append(
+                            {"source": d.source, "link": d.link, "price": d.price}
+                        )
+                        merged = True
+                        break
+
+        if not merged:
+            seen_keys.append((norm_title, d.price, len(unique)))
+            unique.append(d)
 
     return unique
 
@@ -481,7 +509,8 @@ def run_profile(
 
     # Fetch
     all_deals, source_results, fetch_errors = fetch_all_deals(profile)
-    unique_deals = deduplicate(all_deals)
+    dedup_config = profile.get("dedup", {})
+    unique_deals = deduplicate(all_deals, dedup_config=dedup_config)
     logger.info(f"Total unique deals: {len(unique_deals)}")
 
     # Get filter
