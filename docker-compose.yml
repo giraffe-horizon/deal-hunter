@@ -7,7 +7,24 @@ services:
     env_file: .env
     environment:
       - CRON_SCHEDULE=${CRON_SCHEDULE:-*/30 * * * *}
+      - WATCHDOG_SCHEDULE=${WATCHDOG_SCHEDULE:-0 */1 * * *}
+      - DIGEST_SCHEDULE=${DIGEST_SCHEDULE:-0 8 * * 1}
       - TZ=${TZ:-Europe/Warsaw}
     volumes:
       - ./profiles:/app/profiles
       - ./state:/app/state
+
+  deal-hunter-bot:
+    # image: ghcr.io/giraffe-horizon/deal-hunter:latest  # pre-built
+    build: .  # or build locally
+    container_name: deal-hunter-bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - TZ=${TZ:-Europe/Warsaw}
+    command: ["python", "feedback_bot.py"]
+    volumes:
+      - ./profiles:/app/profiles
+      - ./state:/app/state
+    depends_on:
+      - deal-hunter
