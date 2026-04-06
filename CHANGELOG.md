@@ -1,6 +1,120 @@
 # CHANGELOG
 
 
+## v0.2.0 (2026-04-06)
+
+### Bug Fixes
+
+- Address review findings (context manager, category detection, migration API)
+  ([`937e64f`](https://github.com/giraffe-horizon/deal-hunter/commit/937e64f9c7327ab5edb74bf49d1b29c30155c607))
+
+- Add __enter__/__exit__ to SQLiteStorage for context manager support - Replace manual db.close() in
+  deal_hunter.py with try/finally - Add _detect_category() using new top-level 'categories' profile
+  field - Add import_legacy_deal(), import_legacy_price(), commit() public methods to SQLiteStorage
+  so migration script doesn't access _conn directly - Update migration script to use public API and
+  context manager
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- False price drop alerts from cross-source price differences
+  ([`ee51ec8`](https://github.com/giraffe-horizon/deal-hunter/commit/ee51ec85b640ff5ced0ff99aaba4f29af745521b))
+
+- Use deal.id instead of normalized title for price history tracking, preventing cross-source false
+  positives (e.g. same bike at different prices from sprint vs centrumrowerowe) - Add 24h cooldown
+  between price drop alerts for the same deal - Increase default min_drop_amount from 100 to 200 PLN
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Health monitoring review fixes (public API, imports, topic_id)
+  ([`307994c`](https://github.com/giraffe-horizon/deal-hunter/commit/307994cc39bc8767ccad9fccd81fd9c2a3985d8a))
+
+- Add TelegramNotifier.send_text() public method, stop using _send_message() externally - Move
+  'import time' to top-level imports - Don't mutate result dict in _run_with_health_tracking (use
+  .get + dict comprehension) - Read TELEGRAM_TOPIC_ID from env for watchdog and source failure
+  alerts
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Price drop review fixes (limits, digest timer, Polish chars)
+  ([`3152cac`](https://github.com/giraffe-horizon/deal-hunter/commit/3152cac08d65588c5a03d6c27f15c117a035680f))
+
+- Limit price drop alerts to max_alerts, sorted by diff_percent desc - Guard digest Telegram send
+  when credentials are missing - Fix Polish diacritics: Najnizsza -> Najniższa - Add digest systemd
+  timer (weekly Monday 08:00) + service
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Trigger Docker build from Release workflow_run instead of tag push
+  ([`c45876b`](https://github.com/giraffe-horizon/deal-hunter/commit/c45876b0786201d9e168782e0866a843c6a09823))
+
+GITHUB_TOKEN tags don't trigger other workflows. Use workflow_run event on Release completion +
+  fetch latest release tag via API.
+
+### Features
+
+- Add health monitoring with watchdog and systemd timers
+  ([`4c3b49a`](https://github.com/giraffe-horizon/deal-hunter/commit/4c3b49a3a666a5e7f7ba282de83993d118a73d5c))
+
+- health.py: tracks run results, per-source consecutive failures, staleness - state/health.json
+  written after every run with status/duration/version - --health flag: human-readable status (exit
+  0=ok, 1=partial, 2=error, 3=stale) - --watchdog flag: checks freshness, sends Telegram alert if
+  stale (>2h) - Source failure alerts: auto-notify via Telegram after 3+ consecutive failures -
+  scripts/systemd/: user-level timer units (30min run, 1h watchdog) with OnFailure crash
+  notifications - 30 new tests in test_health.py (all 192 tests pass)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add SQLite persistence layer (replaces Notion)
+  ([`ade211a`](https://github.com/giraffe-horizon/deal-hunter/commit/ade211ae3694fe694e91071e473b16d021cf5284))
+
+Add storage/sqlite.py with SQLiteStorage class backed by stdlib sqlite3. Three tables: deals,
+  price_history, feedback. Integrated into deal_hunter.py to persist scored deals after each run.
+  Includes migration script for existing state/*.json files and comprehensive tests (27 cases).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Configurable price drop alerts with weekly digest
+  ([`fba5147`](https://github.com/giraffe-horizon/deal-hunter/commit/fba5147f2b420526317042eacf2ae041d9d7d727))
+
+Add price_tracking profile config (min_drop_percent, min_drop_amount, track_increases) with sensible
+  defaults. Enhanced check_price_changes() returns structured dicts and checks SQLite for
+  lowest-ever prices with graceful fallback to state JSON. Price drop alerts are sent as separate
+  Telegram messages before regular alerts. New --digest flag sends weekly price drop summary from
+  SQLite price_history. Added SQLite methods (get_price_drops, get_lowest_price,
+  get_previous_price), Telegram formatting (send_price_drop_alert, send_digest), and profile
+  validation.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Price history charts and visualization
+  ([`0fae7d1`](https://github.com/giraffe-horizon/deal-hunter/commit/0fae7d1fcbeed5d4e620951c22824ad10976b512))
+
+Add matplotlib-based chart generation (lazy-imported, Agg backend) with three chart types: price
+  history line chart, weekly digest bar chart, and profile trend chart. Charts use Polish labels and
+  are sent to Telegram via new send_photo() method (multipart/form-data upload).
+
+New CLI flags: --price-chart DEAL_ID, --trend-chart PROFILE. The --digest command now also generates
+  and sends a bar chart.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Remove Notion integration (replaced by SQLite in upcoming phase)
+  ([`8a6de86`](https://github.com/giraffe-horizon/deal-hunter/commit/8a6de8687fd2d5d713d77323813336155381ece0))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Verbose scoring breakdown (--verify --verbose)
+  ([`f565c97`](https://github.com/giraffe-horizon/deal-hunter/commit/f565c97ea2957ea221ef8a2a29533391f0784ac5))
+
+Add detailed scoring breakdown to ScoreResult with a new `breakdown` field that tracks every rule
+  that fired (score_rules, penalties, budget, temperature, excluded, required_any) plus
+  BikeFilter-specific entries (size, color, tire, race). New --verbose/-v flag shows per-deal
+  breakdown with box-drawing output, with optional rich library support. New --top N flag limits
+  output. 22 new tests in test_verbose_scoring.py.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.1.0 (2026-04-03)
 
 ### Bug Fixes
