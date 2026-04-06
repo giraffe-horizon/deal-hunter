@@ -932,3 +932,8 @@ class TestProfilePages:
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
+
+    def test_profile_detail_not_found(self, client):
+        """GET /profiles/{name} returns 404 for missing profile."""
+        response = client.get("/profiles/nonexistent_profile_xyz")
+        assert response.status_code == 404

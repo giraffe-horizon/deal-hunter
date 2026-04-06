@@ -4,7 +4,7 @@ import importlib.metadata
 import math
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -417,6 +417,20 @@ async def profiles_page(request: Request):
         request,
         "profiles.html",
         {"profiles": profiles},
+    )
+
+
+@app.get("/profiles/{name}", response_class=HTMLResponse)
+async def profile_detail_page(request: Request, name: str):
+    """Profile detail page (read-only view)."""
+    profile = safe_load_profile(name)
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
+    profile.setdefault("emoji", "\U0001f50d")
+    profile.setdefault("currency", "PLN")
+    return templates.TemplateResponse(
+        "profile_detail.html",
+        {"request": request, "profile": profile},
     )
 
 
