@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.5.1 (2026-04-06)
+
+### Bug Fixes
+
+- Dashboard bug fixes, comprehensive tests, and project cleanup
+  ([`9425937`](https://github.com/giraffe-horizon/deal-hunter/commit/9425937973627f006bbbd79a29edbe2015df12b2))
+
+Fix status update HTMX response losing action buttons after swap and pagination links not preserving
+  active filters. Add COALESCE for NULL-safe SQL aggregates. Expand dashboard test suite from 51 to
+  127 tests with unit, integration, and E2E workflow coverage. Remove remaining Notion references
+  from wiki docs. Update ROADMAP to reflect v1.0 completion.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.5.0 (2026-04-06)
 
 ### Documentation
