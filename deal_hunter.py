@@ -5,6 +5,7 @@ Profiles define products, sources, scoring rules, and notification targets.
 """
 
 import argparse
+import html
 import importlib.metadata
 import json
 import logging
@@ -532,6 +533,34 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
     except Exception as e:
         logger.error(f"SQLite storage unavailable, continuing without persistence: {e}")
 
+    # Flush queued alerts from previous quiet hours
+    if db and telegram and not is_quiet_hours(profile):
+        pending = db.get_pending_alerts(profile=profile_name)
+        if pending:
+            flush_count = min(len(pending), max_alerts)
+            for alert_data in pending[:flush_count]:
+                payload = json.loads(alert_data["payload"])
+                if alert_data["alert_type"] == "deal":
+                    logger.info(f"Flushing queued deal alert: {payload.get('title', '?')[:40]}")
+                    telegram.send_text(
+                        f"\U0001f514 Zakolejkowany alert:\n"
+                        f"<b>{html.escape(payload.get('title', ''))}</b>\n"
+                        f"\U0001f4b0 {payload.get('price', 0):,} PLN\n"
+                        f"Score: {payload.get('score', 0)}\n"
+                        f'\U0001f517 <a href="{html.escape(payload.get("link", ""))}">Link</a>',
+                        topic_id=tg_topic,
+                    )
+                elif alert_data["alert_type"] == "price_drop":
+                    logger.info(f"Flushing queued price drop: {payload.get('title', '?')[:40]}")
+                    telegram.send_text(
+                        f"\U0001f514 Zakolejkowany spadek ceny:\n"
+                        f"<b>{html.escape(payload.get('title', ''))}</b>\n"
+                        f"{payload.get('old_price', 0):,} \u2192 {payload.get('new_price', 0):,} PLN",
+                        topic_id=tg_topic,
+                    )
+            db.mark_alerts_sent([p["id"] for p in pending[:flush_count]])
+            logger.info(f"Flushed {flush_count} queued alerts for {profile_name}")
+
     alerts: list[dict] = []
     price_drop_alerts: list[dict] = []
 
@@ -586,17 +615,34 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
     if price_drop_alerts:
         price_drop_alerts.sort(key=lambda x: x["price_change"]["diff_percent"], reverse=True)
     if telegram and price_drop_alerts:
-        for pda in price_drop_alerts[:max_alerts]:
-            telegram.send_price_drop_alert(
-                pda["deal"],
-                pda["price_change"],
-                topic_id=tg_topic,
-                emoji=emoji,
-                currency=currency,
+        if is_quiet_hours(profile):
+            if db:
+                for pda in price_drop_alerts[:max_alerts]:
+                    payload = json.dumps({
+                        "deal_id": pda["deal"].id,
+                        "title": pda["deal"].title,
+                        "link": pda["deal"].link,
+                        "old_price": pda["price_change"]["old_price"],
+                        "new_price": pda["price_change"]["new_price"],
+                        "diff_pln": pda["price_change"]["diff_pln"],
+                        "diff_percent": pda["price_change"]["diff_percent"],
+                    })
+                    db.queue_alert(profile_name, "price_drop", payload)
+                logger.info(
+                    f"Queued {min(len(price_drop_alerts), max_alerts)} price drop alerts (quiet hours)"
+                )
+        else:
+            for pda in price_drop_alerts[:max_alerts]:
+                telegram.send_price_drop_alert(
+                    pda["deal"],
+                    pda["price_change"],
+                    topic_id=tg_topic,
+                    emoji=emoji,
+                    currency=currency,
+                )
+            logger.info(
+                f"Sent {min(len(price_drop_alerts), max_alerts)} price drop alerts for {profile_name}"
             )
-        logger.info(
-            f"Sent {min(len(price_drop_alerts), max_alerts)} price drop alerts for {profile_name}"
-        )
 
     # Console output for price drops
     for pda in price_drop_alerts:
@@ -626,28 +672,43 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
 
     # Telegram — top alerts individually, rest in summary
     if telegram:
-        top_alerts = alerts[:max_alerts]
-        remaining = alerts[max_alerts:]
+        if is_quiet_hours(profile):
+            if db:
+                for a in alerts[:max_alerts]:
+                    payload = json.dumps({
+                        "deal_id": a["deal"].id,
+                        "title": a["deal"].title,
+                        "price": a["deal"].price,
+                        "link": a["deal"].link,
+                        "score": a["score"],
+                        "plus": a["plus"][:6],
+                        "minus": a["minus"][:4],
+                    })
+                    db.queue_alert(profile_name, "deal", payload)
+                logger.info(f"Queued {min(len(alerts), max_alerts)} deal alerts (quiet hours)")
+        else:
+            top_alerts = alerts[:max_alerts]
+            remaining = alerts[max_alerts:]
 
-        for a in top_alerts:
-            tier = (
-                "\U0001f525\U0001f525\U0001f525 GOR\u0104CA PERE\u0141KA"
-                if a["score"] >= threshold_alert
-                else "\U0001f525 ZNALAZ\u0141EM OKAZJ\u0118"
-            )
-            telegram.send_alert(
-                a["deal"],
-                a["score"],
-                tier,
-                a["plus"],
-                a["minus"],
-                topic_id=tg_topic,
-                emoji=emoji,
-                currency=currency,
-            )
+            for a in top_alerts:
+                tier = (
+                    "\U0001f525\U0001f525\U0001f525 GOR\u0104CA PERE\u0141KA"
+                    if a["score"] >= threshold_alert
+                    else "\U0001f525 ZNALAZ\u0141EM OKAZJ\u0118"
+                )
+                telegram.send_alert(
+                    a["deal"],
+                    a["score"],
+                    tier,
+                    a["plus"],
+                    a["minus"],
+                    topic_id=tg_topic,
+                    emoji=emoji,
+                    currency=currency,
+                )
 
-        if remaining:
-            telegram.send_summary(remaining, topic_id=tg_topic, emoji=emoji, currency=currency)
+            if remaining:
+                telegram.send_summary(remaining, topic_id=tg_topic, emoji=emoji, currency=currency)
 
     # Console output
     for a in alerts:

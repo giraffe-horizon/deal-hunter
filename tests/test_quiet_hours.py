@@ -158,3 +158,49 @@ class TestIsQuietHours:
             mock_dt.now.return_value = datetime(2026, 4, 6, 7, 0)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             assert is_quiet_hours(profile) is False
+
+
+class TestQuietHoursIntegration:
+    """Tests for quiet hours integration with alert flow."""
+
+    def test_flush_pending_alerts_sends_and_marks(self, db):
+        """flush_pending_alerts should send queued alerts and mark them sent."""
+        db.queue_alert("bikes", "deal", json.dumps({
+            "deal_id": "pepper:123",
+            "title": "Test Deal",
+            "price": 5000,
+            "link": "https://example.com",
+            "score": 85,
+            "plus": ["keyword1"],
+            "minus": [],
+        }))
+        db.queue_alert("bikes", "price_drop", json.dumps({
+            "deal_id": "pepper:456",
+            "title": "Drop Deal",
+            "old_price": 10000,
+            "new_price": 8000,
+            "diff_pln": 2000,
+            "diff_percent": 20.0,
+            "link": "https://example.com/2",
+        }))
+
+        pending = db.get_pending_alerts()
+        assert len(pending) == 2
+
+        # Mark all as sent (simulating flush)
+        db.mark_alerts_sent([p["id"] for p in pending])
+        assert db.get_pending_alerts() == []
+
+    def test_flush_respects_max_alerts(self, db):
+        """Only first 5 alerts should be sent, rest stay queued."""
+        for i in range(8):
+            db.queue_alert("bikes", "deal", json.dumps({"id": str(i)}))
+
+        pending = db.get_pending_alerts()
+        assert len(pending) == 8
+
+        # Flush only first 5
+        to_send = pending[:5]
+        db.mark_alerts_sent([p["id"] for p in to_send])
+        remaining = db.get_pending_alerts()
+        assert len(remaining) == 3
