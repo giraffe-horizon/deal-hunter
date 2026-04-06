@@ -11,10 +11,10 @@
 {% block content %}
 
 <!-- Header -->
-<div class="bg-surface-container-low rounded-card p-6 mb-6">
+<div class="bg-surface-container-low rounded-card p-6 mb-6 overflow-hidden">
     <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div class="flex-1 min-w-0">
-            <h1 class="font-headline text-2xl font-bold text-on-surface mb-3">{{ deal.title }}</h1>
+            <h1 class="font-headline text-2xl font-bold text-on-surface mb-3 break-words">{{ deal.title }}</h1>
             <div class="flex flex-wrap items-center gap-3">
                 <span class="font-headline text-3xl font-bold text-primary">{{ deal.price | format_pln }}</span>
                 {% if previous_price and previous_price != deal.price %}
@@ -74,8 +74,8 @@
     <!-- Left column: Chart + Price History -->
     <div class="lg:col-span-2 space-y-6">
         <!-- Price History Chart -->
-        <div class="bg-surface-container-low rounded-card p-6">
-            <div class="flex items-center justify-between mb-4">
+        <div class="bg-surface-container-low rounded-card p-6 overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <h2 class="font-headline text-lg font-semibold text-on-surface">Price History</h2>
                 <div class="flex items-center gap-1" id="period-buttons">
                     <button onclick="filterChart('1m')" data-period="1m"

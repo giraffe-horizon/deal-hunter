@@ -10,3 +10,5 @@ venv/
 profiles/*.yaml
 .coverage
 deal_hunter.egg-info/
+.playwright-mcp/
+screenshots/
