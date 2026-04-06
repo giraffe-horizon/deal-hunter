@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}DealMonitor{% endblock %}</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#005db5',
+                        'primary-dim': '#0052a0',
+                        'primary-container': '#d6e3ff',
+                        'on-primary': '#f6f7ff',
+                        'on-primary-container': '#00519e',
+                        'secondary': '#526074',
+                        'secondary-container': '#d5e3fc',
+                        'on-secondary': '#f8f8ff',
+                        'on-secondary-container': '#455367',
+                        'tertiary': '#006b62',
+                        'tertiary-container': '#91feef',
+                        'on-tertiary': '#e2fff9',
+                        'on-tertiary-container': '#006259',
+                        'background': '#faf8ff',
+                        'surface': '#faf8ff',
+                        'surface-dim': '#cdd9ff',
+                        'surface-container': '#eaedff',
+                        'surface-container-high': '#e2e7ff',
+                        'surface-container-highest': '#d9e2ff',
+                        'surface-container-low': '#f2f3ff',
+                        'surface-container-lowest': '#ffffff',
+                        'surface-variant': '#d9e2ff',
+                        'on-surface': '#113069',
+                        'on-surface-variant': '#445d99',
+                        'on-background': '#113069',
+                        'error': '#9f403d',
+                        'error-container': '#fe8983',
+                        'on-error': '#fff7f6',
+                        'on-error-container': '#752121',
+                        'outline': '#6079b7',
+                        'outline-variant': '#98b1f2',
+                        'inverse-surface': '#060e20',
+                        'inverse-primary': '#5f9efb',
+                    },
+                    fontFamily: {
+                        'headline': ['Manrope', 'sans-serif'],
+                        'body': ['Inter', 'sans-serif'],
+                        'label': ['Inter', 'sans-serif'],
+                    },
+                    borderRadius: {
+                        'card': '0.75rem',
+                    },
+                },
+            },
+        }
+    </script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            color: #113069;
+            background-color: #faf8ff;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Manrope', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-surface-container-low flex flex-col fixed h-full z-10">
+            <!-- Branding -->
+            <div class="p-6 pb-4">
+                <h1 class="font-headline text-xl font-bold text-primary">DealMonitor</h1>
+                <p class="text-xs text-on-surface-variant font-label tracking-wider uppercase mt-1">Analytical Atelier</p>
+            </div>
+
+            <!-- Navigation -->
+            <nav class="flex-1 px-3 space-y-1">
+                <a href="/deals" class="flex items-center gap-3 px-4 py-3 rounded-card text-sm font-medium transition-colors {% if active_page == 'deals' %}bg-surface-container-high text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                    <span class="material-symbols-outlined text-[20px]">search</span>
+                    Deals Explorer
+                </a>
+                <a href="/price-trends" class="flex items-center gap-3 px-4 py-3 rounded-card text-sm font-medium transition-colors {% if active_page == 'price-trends' %}bg-surface-container-high text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                    <span class="material-symbols-outlined text-[20px]">trending_up</span>
+                    Price Trends
+                </a>
+                <a href="/health" class="flex items-center gap-3 px-4 py-3 rounded-card text-sm font-medium transition-colors {% if active_page == 'health' %}bg-surface-container-high text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                    <span class="material-symbols-outlined text-[20px]">monitor_heart</span>
+                    System Health
+                </a>
+            </nav>
+
+            <!-- Bottom action -->
+            <div class="p-4">
+                <a href="/deals" class="flex items-center justify-center gap-2 w-full px-4 py-3 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+                    <span class="material-symbols-outlined text-[20px]">add</span>
+                    New Analysis
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64">
+            <!-- Header -->
+            <header class="sticky top-0 z-10 bg-surface/80 backdrop-blur-xl px-8 py-4 flex items-center justify-between">
+                <div>
+                    <h2 class="font-headline text-lg font-semibold">{% block page_title %}Dashboard{% endblock %}</h2>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary">search</span>
+                    </div>
+                    <div class="relative">
+                        <span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary">notifications</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="px-8 py-6">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+</body>
+</html>

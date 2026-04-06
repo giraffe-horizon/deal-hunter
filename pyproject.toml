@@ -28,6 +28,9 @@ dependencies = [
     "beautifulsoup4",
     "pyyaml",
     "python-dotenv",
+    "fastapi",
+    "uvicorn[standard]",
+    "jinja2",
 ]
 
 [project.scripts]
