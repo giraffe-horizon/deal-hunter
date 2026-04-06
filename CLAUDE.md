@@ -40,6 +40,10 @@ state/health.json       Health monitoring state (last run, per-source/profile re
 state/deals.db          SQLite database (deals, price_history, feedback tables)
 scripts/migrate_state_to_sqlite.py  One-time migration from state/*.json to SQLite
 scripts/systemd/        Systemd user timer units + bot service + install script
+Dockerfile              Docker image (python:3.12-slim + supercronic + tini)
+docker-compose.yml      Two services: deal-hunter (cron) + deal-hunter-bot (polling)
+docker/entrypoint.sh    Container entrypoint (3 cron schedules: --all, --watchdog, --digest)
+examples/               Example profiles (reference only, NOT auto-discovered)
 ```
 
 ## Key Patterns
