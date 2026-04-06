@@ -315,7 +315,7 @@ class TestGetDealStats:
         stats = db.get_deal_stats(score_threshold=70)
         assert stats["total"] == 2
         assert stats["high_score"] == 2  # both >= 70
-        assert stats["new_today"] >= 1   # deal was inserted today
+        assert stats["new_today"] >= 1  # deal was inserted today
 
     def test_custom_score_threshold(self, db, deal, deal2):
         db.upsert_deal(deal, "bikes", 150)

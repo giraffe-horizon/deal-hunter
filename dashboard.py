@@ -43,6 +43,7 @@ def safe_load_profile(name: str) -> dict | None:
     """Load profile without sys.exit on missing files."""
     try:
         from deal_hunter import load_profile
+
         return load_profile(name)
     except SystemExit:
         return None
@@ -52,6 +53,7 @@ def _get_profiles() -> list[str]:
     """Get available profile names, gracefully handling missing profiles dir."""
     try:
         from deal_hunter import list_profiles
+
         return sorted(list_profiles())
     except Exception:
         return []
@@ -114,20 +116,22 @@ def deals_page(
 
     # HTMX partial refresh — return only the table fragment
     if request.headers.get("HX-Request"):
-        return templates.TemplateResponse(request, "partials/deals_table.html", {
-            "deals": deals,
-            "page": page,
-            "total_pages": total_pages,
-            "total_filtered": total_filtered,
-            "filter_params": filter_params,
-        })
+        return templates.TemplateResponse(
+            request,
+            "partials/deals_table.html",
+            {
+                "deals": deals,
+                "page": page,
+                "total_pages": total_pages,
+                "total_filtered": total_filtered,
+                "filter_params": filter_params,
+            },
+        )
 
     # Compute metrics via SQL aggregates (no full table scan)
     stats = db.get_deal_stats(score_threshold=SCORE_THRESHOLD)
     total_deals = stats["total"]
-    high_score_pct = (
-        round(stats["high_score"] / total_deals * 100) if total_deals else 0
-    )
+    high_score_pct = round(stats["high_score"] / total_deals * 100) if total_deals else 0
     new_today = stats["new_today"]
     drops_count = len(db.get_price_drops(days=7))
 
@@ -135,31 +139,36 @@ def deals_page(
     filter_opts = db.get_filter_options()
     profiles = _get_profiles()
 
-    return templates.TemplateResponse(request, "deals.html", {
-        "deals": deals,
-        "total_deals": total_deals,
-        "high_score_pct": high_score_pct,
-        "score_threshold": SCORE_THRESHOLD,
-        "new_today": new_today,
-        "drops_count": drops_count,
-        "profiles": profiles,
-        "sources": filter_opts["sources"],
-        "categories": filter_opts["categories"],
-        "selected_profile": profile,
-        "selected_source": source,
-        "selected_min_score": min_score,
-        "selected_category": category,
-        "selected_status": status,
-        "page": page,
-        "total_pages": total_pages,
-        "total_filtered": total_filtered,
-        "filter_params": filter_params,
-    })
+    return templates.TemplateResponse(
+        request,
+        "deals.html",
+        {
+            "deals": deals,
+            "total_deals": total_deals,
+            "high_score_pct": high_score_pct,
+            "score_threshold": SCORE_THRESHOLD,
+            "new_today": new_today,
+            "drops_count": drops_count,
+            "profiles": profiles,
+            "sources": filter_opts["sources"],
+            "categories": filter_opts["categories"],
+            "selected_profile": profile,
+            "selected_source": source,
+            "selected_min_score": min_score,
+            "selected_category": category,
+            "selected_status": status,
+            "page": page,
+            "total_pages": total_pages,
+            "total_filtered": total_filtered,
+            "filter_params": filter_params,
+        },
+    )
 
 
 @app.get("/health")
 def health_page(request: Request):
     from health import load_health
+
     health = load_health()
 
     # Compute summary metrics from health data
@@ -173,12 +182,16 @@ def health_page(request: Request):
             for err in result.get("errors", []):
                 errors.append({"profile": name, "message": err})
 
-    return templates.TemplateResponse(request, "health.html", {
-        "health": health,
-        "total_deals": total_deals,
-        "total_alerts": total_alerts,
-        "errors": errors,
-    })
+    return templates.TemplateResponse(
+        request,
+        "health.html",
+        {
+            "health": health,
+            "total_deals": total_deals,
+            "total_alerts": total_alerts,
+            "errors": errors,
+        },
+    )
 
 
 @app.get("/price-trends")
@@ -193,9 +206,7 @@ def price_trends_page(
     # Compute summary metrics
     total_drops = len(drops)
     avg_drop_pct = (
-        round(sum(d["diff_percent"] for d in drops) / total_drops, 1)
-        if total_drops
-        else 0
+        round(sum(d["diff_percent"] for d in drops) / total_drops, 1) if total_drops else 0
     )
     biggest_drop = max((d["diff_pln"] for d in drops), default=0)
 
@@ -204,9 +215,7 @@ def price_trends_page(
     for deal in all_deals:
         cat = deal.get("category") or "Uncategorized"
         categories[cat] = categories.get(cat, 0) + 1
-    categories = dict(
-        sorted(categories.items(), key=lambda x: x[1], reverse=True)
-    )
+    categories = dict(sorted(categories.items(), key=lambda x: x[1], reverse=True))
 
     # Sparkline data for top 3 categories
     category_trends: dict[str, list[dict]] = {}
@@ -215,15 +224,19 @@ def price_trends_page(
         if trend:
             category_trends[cat_name] = trend
 
-    return templates.TemplateResponse(request, "price_trends.html", {
-        "drops": drops,
-        "days": days,
-        "total_drops": total_drops,
-        "avg_drop_pct": avg_drop_pct,
-        "biggest_drop": biggest_drop,
-        "categories": categories,
-        "category_trends": category_trends,
-    })
+    return templates.TemplateResponse(
+        request,
+        "price_trends.html",
+        {
+            "drops": drops,
+            "days": days,
+            "total_drops": total_drops,
+            "avg_drop_pct": avg_drop_pct,
+            "biggest_drop": biggest_drop,
+            "categories": categories,
+            "category_trends": category_trends,
+        },
+    )
 
 
 @app.get("/deals/{deal_id}")
@@ -240,12 +253,16 @@ def deal_detail_page(
     lowest_price = db.get_lowest_price(deal_id)
     previous_price = db.get_previous_price(deal_id)
 
-    return templates.TemplateResponse(request, "deal_detail.html", {
-        "deal": deal,
-        "price_history": price_history,
-        "lowest_price": lowest_price,
-        "previous_price": previous_price,
-    })
+    return templates.TemplateResponse(
+        request,
+        "deal_detail.html",
+        {
+            "deal": deal,
+            "price_history": price_history,
+            "lowest_price": lowest_price,
+            "previous_price": previous_price,
+        },
+    )
 
 
 @app.get("/api/price-history/{deal_id}")
@@ -300,7 +317,7 @@ def api_update_deal_status(
         f'        hx-target="#action-buttons" hx-swap="innerHTML"'
         f'        class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container-high text-on-surface-variant rounded-card text-sm font-medium hover:bg-error-container/20 hover:text-error transition-colors">'
         f'  <span class="material-symbols-outlined text-[18px]">block</span>Skip</button>'
-        f'{status_badge}'
+        f"{status_badge}"
     )
 
 
