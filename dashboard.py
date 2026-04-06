@@ -434,6 +434,52 @@ async def profile_detail_page(request: Request, name: str):
     )
 
 
+@app.get("/profiles/{name}/edit", response_class=HTMLResponse)
+async def profile_edit_page(request: Request, name: str):
+    """Profile form editor page."""
+    profile = safe_load_profile(name)
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
+    profile.setdefault("emoji", "\U0001f50d")
+    profile.setdefault("currency", "PLN")
+    return templates.TemplateResponse(
+        "profile_edit.html",
+        {"request": request, "profile": profile},
+    )
+
+
+@app.put("/api/profiles/{name}")
+async def api_update_profile(request: Request, name: str):
+    """Update a profile from form data (JSON body)."""
+    import yaml as _yaml
+    from utils.validation import validate_profile as _validate
+
+    body = await request.json()
+
+    existing = safe_load_profile(name)
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
+
+    # Preserve sources from existing profile if not in body
+    if "sources" not in body or not body["sources"]:
+        body["sources"] = existing.get("sources", {})
+
+    # Preserve fields not in the form
+    for key in ("custom_filter", "custom_data", "price_tracking", "quiet_hours", "dedup"):
+        if key in existing and key not in body:
+            body[key] = existing[key]
+
+    errors = _validate(body)
+    if errors:
+        return JSONResponse({"errors": errors})
+
+    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    with open(profile_path, "w", encoding="utf-8") as f:
+        _yaml.dump(body, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+    return JSONResponse({"ok": True})
+
+
 @app.get("/api/profiles")
 async def api_profiles_list():
     """JSON list of profiles."""

@@ -937,3 +937,8 @@ class TestProfilePages:
         """GET /profiles/{name} returns 404 for missing profile."""
         response = client.get("/profiles/nonexistent_profile_xyz")
         assert response.status_code == 404
+
+    def test_profile_edit_page_not_found(self, client):
+        """GET /profiles/{name}/edit returns 404 for missing profile."""
+        response = client.get("/profiles/nonexistent_xyz/edit")
+        assert response.status_code == 404
