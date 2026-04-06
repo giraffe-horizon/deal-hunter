@@ -565,6 +565,69 @@ async def api_update_profile(request: Request, name: str):
     return JSONResponse({"ok": True})
 
 
+@app.delete("/api/profiles/{name}")
+async def api_delete_profile(name: str):
+    """Delete a profile YAML file."""
+    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    if not profile_path.exists():
+        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
+    profile_path.unlink()
+    return JSONResponse({"ok": True})
+
+
+@app.patch("/api/profiles/{name}/toggle")
+async def api_toggle_profile(name: str):
+    """Toggle a profile's enabled state."""
+    import yaml as _yaml
+
+    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    if not profile_path.exists():
+        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
+
+    with open(profile_path, encoding="utf-8") as f:
+        profile = _yaml.safe_load(f)
+
+    profile["enabled"] = not profile.get("enabled", True)
+
+    with open(profile_path, "w", encoding="utf-8") as f:
+        _yaml.dump(profile, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+    return JSONResponse({"ok": True, "enabled": profile["enabled"]})
+
+
+@app.post("/api/profiles/{name}/run")
+async def api_run_profile(name: str):
+    """Trigger a profile run (dry-run with --verify)."""
+    import html as _html
+    import subprocess
+
+    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    if not profile_path.exists():
+        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
+
+    try:
+        result = subprocess.run(
+            ["python", "deal_hunter.py", "--profile", name, "--verify"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=str(BASE_DIR),
+        )
+        output = result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        output = "Run timed out after 120 seconds."
+    except Exception as e:
+        output = f"Error: {e}"
+
+    safe_output = _html.escape(output)
+    return HTMLResponse(
+        f'<div class="bg-surface-container-low rounded-card p-6 mt-4">'
+        f'<h3 class="font-headline text-base font-semibold text-on-surface mb-3">Run Output</h3>'
+        f'<pre class="text-xs text-on-surface-variant whitespace-pre-wrap overflow-x-auto bg-surface-container rounded-lg p-4">{safe_output}</pre>'
+        f'</div>'
+    )
+
+
 @app.get("/api/profiles")
 async def api_profiles_list():
     """JSON list of profiles."""

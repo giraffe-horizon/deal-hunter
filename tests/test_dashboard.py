@@ -975,3 +975,53 @@ class TestProfilePages:
         if os.path.exists(profile_path):
             os.unlink(profile_path)
         assert data.get("ok") is True
+
+    def test_api_delete_profile(self, client):
+        """DELETE /api/profiles/{name} deletes the profile file."""
+        # Create a test profile first
+        client.post(
+            "/api/profiles",
+            json={
+                "name": "test_delete_me",
+                "emoji": "\U0001f50d",
+                "sources": {"pepper": {"urls": ["https://pepper.pl/search?q=test"]}},
+                "budget": {"min": 100, "max": 5000},
+                "score_threshold": 50,
+                "telegram": {"topic_id": None, "max_alerts": 5},
+            },
+        )
+        response = client.delete("/api/profiles/test_delete_me")
+        assert response.status_code == 200
+        data = response.json()
+        assert data.get("ok") is True
+
+    def test_api_delete_nonexistent(self, client):
+        """DELETE /api/profiles/{name} returns 404 for missing profile."""
+        response = client.delete("/api/profiles/nonexistent_xyz")
+        assert response.status_code == 404
+
+    def test_api_toggle_profile(self, client):
+        """PATCH /api/profiles/{name}/toggle toggles enabled state."""
+        # Create a test profile first
+        client.post(
+            "/api/profiles",
+            json={
+                "name": "test_toggle_me",
+                "emoji": "\U0001f50d",
+                "sources": {"pepper": {"urls": ["https://pepper.pl/search?q=test"]}},
+                "budget": {"min": 100, "max": 5000},
+                "score_threshold": 50,
+                "telegram": {"topic_id": None, "max_alerts": 5},
+            },
+        )
+        response = client.patch("/api/profiles/test_toggle_me/toggle")
+        assert response.status_code == 200
+        data = response.json()
+        assert "enabled" in data
+        # Clean up
+        client.delete("/api/profiles/test_toggle_me")
+
+    def test_api_run_nonexistent(self, client):
+        """POST /api/profiles/{name}/run returns 404 for missing profile."""
+        response = client.post("/api/profiles/nonexistent_xyz/run")
+        assert response.status_code == 404
