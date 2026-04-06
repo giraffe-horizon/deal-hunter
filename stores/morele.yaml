@@ -1,0 +1,15 @@
+name: morele
+type: search
+base_url: "https://www.morele.net"
+search_url: "https://www.morele.net/wyszukiwarka/?q={query}"
+
+strategies:
+  - css
+
+selectors:
+  products: ".cat-product.card"
+  title: ".cat-product-name__header a"
+  price: ".price-new"
+  link: ".cat-product-name__header a@href"
+  image: ".product-image@src"
+  id: "@data-product-id"
