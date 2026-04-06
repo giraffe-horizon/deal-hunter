@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% set active_page = "profiles" %}
+{% block title %}Profiles — DealMonitor{% endblock %}
+{% block page_title %}
+<div class="flex items-center justify-between w-full">
+    <span>Profiles</span>
+    <a href="/profiles/new" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+        <span class="material-symbols-outlined text-[18px]">add</span>
+        New Profile
+    </a>
+</div>
+{% endblock %}
+{% block content %}
+
+{% if profiles %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for p in profiles %}
+    <a href="/profiles/{{ p.name }}" class="bg-surface-container-low rounded-card p-6 hover:bg-surface-container transition-colors block">
+        <div class="flex items-center gap-3 mb-4">
+            <span class="text-2xl">{{ p.emoji }}</span>
+            <h3 class="font-headline text-lg font-semibold text-on-surface">{{ p.name }}</h3>
+            {% if not p.enabled %}
+            <span class="text-xs font-label px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">Disabled</span>
+            {% endif %}
+        </div>
+        <dl class="space-y-2">
+            <div class="flex justify-between text-sm">
+                <dt class="text-on-surface-variant">Sources</dt>
+                <dd class="text-on-surface font-medium">{{ p.source_count }}</dd>
+            </div>
+            <div class="flex justify-between text-sm">
+                <dt class="text-on-surface-variant">Budget</dt>
+                <dd class="text-on-surface font-medium">{{ p.budget_min | format_pln }} – {{ p.budget_max | format_pln }}</dd>
+            </div>
+            <div class="flex justify-between text-sm">
+                <dt class="text-on-surface-variant">Threshold</dt>
+                <dd class="text-on-surface font-medium">{{ p.score_threshold }}</dd>
+            </div>
+        </dl>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="bg-surface-container-low rounded-card p-12 text-center">
+    <span class="material-symbols-outlined text-[48px] text-outline-variant mb-4 block">tune</span>
+    <h2 class="font-headline text-lg font-semibold text-on-surface mb-2">No profiles found</h2>
+    <p class="text-sm text-on-surface-variant mb-4">Create your first profile to start monitoring deals.</p>
+    <a href="/profiles/new" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+        <span class="material-symbols-outlined text-[18px]">add</span>
+        Create Profile
+    </a>
+</div>
+{% endif %}
+
+{% endblock %}

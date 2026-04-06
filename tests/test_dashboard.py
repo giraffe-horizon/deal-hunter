@@ -910,3 +910,25 @@ class TestWatchlistPage:
         assert "target_price" in text
         assert "Target" in text
         assert "bookmark_add" in text
+
+
+class TestProfilePages:
+    """Tests for profile management pages."""
+
+    def test_profiles_page_loads(self, client):
+        """GET /profiles returns 200."""
+        response = client.get("/profiles")
+        assert response.status_code == 200
+        assert "Profiles" in response.text
+
+    def test_profiles_in_sidebar(self, client):
+        """Sidebar contains Profiles link."""
+        response = client.get("/deals")
+        assert "/profiles" in response.text
+
+    def test_api_profiles_list(self, client):
+        """GET /api/profiles returns JSON list."""
+        response = client.get("/api/profiles")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)

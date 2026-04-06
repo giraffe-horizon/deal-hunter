@@ -394,3 +394,44 @@ async def remove_from_watchlist_api(
     """Remove a deal from the watchlist."""
     db.remove_from_watchlist(deal_id)
     return HTMLResponse("")
+
+
+@app.get("/profiles", response_class=HTMLResponse)
+async def profiles_page(request: Request):
+    """Profile list page."""
+    profile_names = _get_profiles()
+    profiles = []
+    for name in profile_names:
+        prof = safe_load_profile(name)
+        if prof:
+            profiles.append({
+                "name": name,
+                "emoji": prof.get("emoji", "\U0001f50d"),
+                "enabled": prof.get("enabled", True),
+                "source_count": len(prof.get("sources", {})),
+                "budget_min": prof.get("budget", {}).get("min", 0),
+                "budget_max": prof.get("budget", {}).get("max", 0),
+                "score_threshold": prof.get("score_threshold", 0),
+            })
+    return templates.TemplateResponse(
+        request,
+        "profiles.html",
+        {"profiles": profiles},
+    )
+
+
+@app.get("/api/profiles")
+async def api_profiles_list():
+    """JSON list of profiles."""
+    profile_names = _get_profiles()
+    profiles = []
+    for name in profile_names:
+        prof = safe_load_profile(name)
+        if prof:
+            profiles.append({
+                "name": name,
+                "emoji": prof.get("emoji", "\U0001f50d"),
+                "enabled": prof.get("enabled", True),
+                "source_count": len(prof.get("sources", {})),
+            })
+    return JSONResponse(profiles)
