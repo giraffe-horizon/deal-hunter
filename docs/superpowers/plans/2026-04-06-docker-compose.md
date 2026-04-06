@@ -12,6 +12,63 @@
 
 ---
 
+### Task 0: Fix CI pipeline — missing test dependencies
+
+**Files:**
+- Modify: `pyproject.toml:41-50`
+
+CI runs `pip install -e ".[dev]"` but `[project.optional-dependencies] dev` is missing `matplotlib`, `pytest-asyncio`, and `python-telegram-bot`. This causes 16 test failures:
+- 10 chart tests fail with `ImportError: matplotlib is required`
+- 6 bot handler tests fail with `async def functions are not natively supported` (missing pytest-asyncio)
+
+- [ ] **Step 1: Add missing dependencies to pyproject.toml dev extras**
+
+In `pyproject.toml`, replace the `[project.optional-dependencies]` dev list:
+
+```toml
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "types-requests",
+    "types-beautifulsoup4",
+    "types-PyYAML",
+    "matplotlib>=3.8",
+    "python-telegram-bot>=21.0",
+]
+```
+
+- [ ] **Step 2: Add pytest-asyncio mode to pyproject.toml**
+
+The `[tool.pytest.ini_options]` section already exists at line 55. Add `asyncio_mode` to it:
+
+```toml
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
+```
+
+- [ ] **Step 3: Run tests locally to verify fixes**
+
+```bash
+pip install -e ".[dev]"
+python -m pytest tests/test_charts.py tests/test_feedback_bot.py -v --tb=short
+```
+Expected: All 16 previously-failing tests pass.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add pyproject.toml
+git commit -m "fix: add matplotlib, pytest-asyncio, python-telegram-bot to dev dependencies"
+```
+
+---
+
 ### Task 1: Fix Dockerfile — add missing COPY targets
 
 **Files:**
