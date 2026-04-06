@@ -31,6 +31,7 @@ You're looking for a specific product — the right bike, the right headphones, 
 - **YAML profiles** — one profile per product type, fully declarative
 - **Interactive setup** — `--init` walks you through creating a new profile
 - **Profile validation** — catch config errors before running
+- **Web dashboard** — browse deals, inspect scoring, view price charts, and check system health in a browser
 - **Docker support** — run on a schedule with docker-compose, zero system dependencies
 - **Graceful degradation** — one source fails, the rest keep working
 - **Cross-source dedup** — fuzzy title+price matching prevents duplicate alerts
@@ -80,6 +81,8 @@ deal-hunter/
 ├── filters/                    Scoring engines
 │   ├── base.py                 Base scorer (keywords, regex, budget, temperature)
 │   └── bike_filter.py          Extended scorer: sizes, colors, tires
+├── dashboard.py                Web dashboard (FastAPI app)
+├── dashboard/templates/        Jinja2 templates (deals, detail, health, trends)
 ├── notifiers/                  Notification backends
 │   └── telegram.py             Telegram Bot API (retry + rate limiting)
 ├── utils/                      Utilities
@@ -157,13 +160,14 @@ docker pull ghcr.io/giraffe-horizon/deal-hunter:latest
 # Option 2: Build locally
 # (docker-compose.yml builds by default — uncomment `image:` to use pre-built)
 
-# Start both services (deal scanner + feedback bot)
+# Start all services (deal scanner + feedback bot + web dashboard)
 docker compose up -d
 
 # View logs
 docker compose logs -f              # all services
 docker compose logs -f deal-hunter   # cron service only
 docker compose logs -f deal-hunter-bot  # bot only
+docker compose logs -f deal-hunter-web  # dashboard only
 
 # One-off commands
 docker compose exec deal-hunter python deal_hunter.py --list
@@ -177,6 +181,7 @@ docker compose exec deal-hunter python deal_hunter.py --health
 |---------|------|-----------------|
 | `deal-hunter` | Cron: scans deals, watchdog, digest | `--all` every 30m, `--watchdog` every 1h, `--digest` Mon 8am |
 | `deal-hunter-bot` | Telegram feedback bot (long-running) | Always on |
+| `deal-hunter-web` | Web dashboard (port 8080) | Always on |
 
 **Schedule customization** via environment variables:
 
@@ -190,8 +195,32 @@ CRON_SCHEDULE="*/15 * * * *" WATCHDOG_SCHEDULE="0 */2 * * *" docker compose up -
 | `WATCHDOG_SCHEDULE` | `0 */1 * * *` | How often to check run freshness |
 | `DIGEST_SCHEDULE` | `0 8 * * 1` | When to send weekly price digest |
 | `TZ` | `Europe/Warsaw` | Timezone for schedules |
+| `DASHBOARD_PORT` | `8080` | Dashboard web UI port |
 
-Both containers mount `profiles/` and `state/` as volumes, so your data persists across restarts.
+All containers mount `profiles/` and `state/` as volumes, so your data persists across restarts.
+
+### Web Dashboard
+
+Browse deals, inspect scoring, view price charts, and check system health at `http://localhost:8080`.
+
+```bash
+# Standalone (without Docker)
+python -m uvicorn dashboard:app --port 8080
+
+# With Docker (included in docker compose up)
+docker compose up -d deal-hunter-web
+```
+
+**Screens:**
+
+| Page | URL | Description |
+|------|-----|-------------|
+| Deals Explorer | `/deals` | Browse all deals with filters (profile, source, score, category, status) |
+| Deal Detail | `/deals/{id}` | Price history chart, metadata, watch/skip actions |
+| Price Trends | `/price-trends` | Price drops analysis, category distribution |
+| System Health | `/health` | Source status, profile results, recent errors |
+
+The dashboard is read-only (except watch/skip actions) and reads from the same SQLite database that the cron scanner writes to. No authentication — designed for local/Tailscale access.
 
 ## Profiles
 

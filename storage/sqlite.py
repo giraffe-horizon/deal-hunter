@@ -137,8 +137,10 @@ class SQLiteStorage:
         min_score: int | None = None,
         category: str | None = None,
         status: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> list[dict]:
-        """Query deals with optional filters."""
+        """Query deals with optional filters and pagination."""
         query = "SELECT * FROM deals WHERE 1=1"
         params: list = []
 
@@ -160,11 +162,105 @@ class SQLiteStorage:
 
         query += " ORDER BY score DESC"
 
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+            if offset is not None:
+                query += " OFFSET ?"
+                params.append(offset)
+
         try:
             rows = self._conn.execute(query, params).fetchall()
             return [dict(row) for row in rows]
         except sqlite3.Error as e:
             logger.error(f"Failed to query deals: {e}")
+            return []
+
+    def count_deals(
+        self,
+        profile: str | None = None,
+        source: str | None = None,
+        min_score: int | None = None,
+        category: str | None = None,
+        status: str | None = None,
+    ) -> int:
+        """Count deals matching filters."""
+        query = "SELECT COUNT(*) as cnt FROM deals WHERE 1=1"
+        params: list = []
+
+        if profile is not None:
+            query += " AND profile = ?"
+            params.append(profile)
+        if source is not None:
+            query += " AND source = ?"
+            params.append(source)
+        if min_score is not None:
+            query += " AND score >= ?"
+            params.append(min_score)
+        if category is not None:
+            query += " AND category = ?"
+            params.append(category)
+        if status is not None:
+            query += " AND status = ?"
+            params.append(status)
+
+        try:
+            row = self._conn.execute(query, params).fetchone()
+            return int(row["cnt"]) if row else 0
+        except sqlite3.Error as e:
+            logger.error(f"Failed to count deals: {e}")
+            return 0
+
+    def get_deal_stats(self, score_threshold: int = 70) -> dict:
+        """Get aggregate deal statistics via SQL."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        try:
+            row = self._conn.execute(
+                """SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN score >= ? THEN 1 ELSE 0 END) as high_score,
+                    SUM(CASE WHEN first_seen LIKE ? THEN 1 ELSE 0 END) as new_today
+                FROM deals""",
+                (score_threshold, f"{today}%"),
+            ).fetchone()
+            return dict(row) if row else {"total": 0, "high_score": 0, "new_today": 0}
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get deal stats: {e}")
+            return {"total": 0, "high_score": 0, "new_today": 0}
+
+    def get_filter_options(self) -> dict:
+        """Get distinct sources and categories for filter dropdowns."""
+        try:
+            sources = self._conn.execute(
+                "SELECT DISTINCT source FROM deals WHERE source IS NOT NULL AND source != '' ORDER BY source"
+            ).fetchall()
+            categories = self._conn.execute(
+                "SELECT DISTINCT category FROM deals WHERE category IS NOT NULL AND category != '' ORDER BY category"
+            ).fetchall()
+            return {
+                "sources": [r["source"] for r in sources],
+                "categories": [r["category"] for r in categories],
+            }
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get filter options: {e}")
+            return {"sources": [], "categories": []}
+
+    def get_category_price_trend(self, category: str, days: int = 30) -> list[dict]:
+        """Get daily average price for a category over the last N days."""
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        try:
+            rows = self._conn.execute(
+                """SELECT DATE(ph.recorded_at) as day, AVG(ph.price) as avg_price
+                FROM price_history ph
+                JOIN deals d ON ph.deal_id = d.id
+                WHERE d.category = ? AND ph.recorded_at >= ?
+                GROUP BY DATE(ph.recorded_at)
+                ORDER BY day""",
+                (category, cutoff),
+            ).fetchall()
+            return [{"day": r["day"], "avg_price": round(r["avg_price"])} for r in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get category trend for {category}: {e}")
             return []
 
     def get_deal(self, deal_id: str) -> dict | None:

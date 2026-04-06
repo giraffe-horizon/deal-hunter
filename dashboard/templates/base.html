@@ -114,30 +114,13 @@
                 </a>
             </nav>
 
-            <!-- Bottom action -->
-            <div class="p-4">
-                <a href="/deals" class="flex items-center justify-center gap-2 w-full px-4 py-3 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
-                    <span class="material-symbols-outlined text-[20px]">add</span>
-                    New Analysis
-                </a>
-            </div>
         </aside>
 
         <!-- Main Content -->
         <main class="flex-1 ml-64">
             <!-- Header -->
-            <header class="sticky top-0 z-10 bg-surface/80 backdrop-blur-xl px-8 py-4 flex items-center justify-between">
-                <div>
-                    <h2 class="font-headline text-lg font-semibold">{% block page_title %}Dashboard{% endblock %}</h2>
-                </div>
-                <div class="flex items-center gap-3">
-                    <div class="relative">
-                        <span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary">search</span>
-                    </div>
-                    <div class="relative">
-                        <span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary">notifications</span>
-                    </div>
-                </div>
+            <header class="sticky top-0 z-10 bg-surface/80 backdrop-blur-xl px-8 py-4">
+                <h2 class="font-headline text-lg font-semibold">{% block page_title %}Dashboard{% endblock %}</h2>
             </header>
 
             <!-- Page Content -->

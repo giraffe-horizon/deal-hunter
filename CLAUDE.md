@@ -13,7 +13,8 @@
 - **python-dotenv** — environment variables from `.env`
 - **python-telegram-bot** v21+ — async Telegram bot for feedback (polling)
 - **matplotlib** >= 3.8 — optional, price history charts (lazy-imported)
-- No web framework — this is a CLI tool designed to run on cron
+- **fastapi** + **uvicorn** + **jinja2** — web dashboard (read-only UI for deals, health, price trends)
+- **HTMX** + **Chart.js** + **Tailwind CSS** — frontend via CDN (no build step)
 
 ## Architecture
 
@@ -28,6 +29,8 @@ stores/*.yaml           Declarative store definitions (auto-discovered, no Pytho
 stores/README.md        Guide: "How to add a new store in 5 minutes"
 filters/base.py         Base scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
+dashboard.py            Web dashboard: FastAPI app, routes, API endpoints
+dashboard/templates/    Jinja2 templates (base, deals, deal_detail, health, price_trends)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting + photo upload
 visualization/charts.py Price history charts (matplotlib, lazy-imported)
 storage/sqlite.py       SQLite persistence layer (deals, price history, feedback)
@@ -41,7 +44,7 @@ state/deals.db          SQLite database (deals, price_history, feedback tables)
 scripts/migrate_state_to_sqlite.py  One-time migration from state/*.json to SQLite
 scripts/systemd/        Systemd user timer units + bot service + install script
 Dockerfile              Docker image (python:3.12-slim + supercronic + tini)
-docker-compose.yml      Two services: deal-hunter (cron) + deal-hunter-bot (polling)
+docker-compose.yml      Three services: deal-hunter (cron) + deal-hunter-bot (polling) + deal-hunter-web (dashboard)
 docker/entrypoint.sh    Container entrypoint (3 cron schedules: --all, --watchdog, --digest)
 examples/               Example profiles (reference only, NOT auto-discovered)
 ```

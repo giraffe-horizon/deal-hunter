@@ -1,0 +1,91 @@
+<table class="w-full">
+    <thead>
+        <tr class="text-left text-xs font-label text-on-surface-variant uppercase tracking-wider">
+            <th class="pb-3 pl-4">Title</th>
+            <th class="pb-3">Price</th>
+            <th class="pb-3">Source</th>
+            <th class="pb-3">Profile</th>
+            <th class="pb-3">Score</th>
+            <th class="pb-3 pr-4">Status</th>
+        </tr>
+    </thead>
+    <tbody class="divide-y divide-surface-variant/30">
+        {% if deals %}
+            {% for deal in deals %}
+            <tr class="hover:bg-surface-container transition-colors cursor-pointer"
+                onclick="window.location='/deals/{{ deal.id | urlencode }}'">
+                <td class="py-3 pl-4 pr-2">
+                    <span class="text-sm font-medium text-on-surface line-clamp-1">{{ deal.title }}</span>
+                </td>
+                <td class="py-3 pr-2">
+                    <span class="text-sm font-headline font-semibold text-on-surface">{{ deal.price | format_pln }}</span>
+                </td>
+                <td class="py-3 pr-2">
+                    <span class="text-xs font-label px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant">{{ deal.source }}</span>
+                </td>
+                <td class="py-3 pr-2">
+                    <span class="text-xs font-label px-2 py-1 rounded-full bg-primary-container text-on-primary-container">{{ deal.profile }}</span>
+                </td>
+                <td class="py-3 pr-2">
+                    {% if deal.score is not none %}
+                        {% if deal.score >= 70 %}
+                            <span class="text-sm font-headline font-bold text-tertiary">{{ deal.score }}</span>
+                        {% elif deal.score >= 40 %}
+                            <span class="text-sm font-headline font-bold text-[#b8860b]">{{ deal.score }}</span>
+                        {% else %}
+                            <span class="text-sm font-headline font-bold text-error">{{ deal.score }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-sm text-on-surface-variant">&mdash;</span>
+                    {% endif %}
+                </td>
+                <td class="py-3 pr-4">
+                    {% if deal.status == 'watching' %}
+                        <span class="text-xs font-label px-2.5 py-1 rounded-full bg-primary-container text-primary font-medium">Watching</span>
+                    {% elif deal.status == 'rejected' %}
+                        <span class="text-xs font-label px-2.5 py-1 rounded-full bg-error-container/30 text-error font-medium">Rejected</span>
+                    {% else %}
+                        <span class="text-xs font-label px-2.5 py-1 rounded-full bg-tertiary-container/30 text-tertiary font-medium">Active</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan="6" class="py-16 text-center">
+                    <span class="material-symbols-outlined text-[40px] text-outline-variant mb-3 block">search_off</span>
+                    <p class="text-on-surface-variant text-sm">No deals found</p>
+                </td>
+            </tr>
+        {% endif %}
+    </tbody>
+</table>
+
+{% if total_pages is defined and total_pages > 1 %}
+<div class="flex items-center justify-between px-4 py-3 bg-surface-container-low">
+    <p class="text-xs font-label text-on-surface-variant">
+        {{ total_filtered }} deals &middot; page {{ page }} of {{ total_pages }}
+    </p>
+    <div class="flex items-center gap-1">
+        {% if page > 1 %}
+            <a href="/deals?page={{ page - 1 }}" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">
+                <span class="material-symbols-outlined text-[16px] align-middle">chevron_left</span>
+            </a>
+        {% endif %}
+        {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+                <span class="px-3 py-1.5 text-xs font-label rounded-card bg-primary text-on-primary font-medium">{{ p }}</span>
+            {% elif p <= 3 or p >= total_pages - 1 or (p >= page - 1 and p <= page + 1) %}
+                <a href="/deals?page={{ p }}" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">{{ p }}</a>
+            {% elif p == 4 or p == total_pages - 2 %}
+                <span class="px-1 text-xs text-on-surface-variant">&hellip;</span>
+            {% endif %}
+        {% endfor %}
+        {% if page < total_pages %}
+            <a href="/deals?page={{ page + 1 }}" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">
+                <span class="material-symbols-outlined text-[16px] align-middle">chevron_right</span>
+            </a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

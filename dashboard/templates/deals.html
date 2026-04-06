@@ -1,10 +1,127 @@
 {% extends "base.html" %}
+{% set active_page = "deals" %}
 {% block title %}Deals Explorer — DealMonitor{% endblock %}
 {% block page_title %}Deals Explorer{% endblock %}
 {% block content %}
-<div class="bg-surface-container-low rounded-card p-8 text-center">
-    <span class="material-symbols-outlined text-[48px] text-primary mb-4">search</span>
-    <h3 class="font-headline text-xl font-semibold mb-2">Dashboard Ready</h3>
-    <p class="text-on-surface-variant">The Deal Hunter dashboard scaffold is working. Deals list coming soon.</p>
+
+<!-- Metric Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Total Deals -->
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-start gap-3">
+            <span class="material-symbols-outlined text-primary text-[28px]">inventory_2</span>
+            <div>
+                <p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Total Deals</p>
+                <p class="font-headline text-2xl font-bold text-on-surface">{{ total_deals }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Above Alert Threshold -->
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-start gap-3">
+            <span class="material-symbols-outlined text-tertiary text-[28px]">trending_up</span>
+            <div>
+                <p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Score {{ score_threshold }}+</p>
+                <p class="font-headline text-2xl font-bold text-on-surface">{{ high_score_pct }}%</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Today -->
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-start gap-3">
+            <span class="material-symbols-outlined text-primary text-[28px]">new_releases</span>
+            <div>
+                <p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">New Today</p>
+                <p class="font-headline text-2xl font-bold text-on-surface">{{ new_today }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Price Drops -->
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-start gap-3">
+            <span class="material-symbols-outlined text-error text-[28px]">price_change</span>
+            <div>
+                <p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Price Drops (7d)</p>
+                <p class="font-headline text-2xl font-bold text-on-surface">{{ drops_count }}</p>
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- Filter Bar -->
+<div class="bg-surface-container-low rounded-card p-4 mb-6">
+    <form id="deal-filters" class="flex flex-wrap items-center gap-3">
+        <select name="profile"
+                hx-get="/deals"
+                hx-target="#deals-table"
+                hx-include="#deal-filters"
+                class="bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">All Profiles</option>
+            {% for p in profiles %}
+            <option value="{{ p }}" {% if selected_profile == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="source"
+                hx-get="/deals"
+                hx-target="#deals-table"
+                hx-include="#deal-filters"
+                class="bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">All Sources</option>
+            {% for s in sources %}
+            <option value="{{ s }}" {% if selected_source == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="min_score"
+                hx-get="/deals"
+                hx-target="#deals-table"
+                hx-include="#deal-filters"
+                class="bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">All Scores</option>
+            <option value="70" {% if selected_min_score == 70 %}selected{% endif %}>70+</option>
+            <option value="50" {% if selected_min_score == 50 %}selected{% endif %}>50+</option>
+            <option value="30" {% if selected_min_score == 30 %}selected{% endif %}>30+</option>
+        </select>
+
+        <select name="category"
+                hx-get="/deals"
+                hx-target="#deals-table"
+                hx-include="#deal-filters"
+                class="bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">All Categories</option>
+            {% for c in categories %}
+            <option value="{{ c }}" {% if selected_category == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="status"
+                hx-get="/deals"
+                hx-target="#deals-table"
+                hx-include="#deal-filters"
+                class="bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="">All Statuses</option>
+            <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active</option>
+            <option value="watching" {% if selected_status == 'watching' %}selected{% endif %}>Watching</option>
+            <option value="rejected" {% if selected_status == 'rejected' %}selected{% endif %}>Rejected</option>
+        </select>
+
+        <a href="/deals"
+           class="ml-auto text-xs font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1">
+            <span class="material-symbols-outlined text-[16px]">filter_list_off</span>
+            Clear Filters
+        </a>
+    </form>
+</div>
+
+<!-- Deals Table -->
+<div class="bg-surface-container-low rounded-card overflow-hidden">
+    <div id="deals-table">
+        {% include "partials/deals_table.html" %}
+    </div>
+</div>
+
 {% endblock %}

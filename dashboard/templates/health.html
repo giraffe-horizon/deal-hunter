@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% set active_page = "health" %}
+{% block title %}System Health — DealMonitor{% endblock %}
+{% block page_title %}System Health{% endblock %}
+{% block content %}
+
+{% if health is none %}
+<div class="bg-surface-container-low rounded-card p-8 text-center">
+    <span class="material-symbols-outlined text-[48px] text-on-surface-variant mb-4">monitor_heart</span>
+    <h3 class="font-headline text-xl font-semibold mb-2">No health data found</h3>
+    <p class="text-on-surface-variant">Has Deal Hunter ever run? Health data is generated after the first execution.</p>
+</div>
+
+{% else %}
+
+{# ── Operational Heartbeat ── #}
+<div class="bg-surface-container-low rounded-card p-6 mb-6">
+    <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary">pulse_alert</span>
+        <h3 class="font-headline text-base font-semibold">Operational Heartbeat</h3>
+    </div>
+    <div class="flex items-center gap-6 flex-wrap">
+        <div>
+            <p class="text-xs text-on-surface-variant font-label uppercase tracking-wider mb-1">Last Run</p>
+            <p class="font-headline text-lg font-semibold">{{ health.last_run | default("Unknown") }}</p>
+        </div>
+        <div>
+            <p class="text-xs text-on-surface-variant font-label uppercase tracking-wider mb-1">Status</p>
+            {% set status = health.status | default("unknown") %}
+            {% if status == "ok" %}
+            <span class="inline-block px-3 py-1 rounded-full text-sm font-medium bg-tertiary-container text-on-tertiary-container">OK</span>
+            {% elif status == "partial" %}
+            <span class="inline-block px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800">PARTIAL</span>
+            {% elif status == "error" %}
+            <span class="inline-block px-3 py-1 rounded-full text-sm font-medium bg-error-container text-on-error-container">ERROR</span>
+            {% else %}
+            <span class="inline-block px-3 py-1 rounded-full text-sm font-medium bg-surface-container-high text-on-surface-variant">{{ status | upper }}</span>
+            {% endif %}
+        </div>
+        <div>
+            <p class="text-xs text-on-surface-variant font-label uppercase tracking-wider mb-1">Duration</p>
+            <p class="font-headline text-lg font-semibold">{{ health.duration_seconds | default("?") }}s</p>
+        </div>
+    </div>
+</div>
+
+{# ── Summary Cards ── #}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-on-surface-variant text-[20px]">info</span>
+            <p class="text-xs text-on-surface-variant font-label uppercase tracking-wider">Version</p>
+        </div>
+        <p class="font-headline text-2xl font-bold">{{ health.version | default("?") }}</p>
+    </div>
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-on-surface-variant text-[20px]">shopping_bag</span>
+            <p class="text-xs text-on-surface-variant font-label uppercase tracking-wider">Total Deals</p>
+        </div>
+        <p class="font-headline text-2xl font-bold">{{ total_deals }}</p>
+    </div>
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-on-surface-variant text-[20px]">notifications_active</span>
+            <p class="text-xs text-on-surface-variant font-label uppercase tracking-wider">Total Alerts</p>
+        </div>
+        <p class="font-headline text-2xl font-bold">{{ total_alerts }}</p>
+    </div>
+</div>
+
+{# ── Source Status Monitor ── #}
+{% if health.sources_health %}
+<div class="bg-surface-container-low rounded-card p-6 mb-6">
+    <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary">dns</span>
+        <h3 class="font-headline text-base font-semibold">Source Status Monitor</h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-xs text-on-surface-variant font-label uppercase tracking-wider">
+                    <th class="pb-3 pr-4">Source</th>
+                    <th class="pb-3 pr-4">Status</th>
+                    <th class="pb-3 pr-4">Consecutive Failures</th>
+                    <th class="pb-3">Last Success</th>
+                </tr>
+            </thead>
+            <tbody class="font-body">
+                {% for source_name, source_data in health.sources_health.items() %}
+                <tr class="border-t border-surface-container-high">
+                    <td class="py-3 pr-4 font-medium">{{ source_name }}</td>
+                    <td class="py-3 pr-4">
+                        {% set s_status = source_data.status | default("unknown") %}
+                        {% if s_status == "ok" %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-tertiary-container text-on-tertiary-container">ok</span>
+                        {% elif s_status == "degraded" %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">degraded</span>
+                        {% elif s_status == "down" %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-error-container text-on-error-container">down</span>
+                        {% else %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-surface-container-high text-on-surface-variant">{{ s_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3 pr-4">{{ source_data.consecutive_failures | default(0) }}</td>
+                    <td class="py-3">{{ source_data.last_success | default("Never") }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{# ── Profile Results ── #}
+{% if health.profile_results %}
+<div class="bg-surface-container-low rounded-card p-6 mb-6">
+    <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary">assignment</span>
+        <h3 class="font-headline text-base font-semibold">Profile Results</h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-xs text-on-surface-variant font-label uppercase tracking-wider">
+                    <th class="pb-3 pr-4">Profile</th>
+                    <th class="pb-3 pr-4">Status</th>
+                    <th class="pb-3 pr-4">Deals Found</th>
+                    <th class="pb-3 pr-4">New Alerts</th>
+                    <th class="pb-3">Errors</th>
+                </tr>
+            </thead>
+            <tbody class="font-body">
+                {% for profile_name, result in health.profile_results.items() %}
+                <tr class="border-t border-surface-container-high">
+                    <td class="py-3 pr-4 font-medium">{{ profile_name }}</td>
+                    <td class="py-3 pr-4">
+                        {% set p_status = result.status | default("unknown") %}
+                        {% if p_status == "ok" %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-tertiary-container text-on-tertiary-container">ok</span>
+                        {% elif p_status == "partial" %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">partial</span>
+                        {% elif p_status == "error" %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-error-container text-on-error-container">error</span>
+                        {% else %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-surface-container-high text-on-surface-variant">{{ p_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3 pr-4">{{ result.deals_found | default(0) }}</td>
+                    <td class="py-3 pr-4">{{ result.new_alerts | default(0) }}</td>
+                    <td class="py-3">
+                        {% set errs = result.errors | default([]) %}
+                        {% if errs %}
+                        <span class="text-error">{{ errs | length }} error{{ "s" if errs | length > 1 }}</span>
+                        {% else %}
+                        <span class="text-on-surface-variant">--</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{# ── Recent Errors ── #}
+{% if errors %}
+<div class="bg-surface-container-low rounded-card p-6">
+    <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-error">error</span>
+        <h3 class="font-headline text-base font-semibold">Recent Errors</h3>
+    </div>
+    <ul class="space-y-2">
+        {% for err in errors %}
+        <li class="flex items-start gap-2 text-sm">
+            <span class="material-symbols-outlined text-error text-[18px] mt-0.5">warning</span>
+            <span><span class="font-medium">{{ err.profile }}:</span> {{ err.message }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

@@ -1,21 +1,27 @@
 """Deal Hunter Web Dashboard — FastAPI application."""
 
+import math
 from pathlib import Path
-from fastapi import FastAPI, Request, Depends
-from fastapi.responses import RedirectResponse
+
+from fastapi import FastAPI, Form, Request, Depends
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+
 from storage.sqlite import SQLiteStorage
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "state" / "deals.db"
 
+DEALS_PER_PAGE = 50
+SCORE_THRESHOLD = 70
+
 app = FastAPI(title="Deal Hunter Dashboard")
 templates = Jinja2Templates(directory=str(BASE_DIR / "dashboard" / "templates"))
 
 
-def format_pln(value: int) -> str:
+def format_pln(value: int | None) -> str:
     """Format integer price as PLN string: 8500 -> '8 500 zl'."""
-    if not value:
+    if value is None or value == 0:
         return "0 zl"
     formatted = f"{value:,}".replace(",", " ")
     return f"{formatted} zl"
@@ -42,15 +48,261 @@ def safe_load_profile(name: str) -> dict | None:
         return None
 
 
+def _get_profiles() -> list[str]:
+    """Get available profile names, gracefully handling missing profiles dir."""
+    try:
+        from deal_hunter import list_profiles
+        return sorted(list_profiles())
+    except Exception:
+        return []
+
+
 @app.get("/")
 def index():
     return RedirectResponse(url="/deals", status_code=302)
 
 
 @app.get("/deals")
-def deals_page(request: Request, db: SQLiteStorage = Depends(get_db)):
+def deals_page(
+    request: Request,
+    profile: str | None = None,
+    source: str | None = None,
+    min_score: int | None = None,
+    category: str | None = None,
+    status: str | None = None,
+    page: int = 1,
+    db: SQLiteStorage = Depends(get_db),
+):
+    # Normalize empty string params to None
+    profile = profile or None
+    source = source or None
+    category = category or None
+    status = status or None
+    page = max(1, page)
+
+    offset = (page - 1) * DEALS_PER_PAGE
+    deals = db.get_deals(
+        profile=profile,
+        source=source,
+        min_score=min_score,
+        category=category,
+        status=status,
+        limit=DEALS_PER_PAGE,
+        offset=offset,
+    )
+    total_filtered = db.count_deals(
+        profile=profile,
+        source=source,
+        min_score=min_score,
+        category=category,
+        status=status,
+    )
+    total_pages = max(1, math.ceil(total_filtered / DEALS_PER_PAGE))
+
+    # HTMX partial refresh — return only the table fragment
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse("partials/deals_table.html", {
+            "request": request,
+            "deals": deals,
+            "page": page,
+            "total_pages": total_pages,
+            "total_filtered": total_filtered,
+        })
+
+    # Compute metrics via SQL aggregates (no full table scan)
+    stats = db.get_deal_stats(score_threshold=SCORE_THRESHOLD)
+    total_deals = stats["total"]
+    high_score_pct = (
+        round(stats["high_score"] / total_deals * 100) if total_deals else 0
+    )
+    new_today = stats["new_today"]
+    drops_count = len(db.get_price_drops(days=7))
+
+    # Filter dropdown options via SQL
+    filter_opts = db.get_filter_options()
+    profiles = _get_profiles()
+
     return templates.TemplateResponse("deals.html", {
         "request": request,
-        "active_page": "deals",
-        "deals": [],
+        "deals": deals,
+        "total_deals": total_deals,
+        "high_score_pct": high_score_pct,
+        "score_threshold": SCORE_THRESHOLD,
+        "new_today": new_today,
+        "drops_count": drops_count,
+        "profiles": profiles,
+        "sources": filter_opts["sources"],
+        "categories": filter_opts["categories"],
+        "selected_profile": profile,
+        "selected_source": source,
+        "selected_min_score": min_score,
+        "selected_category": category,
+        "selected_status": status,
+        "page": page,
+        "total_pages": total_pages,
+        "total_filtered": total_filtered,
     })
+
+
+@app.get("/health")
+def health_page(request: Request):
+    from health import load_health
+    health = load_health()
+
+    # Compute summary metrics from health data
+    total_deals = 0
+    total_alerts = 0
+    errors = []
+    if health and "profile_results" in health:
+        for name, result in health["profile_results"].items():
+            total_deals += result.get("deals_found", 0)
+            total_alerts += result.get("new_alerts", 0)
+            for err in result.get("errors", []):
+                errors.append({"profile": name, "message": err})
+
+    return templates.TemplateResponse("health.html", {
+        "request": request,
+        "health": health,
+        "total_deals": total_deals,
+        "total_alerts": total_alerts,
+        "errors": errors,
+    })
+
+
+@app.get("/price-trends")
+def price_trends_page(
+    request: Request,
+    days: int = 7,
+    db: SQLiteStorage = Depends(get_db),
+):
+    drops = db.get_price_drops(days=days)
+    all_deals = db.get_deals()
+
+    # Compute summary metrics
+    total_drops = len(drops)
+    avg_drop_pct = (
+        round(sum(d["diff_percent"] for d in drops) / total_drops, 1)
+        if total_drops
+        else 0
+    )
+    biggest_drop = max((d["diff_pln"] for d in drops), default=0)
+
+    # Category distribution from all deals
+    categories: dict[str, int] = {}
+    for deal in all_deals:
+        cat = deal.get("category") or "Uncategorized"
+        categories[cat] = categories.get(cat, 0) + 1
+    categories = dict(
+        sorted(categories.items(), key=lambda x: x[1], reverse=True)
+    )
+
+    # Sparkline data for top 3 categories
+    category_trends: dict[str, list[dict]] = {}
+    for cat_name in list(categories.keys())[:3]:
+        trend = db.get_category_price_trend(cat_name, days=30)
+        if trend:
+            category_trends[cat_name] = trend
+
+    return templates.TemplateResponse("price_trends.html", {
+        "request": request,
+        "drops": drops,
+        "days": days,
+        "total_drops": total_drops,
+        "avg_drop_pct": avg_drop_pct,
+        "biggest_drop": biggest_drop,
+        "categories": categories,
+        "category_trends": category_trends,
+    })
+
+
+@app.get("/deals/{deal_id}")
+def deal_detail_page(
+    request: Request,
+    deal_id: str,
+    db: SQLiteStorage = Depends(get_db),
+):
+    deal = db.get_deal(deal_id)
+    if not deal:
+        return HTMLResponse(content="Deal not found", status_code=404)
+
+    price_history = db.get_price_history(deal_id)
+    lowest_price = db.get_lowest_price(deal_id)
+    previous_price = db.get_previous_price(deal_id)
+
+    return templates.TemplateResponse("deal_detail.html", {
+        "request": request,
+        "deal": deal,
+        "price_history": price_history,
+        "lowest_price": lowest_price,
+        "previous_price": previous_price,
+    })
+
+
+@app.get("/api/price-history/{deal_id}")
+def api_price_history(deal_id: str, db: SQLiteStorage = Depends(get_db)):
+    history = db.get_price_history(deal_id)
+    if not history:
+        return {"labels": [], "prices": [], "lowest": None, "highest": None}
+
+    labels = [h["recorded_at"][:10] for h in history]  # YYYY-MM-DD
+    prices = [h["price"] for h in history]
+
+    return {
+        "labels": labels,
+        "prices": prices,
+        "lowest": min(prices),
+        "highest": max(prices),
+    }
+
+
+@app.post("/api/deals/{deal_id}/status")
+def api_update_deal_status(
+    deal_id: str,
+    status: str = Form(...),
+    db: SQLiteStorage = Depends(get_db),
+):
+    if status not in ("watching", "rejected", "active"):
+        return JSONResponse({"error": "Invalid status"}, status_code=400)
+    ok = db.update_deal_status(deal_id, status)
+    if not ok:
+        return JSONResponse({"error": "Deal not found"}, status_code=404)
+    # Return HTML fragment for HTMX swap
+    label = {"watching": "Watching", "rejected": "Skipped", "active": "Active"}[status]
+    icon = {"watching": "visibility", "rejected": "block", "active": "check_circle"}[status]
+    color = {"watching": "text-primary", "rejected": "text-error", "active": "text-tertiary"}[status]
+    return HTMLResponse(
+        f'<span class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium {color}">'
+        f'<span class="material-symbols-outlined text-[18px]">{icon}</span>'
+        f'{label}</span>'
+    )
+
+
+@app.get("/api/deals")
+def api_deals(
+    profile: str | None = None,
+    source: str | None = None,
+    min_score: int | None = None,
+    category: str | None = None,
+    status: str | None = None,
+    db: SQLiteStorage = Depends(get_db),
+):
+    return db.get_deals(
+        profile=profile or None,
+        source=source or None,
+        min_score=min_score,
+        category=category or None,
+        status=status or None,
+    )
+
+
+@app.get("/api/stats")
+def api_stats(db: SQLiteStorage = Depends(get_db)):
+    stats = db.get_deal_stats(score_threshold=SCORE_THRESHOLD)
+    total = stats["total"]
+    drops = db.get_price_drops(days=7)
+    return {
+        "total_deals": total,
+        "high_score_pct": round(stats["high_score"] / total * 100) if total else 0,
+        "new_today": stats["new_today"],
+        "drops_count": len(drops),
+    }

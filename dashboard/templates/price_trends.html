@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% set active_page = "price-trends" %}
+
+{% block title %}Price Trends — DealMonitor{% endblock %}
+{% block page_title %}Price Trends{% endblock %}
+
+{% block content %}
+<!-- Time filter tabs -->
+<div class="flex gap-2 mb-6">
+    <a href="/price-trends?days=1"
+       class="px-5 py-2 rounded-card text-sm font-medium transition-colors
+              {% if days == 1 %}bg-primary text-on-primary{% else %}bg-surface-container-low text-on-surface-variant hover:bg-surface-container{% endif %}">
+        24 Hours
+    </a>
+    <a href="/price-trends?days=7"
+       class="px-5 py-2 rounded-card text-sm font-medium transition-colors
+              {% if days == 7 %}bg-primary text-on-primary{% else %}bg-surface-container-low text-on-surface-variant hover:bg-surface-container{% endif %}">
+        7 Days
+    </a>
+</div>
+
+<!-- Summary cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="material-symbols-outlined text-primary text-[20px]">trending_down</span>
+            <span class="text-sm font-label text-on-surface-variant">Total Price Drops</span>
+        </div>
+        <p class="font-headline text-3xl font-bold text-on-surface">{{ total_drops }}</p>
+    </div>
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="material-symbols-outlined text-primary text-[20px]">percent</span>
+            <span class="text-sm font-label text-on-surface-variant">Average Drop</span>
+        </div>
+        <p class="font-headline text-3xl font-bold text-on-surface">{{ avg_drop_pct }}%</p>
+    </div>
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="material-symbols-outlined text-primary text-[20px]">arrow_downward</span>
+            <span class="text-sm font-label text-on-surface-variant">Biggest Drop</span>
+        </div>
+        <p class="font-headline text-3xl font-bold text-on-surface">{{ biggest_drop | format_pln }}</p>
+    </div>
+</div>
+
+<!-- Price Drops table -->
+<div class="bg-surface-container-low rounded-card p-6 mb-8">
+    <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary text-[20px]">sell</span>
+        <h3 class="font-headline text-base font-semibold">Price Drops</h3>
+    </div>
+
+    {% if drops %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm font-body">
+            <thead>
+                <tr class="text-on-surface-variant text-left border-b border-outline-variant/30">
+                    <th class="pb-3 pr-4 font-medium">Title</th>
+                    <th class="pb-3 pr-4 font-medium">Source</th>
+                    <th class="pb-3 pr-4 font-medium text-right">Previous Price</th>
+                    <th class="pb-3 pr-4 font-medium text-right">Current Price</th>
+                    <th class="pb-3 pr-4 font-medium text-right">Drop %</th>
+                    <th class="pb-3 font-medium text-right">Drop Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for drop in drops %}
+                <tr class="border-b border-outline-variant/10 last:border-0">
+                    <td class="py-3 pr-4">
+                        <a href="/deals/{{ drop.id | urlencode }}" class="text-primary hover:underline font-medium">
+                            {{ drop.title }}
+                        </a>
+                        {% if drop.is_lowest_ever %}
+                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-tertiary-container text-on-tertiary-container">
+                            Lowest ever
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3 pr-4 text-on-surface-variant capitalize">{{ drop.source }}</td>
+                    <td class="py-3 pr-4 text-right text-on-surface-variant line-through">{{ drop.old_price | format_pln }}</td>
+                    <td class="py-3 pr-4 text-right font-medium">{{ drop.new_price | format_pln }}</td>
+                    <td class="py-3 pr-4 text-right font-medium text-error">-{{ drop.diff_percent }}%</td>
+                    <td class="py-3 text-right font-medium text-error">-{{ drop.diff_pln | format_pln }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-12">
+        <span class="material-symbols-outlined text-on-surface-variant text-[48px] mb-3 block">price_check</span>
+        <p class="text-on-surface-variant font-body">No price drops in this period</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Category Distribution -->
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-primary text-[20px]">category</span>
+            <h3 class="font-headline text-base font-semibold">Category Distribution</h3>
+        </div>
+
+        {% if categories %}
+        {% set max_count = categories.values() | list | max %}
+        <div class="space-y-3">
+            {% for cat, count in categories.items() %}
+            <div class="flex items-center gap-3">
+                <span class="text-sm font-body text-on-surface w-36 truncate" title="{{ cat }}">{{ cat }}</span>
+                <div class="flex-1 bg-surface-container rounded-full h-6 overflow-hidden">
+                    <div class="h-full rounded-full flex items-center px-3
+                                {% if loop.index0 % 4 == 0 %}bg-primary{% elif loop.index0 % 4 == 1 %}bg-secondary{% elif loop.index0 % 4 == 2 %}bg-tertiary{% else %}bg-outline{% endif %}"
+                         style="width: {{ (count / max_count * 100) | round }}%">
+                        {% if count / max_count > 0.15 %}
+                        <span class="text-xs font-medium text-white">{{ count }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if count / max_count <= 0.15 %}
+                <span class="text-xs font-medium text-on-surface-variant">{{ count }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8">
+            <p class="text-on-surface-variant font-body">No deals found</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Category Trends (sparklines) -->
+    {% if category_trends %}
+    <div class="bg-surface-container-low rounded-card p-6">
+        <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-primary text-[20px]">insights</span>
+            <h3 class="font-headline text-base font-semibold">Category Trends (30d)</h3>
+        </div>
+        <div class="space-y-6">
+            {% for cat_name, trend in category_trends.items() %}
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-on-surface">{{ cat_name }}</span>
+                    <span class="text-xs font-label text-on-surface-variant">{{ trend | length }} data points</span>
+                </div>
+                <canvas id="sparkline-{{ loop.index }}" height="48"></canvas>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% if category_trends %}
+<script>
+(function() {
+    const colors = ['#005db5', '#526074', '#006b62'];
+    const trends = {{ category_trends | tojson }};
+    let idx = 0;
+    for (const [cat, data] of Object.entries(trends)) {
+        idx++;
+        const canvas = document.getElementById('sparkline-' + idx);
+        if (!canvas || !data.length) continue;
+
+        const labels = data.map(d => d.day);
+        const prices = data.map(d => d.avg_price);
+        const color = colors[(idx - 1) % colors.length];
+
+        new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: prices,
+                    borderColor: color,
+                    backgroundColor: color + '15',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#060e20',
+                        titleFont: { family: 'Inter', size: 11 },
+                        bodyFont: { family: 'Inter', size: 11 },
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.parsed.y.toLocaleString('pl-PL') + ' zl';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { display: false },
+                    y: { display: false }
+                }
+            }
+        });
+    }
+})();
+</script>
+{% endif %}
+{% endblock %}
