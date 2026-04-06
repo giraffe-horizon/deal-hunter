@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## v0.10.0 (2026-04-06)
+
+### Chores
+
+- Docs update for Wave 4 — mark A.1 + C.2 as Done, complete Roadmap v2
+  ([`c3adc97`](https://github.com/giraffe-horizon/deal-hunter/commit/c3adc97be9a68f237c095f78bf87b76070b41448))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- Add deal comparator with side-by-side view and sparklines
+  ([`271c5e9`](https://github.com/giraffe-horizon/deal-hunter/commit/271c5e9ede1698dff476375ee9f8a89ca931df94))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- Add deal comparison checkboxes and floating compare bar
+  ([`209b836`](https://github.com/giraffe-horizon/deal-hunter/commit/209b83674e3cdf8139775853a115d99b7eba676e))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- Add scoring tuner with live simulation and profile save
+  ([`ebcec32`](https://github.com/giraffe-horizon/deal-hunter/commit/ebcec32de762e70c7dc44073da209d3938934d2f))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+
 ## v0.9.0 (2026-04-06)
 
 ### Chores
