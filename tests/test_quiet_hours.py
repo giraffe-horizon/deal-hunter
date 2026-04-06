@@ -204,3 +204,47 @@ class TestQuietHoursIntegration:
         db.mark_alerts_sent([p["id"] for p in to_send])
         remaining = db.get_pending_alerts()
         assert len(remaining) == 3
+
+
+from utils.validation import validate_profile
+
+
+class TestQuietHoursValidation:
+    """Tests for quiet_hours config validation."""
+
+    VALID_PROFILE = {
+        "name": "test",
+        "sources": {"pepper": {}},
+        "budget": {"min": 100, "max": 10000},
+        "score_threshold": 50,
+        "telegram": {"topic_id": 1},
+    }
+
+    def test_valid_quiet_hours(self):
+        profile = {**self.VALID_PROFILE, "quiet_hours": {"start": "22:00", "end": "07:00"}}
+        errors = validate_profile(profile)
+        assert not errors
+
+    def test_invalid_quiet_hours_not_dict(self):
+        profile = {**self.VALID_PROFILE, "quiet_hours": "22:00-07:00"}
+        errors = validate_profile(profile)
+        assert any("quiet_hours" in e and "dict" in e for e in errors)
+
+    def test_invalid_quiet_hours_missing_start(self):
+        profile = {**self.VALID_PROFILE, "quiet_hours": {"end": "07:00"}}
+        errors = validate_profile(profile)
+        assert any("start" in e for e in errors)
+
+    def test_invalid_quiet_hours_missing_end(self):
+        profile = {**self.VALID_PROFILE, "quiet_hours": {"start": "22:00"}}
+        errors = validate_profile(profile)
+        assert any("end" in e for e in errors)
+
+    def test_invalid_quiet_hours_bad_format(self):
+        profile = {**self.VALID_PROFILE, "quiet_hours": {"start": "10pm", "end": "7am"}}
+        errors = validate_profile(profile)
+        assert any("HH:MM" in e for e in errors)
+
+    def test_no_quiet_hours_is_valid(self):
+        errors = validate_profile(self.VALID_PROFILE)
+        assert not errors

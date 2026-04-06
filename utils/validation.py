@@ -99,4 +99,22 @@ def validate_profile(profile: dict) -> list[str]:
             if "track_increases" in pt and not isinstance(pt["track_increases"], bool):
                 errors.append("'price_tracking.track_increases' must be a boolean")
 
+    # quiet_hours validation
+    if "quiet_hours" in profile:
+        qh = profile["quiet_hours"]
+        if not isinstance(qh, dict):
+            errors.append("'quiet_hours' must be a dict")
+        else:
+            if "start" not in qh:
+                errors.append("'quiet_hours' must have 'start' key")
+            if "end" not in qh:
+                errors.append("'quiet_hours' must have 'end' key")
+            for key in ("start", "end"):
+                val = qh.get(key)
+                if val is not None:
+                    import re as _re
+
+                    if not isinstance(val, str) or not _re.match(r"^\d{2}:\d{2}$", val):
+                        errors.append(f"'quiet_hours.{key}' must be in HH:MM format")
+
     return errors
