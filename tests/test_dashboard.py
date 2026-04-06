@@ -942,3 +942,8 @@ class TestProfilePages:
         """GET /profiles/{name}/edit returns 404 for missing profile."""
         response = client.get("/profiles/nonexistent_xyz/edit")
         assert response.status_code == 404
+
+    def test_profile_yaml_page_not_found(self, client):
+        """GET /profiles/{name}/edit/yaml returns 404 for missing profile."""
+        response = client.get("/profiles/nonexistent_xyz/edit/yaml")
+        assert response.status_code == 404

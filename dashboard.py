@@ -420,6 +420,50 @@ async def profiles_page(request: Request):
     )
 
 
+@app.get("/profiles/{name}/edit/yaml", response_class=HTMLResponse)
+async def profile_yaml_page(request: Request, name: str):
+    """Raw YAML editor page."""
+    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    if not profile_path.exists():
+        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
+    yaml_content = profile_path.read_text(encoding="utf-8")
+    return templates.TemplateResponse(
+        "profile_yaml.html",
+        {"request": request, "name": name, "yaml_content": yaml_content},
+    )
+
+
+@app.put("/api/profiles/{name}/yaml")
+async def api_update_profile_yaml(request: Request, name: str):
+    """Update a profile from raw YAML text."""
+    import yaml as _yaml
+    from utils.validation import validate_profile as _validate
+
+    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    if not profile_path.exists():
+        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
+
+    body = await request.body()
+    yaml_text = body.decode("utf-8")
+
+    try:
+        profile = _yaml.safe_load(yaml_text)
+    except _yaml.YAMLError as e:
+        return JSONResponse({"errors": [f"YAML parse error: {e}"]})
+
+    if not isinstance(profile, dict):
+        return JSONResponse({"errors": ["YAML must be a mapping (dict)"]})
+
+    errors = _validate(profile)
+    if errors:
+        return JSONResponse({"errors": errors})
+
+    with open(profile_path, "w", encoding="utf-8") as f:
+        f.write(yaml_text)
+
+    return JSONResponse({"ok": True})
+
+
 @app.get("/profiles/{name}", response_class=HTMLResponse)
 async def profile_detail_page(request: Request, name: str):
     """Profile detail page (read-only view)."""
