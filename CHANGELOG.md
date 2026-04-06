@@ -1,6 +1,85 @@
 # CHANGELOG
 
 
+## v0.8.0 (2026-04-06)
+
+### Chores
+
+- Lint fixes + docs update for Wave 2 (A.2, C.1)
+  ([`3fad777`](https://github.com/giraffe-horizon/deal-hunter/commit/3fad7779a4db7ed0b0c082c170f62c3578cd1b9e))
+
+Fix ruff lint/format issues across Wave 2 files. Update CLAUDE.md with cross-source dedup,
+  watchlist, /target command. Mark A.2, C.1 as done in ROADMAP-v2.md. Add Wave 2 implementation
+  plan.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **dedup**: Add alt_links field to Deal dataclass
+  ([`56e65f0`](https://github.com/giraffe-horizon/deal-hunter/commit/56e65f0c910c72ab9aef3b701b2444ed11cbfeb6))
+
+Adds alt_links: list[dict] = field(default_factory=list) to the Deal dataclass to support
+  cross-source deduplication (same product from multiple sources). Includes two new tests verifying
+  default empty list and populated alt_links.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **dedup**: Add dashboard alt_links display and dedup validation
+  ([`8409297`](https://github.com/giraffe-horizon/deal-hunter/commit/84092978476f69f9856eef0b30162c9507d542ed))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **dedup**: Render alt_links in Telegram alerts
+  ([`bed0f48`](https://github.com/giraffe-horizon/deal-hunter/commit/bed0f48b40a862739b8863b503203f170678a807))
+
+Add cross-source alt_links section to send_alert() and send_price_drop_alert() so users see
+  alternate sources for the same product in Telegram messages.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **dedup**: Rewrite deduplicate() to merge cross-source duplicates
+  ([`4ad5763`](https://github.com/giraffe-horizon/deal-hunter/commit/4ad5763941d3180b8d6f2aa1e2eac069f4d44506))
+
+Instead of dropping duplicates, the winner keeps its position and gains alt_links entries from
+  merged sources. Supports configurable price tolerance (default 5%) and title similarity (default
+  0.85 via SequenceMatcher). Zero-price deals are never merged. Dedup can be disabled per-profile
+  via `dedup: {enabled: false}` in YAML.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **watchlist**: Add /target command to feedback bot
+  ([`849c39c`](https://github.com/giraffe-horizon/deal-hunter/commit/849c39c2ea2f3656036199975293c45d41e9d922))
+
+Adds /target <deal_id> <price> command that sets a price target on a deal via add_to_watchlist().
+  Includes two new tests covering the happy path and missing-args validation.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **watchlist**: Add dashboard page, routes, and sidebar nav
+  ([`9b4e732`](https://github.com/giraffe-horizon/deal-hunter/commit/9b4e732f9bed77ab639cf41d96c66b1ad9751013))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **watchlist**: Add SQLite schema and CRUD methods
+  ([`2f0b62e`](https://github.com/giraffe-horizon/deal-hunter/commit/2f0b62e75126327ace075d947d946512c6741152))
+
+Add watchlist table to SCHEMA_SQL and implement add_to_watchlist, remove_from_watchlist,
+  get_watchlist, check_watchlist_triggers, and mark_watchlist_triggered methods with full test
+  coverage (11 tests).
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **watchlist**: Add Telegram alert and run integration
+  ([`8381a9d`](https://github.com/giraffe-horizon/deal-hunter/commit/8381a9d8d15454b63ab577e9458a2f9df116a752))
+
+Add send_watchlist_alert() to TelegramNotifier with Polish-language CEL CENOWY message, and wire
+  check_watchlist_triggers/mark_watchlist_triggered into the _run_normal() flow immediately after
+  db.upsert_deal().
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+
 ## v0.7.0 (2026-04-06)
 
 ### Chores
