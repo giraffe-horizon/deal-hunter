@@ -1,0 +1,15 @@
+[Unit]
+Description=Deal Hunter Telegram Feedback Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/deal-hunter
+ExecStart=%h/Projects/deal-hunter/venv/bin/python feedback_bot.py
+Restart=on-failure
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

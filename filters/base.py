@@ -73,9 +73,6 @@ class BaseFilter:
 
     def score_deal(self, deal) -> ScoreResult:
         """Score a deal. Returns ScoreResult with score, reasons, and rejection status."""
-        title_lower = deal.title.lower()
-        desc_lower = deal.description.lower()
-        text = (title_lower + " " + desc_lower)
         result = ScoreResult(score=0)
 
         # Check excluded words first (hard reject)
@@ -93,9 +90,16 @@ class BaseFilter:
         # Check required_any (at least one must match)
         if self.required_any:
             any_matched = False
+            matched_rule = ""
+            matched_source = ""
+            matched_text = ""
             for req in self.required_any:
-                if self._match_keyword(req, text):
+                found, source, match_text = self._find_match(req, deal.title, deal.description)
+                if found:
                     any_matched = True
+                    matched_rule = str(req)
+                    matched_source = source
+                    matched_text = match_text
                     break
             if not any_matched:
                 result.rejected = True
@@ -105,6 +109,10 @@ class BaseFilter:
                     "match": "", "type": "required_any",
                 })
                 return result
+            result.breakdown.append({
+                "rule": matched_rule, "points": 0, "source": matched_source,
+                "match": matched_text, "type": "required_any",
+            })
 
         # Positive score rules
         for keyword, points in self.score_rules.items():

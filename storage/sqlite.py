@@ -342,6 +342,41 @@ class SQLiteStorage:
             logger.error(f"Failed to get price drops: {e}")
             return []
 
+    def update_deal_status(self, deal_id: str, status: str) -> bool:
+        """Update a deal's status. Returns True if the deal existed."""
+        try:
+            cursor = self._conn.execute(
+                "UPDATE deals SET status = ? WHERE id = ?", (status, deal_id)
+            )
+            self._conn.commit()
+            return cursor.rowcount > 0
+        except sqlite3.Error as e:
+            logger.error(f"Failed to update status for {deal_id}: {e}")
+            return False
+
+    def get_deals_by_status(self, status: str, limit: int = 20) -> list[dict]:
+        """Get deals filtered by status, ordered by last_seen descending."""
+        try:
+            rows = self._conn.execute(
+                "SELECT * FROM deals WHERE status = ? ORDER BY last_seen DESC LIMIT ?",
+                (status, limit),
+            ).fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get deals by status '{status}': {e}")
+            return []
+
+    def get_feedback_stats(self) -> dict:
+        """Get counts of feedback actions. Returns {'watch': N, 'skip': M, ...}."""
+        try:
+            rows = self._conn.execute(
+                "SELECT action, COUNT(*) as cnt FROM feedback GROUP BY action"
+            ).fetchall()
+            return {row["action"]: row["cnt"] for row in rows}
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get feedback stats: {e}")
+            return {}
+
     def commit(self) -> None:
         """Commit the current transaction."""
         self._conn.commit()

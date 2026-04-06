@@ -57,10 +57,11 @@ class BikeFilter(BaseFilter):
         # Color exclusion
         for color in self.excluded_colors:
             if color.lower() in text:
+                color_source = "title" if color.lower() in deal.title.lower() else "description"
                 result.score -= 100
                 result.minus.append(f"-100 color {color}")
                 result.breakdown.append({
-                    "rule": f"color:{color}", "points": -100, "source": "title",
+                    "rule": f"color:{color}", "points": -100, "source": color_source,
                     "match": color.lower(), "type": "color",
                 })
 
