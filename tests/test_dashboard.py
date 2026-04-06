@@ -971,7 +971,10 @@ class TestProfilePages:
         data = response.json()
         # Clean up: delete the created file if it exists
         import os
-        profile_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "profiles", "test_create_profile.yaml")
+
+        profile_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "profiles", "test_create_profile.yaml"
+        )
         if os.path.exists(profile_path):
             os.unlink(profile_path)
         assert data.get("ok") is True

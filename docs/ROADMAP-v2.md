@@ -191,7 +191,7 @@ GET    /api/profiles/<name>/run/status  # SSE stream logu
 | B.2 | Allegro RSS source | M (5h) | Średni | ✅ Done |
 | C.1 | Watchlist z price alertem | M (6h) | Wysoki | ✅ Done |
 | C.2 | Porównywarka | M (6h) | Niski | |
-| C.4 | Zarządzanie profilami (full CRUD) | XL (20h) | Wysoki | |
+| C.4 | Zarządzanie profilami (full CRUD) | XL (20h) | Wysoki | ✅ Done |
 
 **Szacowany łączny effort:** ~60h
 **Rekomendowana kolejność:** A.3 → A.2 → C.1 → B.1 → B.2 → C.4 → A.1 → C.2

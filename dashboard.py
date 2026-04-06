@@ -404,15 +404,17 @@ async def profiles_page(request: Request):
     for name in profile_names:
         prof = safe_load_profile(name)
         if prof:
-            profiles.append({
-                "name": name,
-                "emoji": prof.get("emoji", "\U0001f50d"),
-                "enabled": prof.get("enabled", True),
-                "source_count": len(prof.get("sources", {})),
-                "budget_min": prof.get("budget", {}).get("min", 0),
-                "budget_max": prof.get("budget", {}).get("max", 0),
-                "score_threshold": prof.get("score_threshold", 0),
-            })
+            profiles.append(
+                {
+                    "name": name,
+                    "emoji": prof.get("emoji", "\U0001f50d"),
+                    "enabled": prof.get("enabled", True),
+                    "source_count": len(prof.get("sources", {})),
+                    "budget_min": prof.get("budget", {}).get("min", 0),
+                    "budget_max": prof.get("budget", {}).get("max", 0),
+                    "score_threshold": prof.get("score_threshold", 0),
+                }
+            )
     return templates.TemplateResponse(
         request,
         "profiles.html",
@@ -437,6 +439,7 @@ async def profile_yaml_page(request: Request, name: str):
 async def api_update_profile_yaml(request: Request, name: str):
     """Update a profile from raw YAML text."""
     import yaml as _yaml
+
     from utils.validation import validate_profile as _validate
 
     profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
@@ -481,13 +484,20 @@ async def profile_create_page(request: Request):
 async def api_create_profile(request: Request):
     """Create a new profile."""
     import yaml as _yaml
+
     from utils.validation import validate_profile as _validate
 
     body = await request.json()
     name = body.get("name", "")
 
     if not name or not name.replace("-", "").replace("_", "").isalnum():
-        return JSONResponse({"errors": ["Invalid profile name. Use lowercase letters, numbers, hyphens, underscores."]})
+        return JSONResponse(
+            {
+                "errors": [
+                    "Invalid profile name. Use lowercase letters, numbers, hyphens, underscores."
+                ]
+            }
+        )
 
     profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
     if profile_path.exists():
@@ -537,6 +547,7 @@ async def profile_edit_page(request: Request, name: str):
 async def api_update_profile(request: Request, name: str):
     """Update a profile from form data (JSON body)."""
     import yaml as _yaml
+
     from utils.validation import validate_profile as _validate
 
     body = await request.json()
@@ -624,7 +635,7 @@ async def api_run_profile(name: str):
         f'<div class="bg-surface-container-low rounded-card p-6 mt-4">'
         f'<h3 class="font-headline text-base font-semibold text-on-surface mb-3">Run Output</h3>'
         f'<pre class="text-xs text-on-surface-variant whitespace-pre-wrap overflow-x-auto bg-surface-container rounded-lg p-4">{safe_output}</pre>'
-        f'</div>'
+        f"</div>"
     )
 
 
@@ -636,10 +647,12 @@ async def api_profiles_list():
     for name in profile_names:
         prof = safe_load_profile(name)
         if prof:
-            profiles.append({
-                "name": name,
-                "emoji": prof.get("emoji", "\U0001f50d"),
-                "enabled": prof.get("enabled", True),
-                "source_count": len(prof.get("sources", {})),
-            })
+            profiles.append(
+                {
+                    "name": name,
+                    "emoji": prof.get("emoji", "\U0001f50d"),
+                    "enabled": prof.get("enabled", True),
+                    "source_count": len(prof.get("sources", {})),
+                }
+            )
     return JSONResponse(profiles)
