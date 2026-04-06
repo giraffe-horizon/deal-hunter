@@ -38,6 +38,15 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 
 CREATE INDEX IF NOT EXISTS idx_deals_profile_score ON deals(profile, score DESC);
+
+CREATE TABLE IF NOT EXISTS alert_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile TEXT NOT NULL,
+    alert_type TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    sent_at DATETIME
+);
 """
 
 
@@ -488,6 +497,48 @@ class SQLiteStorage:
     def commit(self) -> None:
         """Commit the current transaction."""
         self._conn.commit()
+
+    def queue_alert(self, profile: str, alert_type: str, payload_json: str) -> None:
+        """Queue an alert for later sending (used during quiet hours)."""
+        now = datetime.now().isoformat()
+        try:
+            self._conn.execute(
+                "INSERT INTO alert_queue (profile, alert_type, payload, created_at) VALUES (?, ?, ?, ?)",
+                (profile, alert_type, payload_json, now),
+            )
+            self._conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Failed to queue alert for {profile}: {e}")
+
+    def get_pending_alerts(self, profile: str | None = None) -> list[dict]:
+        """Get unsent alerts from the queue, ordered by creation time."""
+        query = "SELECT * FROM alert_queue WHERE sent_at IS NULL"
+        params: list = []
+        if profile is not None:
+            query += " AND profile = ?"
+            params.append(profile)
+        query += " ORDER BY created_at ASC"
+        try:
+            rows = self._conn.execute(query, params).fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get pending alerts: {e}")
+            return []
+
+    def mark_alerts_sent(self, alert_ids: list[int]) -> None:
+        """Mark alerts as sent by setting sent_at timestamp."""
+        if not alert_ids:
+            return
+        now = datetime.now().isoformat()
+        placeholders = ",".join("?" for _ in alert_ids)
+        try:
+            self._conn.execute(
+                f"UPDATE alert_queue SET sent_at = ? WHERE id IN ({placeholders})",
+                [now, *alert_ids],
+            )
+            self._conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Failed to mark alerts as sent: {e}")
 
     def close(self) -> None:
         """Close the database connection."""
