@@ -1,6 +1,24 @@
 # CHANGELOG
 
 
+## v0.6.1 (2026-04-06)
+
+### Bug Fixes
+
+- Resolve deal detail page horizontal overflow on mobile
+  ([`5d881bd`](https://github.com/giraffe-horizon/deal-hunter/commit/5d881bd89ebd678aa45eb170aa6394ff3ccac58b))
+
+Prevent long titles, chart containers, and period buttons from expanding beyond 375px viewport
+  width.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Documentation
+
+- Add roadmap v2.0 (A: quality, B: sources, C: dashboard UX)
+  ([`1b408ee`](https://github.com/giraffe-horizon/deal-hunter/commit/1b408ee3700e28e16a65149b26124c8e22575418))
+
+
 ## v0.6.0 (2026-04-06)
 
 ### Code Style
