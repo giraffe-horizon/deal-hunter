@@ -1,6 +1,44 @@
 # CHANGELOG
 
 
+## v0.5.0 (2026-04-06)
+
+### Documentation
+
+- Add Docker and examples entries to CLAUDE.md architecture
+  ([`e02d38f`](https://github.com/giraffe-horizon/deal-hunter/commit/e02d38fc7524199f75a44a888f2fdf08135b69dc))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add web dashboard design spec
+  ([`563e0cd`](https://github.com/giraffe-horizon/deal-hunter/commit/563e0cda8fd5a18a7a5e16322ef5f9edc1bbc69e))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- Add web dashboard scaffold with FastAPI + Stitch design system
+  ([`00bf14b`](https://github.com/giraffe-horizon/deal-hunter/commit/00bf14be11c2e71fd104f10f96e8187cff2d0010))
+
+Create FastAPI app with Jinja2 templates, sidebar navigation, and Stitch design tokens (Analytical
+  Atelier). Includes CDN imports for Tailwind, Chart.js, HTMX, Google Fonts, and Material Symbols.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add web dashboard with 4 screens and Docker service
+  ([`8627d7f`](https://github.com/giraffe-horizon/deal-hunter/commit/8627d7fa9586e71b2e8a9b96f4e00c186889239d))
+
+FastAPI dashboard at port 8080 with Deals Explorer (filterable, paginated), Deal Detail (Chart.js
+  price history, watch/skip actions), System Health (source/profile status from health.json), and
+  Price Trends (drops table, category sparklines). HTMX for partial table refresh, Tailwind CSS +
+  Stitch design tokens via CDN.
+
+Adds deal-hunter-web Docker Compose service, SQL aggregate methods for dashboard performance, and
+  /api/stats endpoint.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.4.3 (2026-04-06)
 
 ### Bug Fixes
