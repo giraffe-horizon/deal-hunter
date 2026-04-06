@@ -305,3 +305,61 @@ class TestBotHandlers:
         text = message.reply_text.call_args[0][0]
         assert "Obserwowane oferty" in text
         assert "Test Feedback Deal" in text
+
+
+@pytest.mark.asyncio
+async def test_cmd_target_adds_to_watchlist(tmp_path):
+    """The /target command adds a deal to the watchlist."""
+    db_path = tmp_path / "test.db"
+    db = SQLiteStorage(db_path)
+
+    # Seed a deal
+    deal = type("Deal", (), {
+        "id": "pepper:123", "title": "Test Deal", "price": 10000,
+        "link": "https://example.com", "source": "pepper",
+        "description": "", "image_url": "", "published_at": "",
+        "regular_price": 0,
+    })()
+    db.upsert_deal(deal, profile="test", score=80, category="test")
+
+    from feedback_bot import cmd_target
+
+    update = MagicMock()
+    update.effective_chat.id = 12345
+    update.message.reply_html = AsyncMock()
+
+    context = MagicMock()
+    context.args = ["pepper:123", "8000"]
+
+    with patch("feedback_bot.get_storage") as mock_storage:
+        mock_storage.return_value.__enter__ = MagicMock(return_value=db)
+        mock_storage.return_value.__exit__ = MagicMock(return_value=False)
+        await cmd_target(update, context)
+
+    update.message.reply_html.assert_called_once()
+    msg = update.message.reply_html.call_args[0][0]
+    assert "8" in msg  # target price mentioned
+
+    items = db.get_watchlist()
+    assert len(items) == 1
+    assert items[0]["target_price"] == 8000
+    db.close()
+
+
+@pytest.mark.asyncio
+async def test_cmd_target_missing_args():
+    """The /target command with wrong args shows usage."""
+    from feedback_bot import cmd_target
+
+    update = MagicMock()
+    update.effective_chat.id = 12345
+    update.message.reply_html = AsyncMock()
+
+    context = MagicMock()
+    context.args = []
+
+    await cmd_target(update, context)
+
+    update.message.reply_html.assert_called_once()
+    msg = update.message.reply_html.call_args[0][0]
+    assert "/target" in msg.lower()

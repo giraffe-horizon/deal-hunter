@@ -144,6 +144,42 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         storage.close()
 
 
+async def cmd_target(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Set a target price for a deal. Usage: /target <deal_id> <price>"""
+    if len(context.args) < 2:
+        await update.message.reply_html(
+            "Użycie: <code>/target &lt;deal_id&gt; &lt;cena&gt;</code>\n"
+            "Przykład: <code>/target pepper:12345 8000</code>"
+        )
+        return
+
+    deal_id = context.args[0]
+    try:
+        target_price = int(context.args[1])
+    except ValueError:
+        await update.message.reply_html("❌ Cena musi być liczbą całkowitą (w PLN).")
+        return
+
+    if target_price <= 0:
+        await update.message.reply_html("❌ Cena musi być większa od 0.")
+        return
+
+    with get_storage() as db:
+        result = db.add_to_watchlist(deal_id, target_price)
+
+    if result:
+        price_str = f"{target_price:,} PLN".replace(",", " ")
+        await update.message.reply_html(
+            f"\U0001f3af Ustawiono cel cenowy: <b>{html.escape(price_str)}</b>\n"
+            f"Deal: <code>{html.escape(deal_id)}</code>\n"
+            f"Powiadomię Cię gdy cena spadnie do tego poziomu."
+        )
+    else:
+        await update.message.reply_html(
+            f"\u26a0\ufe0f Deal <code>{html.escape(deal_id)}</code> jest już na liście obserwowanych."
+        )
+
+
 async def cmd_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/watchlist — show all deals with status='watching'."""
     storage = get_storage()
@@ -190,6 +226,7 @@ def main() -> None:
     app.add_handler(CommandHandler("skip", cmd_skip))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("watchlist", cmd_watchlist))
+    app.add_handler(CommandHandler("target", cmd_target))
 
     logger.info("Feedback bot starting (polling)...")
 
