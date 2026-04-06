@@ -280,14 +280,9 @@ def check_price_changes(
 # ──────────────── PROFILE ────────────────
 
 
-EXAMPLES_DIR = BASE_DIR / "examples"
-
-
 def load_profile(name: str) -> dict:
-    """Load a YAML profile by name. Checks profiles/ first, then examples/."""
+    """Load a YAML profile by name from profiles/ directory."""
     path = PROFILES_DIR / f"{name}.yaml"
-    if not path.exists():
-        path = EXAMPLES_DIR / f"{name}.yaml"
     if not path.exists():
         logger.error(f"Profile not found: {name}")
         sys.exit(1)
@@ -300,20 +295,17 @@ def load_profile(name: str) -> dict:
 
 
 def list_profiles(include_disabled: bool = True) -> list[str]:
-    """List available profile names. Checks profiles/ and examples/."""
+    """List available profile names from profiles/ directory."""
     names: list[str] = []
-    for directory in (PROFILES_DIR, EXAMPLES_DIR):
-        if not directory.exists():
-            continue
-        for p in directory.glob("*.yaml"):
-            if p.stem in names:
+    if not PROFILES_DIR.exists():
+        return names
+    for p in PROFILES_DIR.glob("*.yaml"):
+        if not include_disabled:
+            with open(p, encoding="utf-8") as f:
+                prof = yaml.safe_load(f)
+            if isinstance(prof, dict) and not prof.get("enabled", True):
                 continue
-            if not include_disabled:
-                with open(p, encoding="utf-8") as f:
-                    prof = yaml.safe_load(f)
-                if isinstance(prof, dict) and not prof.get("enabled", True):
-                    continue
-            names.append(p.stem)
+        names.append(p.stem)
     return names
 
 

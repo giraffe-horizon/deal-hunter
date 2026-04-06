@@ -24,7 +24,6 @@ COPY utils/ utils/
 COPY stores/ stores/
 COPY storage/ storage/
 COPY visualization/ visualization/
-COPY examples/ examples/
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
