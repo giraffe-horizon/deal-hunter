@@ -49,6 +49,43 @@ STATE_DIR = BASE_DIR / "state"
 STATE_TTL_DAYS = 14
 DB_PATH = STATE_DIR / "deals.db"
 
+
+def is_quiet_hours(profile: dict) -> bool:
+    """Check if current time is within quiet hours.
+
+    Priority: profile quiet_hours > env QUIET_HOURS_START/END > disabled.
+    """
+    qh = profile.get("quiet_hours")
+    if qh:
+        start_str = qh.get("start")
+        end_str = qh.get("end")
+    else:
+        start_str = os.environ.get("QUIET_HOURS_START")
+        end_str = os.environ.get("QUIET_HOURS_END")
+
+    if not start_str or not end_str:
+        return False
+
+    try:
+        start_h, start_m = map(int, start_str.split(":"))
+        end_h, end_m = map(int, end_str.split(":"))
+    except (ValueError, AttributeError):
+        logger.warning(f"Invalid quiet hours format: {start_str}-{end_str}")
+        return False
+
+    now = datetime.now()
+    current_minutes = now.hour * 60 + now.minute
+    start_minutes = start_h * 60 + start_m
+    end_minutes = end_h * 60 + end_m
+
+    if start_minutes <= end_minutes:
+        # Same day range (e.g., 13:00-15:00)
+        return start_minutes <= current_minutes < end_minutes
+    else:
+        # Overnight range (e.g., 22:00-07:00)
+        return current_minutes >= start_minutes or current_minutes < end_minutes
+
+
 load_dotenv(BASE_DIR / ".env")
 
 
