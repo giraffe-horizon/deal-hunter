@@ -1,6 +1,55 @@
 # CHANGELOG
 
 
+## v0.4.0 (2026-04-06)
+
+### Bug Fixes
+
+- Add matplotlib, pytest-asyncio, python-telegram-bot to dev dependencies
+  ([`3e87c9b`](https://github.com/giraffe-horizon/deal-hunter/commit/3e87c9b487afc9518b0f11958548790ebc8bbb0e))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- Add missing COPY targets to Dockerfile (feedback_bot, storage, visualization)
+  ([`efdf6c0`](https://github.com/giraffe-horizon/deal-hunter/commit/efdf6c086e955ed4844a0728fcfb65441e27ff7c))
+
+- Add missing health.py to Dockerfile, fix bot entrypoint override
+  ([`01bdc08`](https://github.com/giraffe-horizon/deal-hunter/commit/01bdc086395816ff87fee813f5dcc8e38bdf79e0))
+
+- health.py was missing from COPY targets, causing ModuleNotFoundError - bot service needs
+  entrypoint override to bypass the cron entrypoint.sh
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Documentation
+
+- Add Docker Compose full service design spec
+  ([`7b8d58e`](https://github.com/giraffe-horizon/deal-hunter/commit/7b8d58e4e4b686b2b9a4cbfce26fb13b40debb5d))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add Docker Compose implementation plan
+  ([`94c20ff`](https://github.com/giraffe-horizon/deal-hunter/commit/94c20ff62ff84576bf434227a3c7bcffc202d34c))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Update Docker section with bot service and schedule config
+  ([`41cb309`](https://github.com/giraffe-horizon/deal-hunter/commit/41cb30997eb5f167d1ee6f42c032b682db4dc889))
+
+- Update implementation plan with CI fix task
+  ([`e36964b`](https://github.com/giraffe-horizon/deal-hunter/commit/e36964b484c0c6613153c2bad70ee9898f406bfd))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- Add feedback bot service to docker-compose
+  ([`de68fc3`](https://github.com/giraffe-horizon/deal-hunter/commit/de68fc31fbca90651324e57493cace7c21836242))
+
+- Extend entrypoint with watchdog and digest cron schedules
+  ([`6f99b3e`](https://github.com/giraffe-horizon/deal-hunter/commit/6f99b3ecc23c3015f41afbd54761ef034f0c9e01))
+
+
 ## v0.3.0 (2026-04-06)
 
 ### Bug Fixes
