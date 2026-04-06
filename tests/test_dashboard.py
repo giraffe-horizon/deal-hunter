@@ -2,10 +2,7 @@
 
 from unittest.mock import patch
 
-import pytest
-
-from dashboard import format_pln, safe_load_profile, _get_profiles
-
+from dashboard import _get_profiles, format_pln, safe_load_profile
 
 # ──────────────── Unit tests: format_pln ────────────────
 
@@ -336,8 +333,8 @@ class TestDealDetailPage:
 
     def test_deal_without_price_history(self, client):
         # pepper:77777 (score 20) has no price history entries
-        text = client.get("/deals/pepper:77777").text
-        assert response_status_code(client.get("/deals/pepper:77777")) == 200
+        response = client.get("/deals/pepper:77777")
+        assert response.status_code == 200
 
 
 # ──────────────── E2E tests: Health page ────────────────
@@ -842,9 +839,3 @@ class TestE2EWorkflows:
         high_score_deals = [d for d in deals if d["score"] and d["score"] >= 70]
         expected_pct = round(len(high_score_deals) / len(deals) * 100) if deals else 0
         assert stats["high_score_pct"] == expected_pct
-
-
-# ──────────────── Helper ────────────────
-
-def response_status_code(response):
-    return response.status_code

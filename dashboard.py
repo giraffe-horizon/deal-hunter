@@ -3,7 +3,7 @@
 import math
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request, Depends
+from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
