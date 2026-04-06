@@ -108,3 +108,48 @@ class TestWatchlistCRUD:
         """Deal not in watchlist returns None for trigger check."""
         trigger = db.check_watchlist_triggers("pepper:999", 5000)
         assert trigger is None
+
+
+from unittest.mock import MagicMock, patch
+
+
+class TestWatchlistTelegram:
+    """Tests for watchlist Telegram alert."""
+
+    def test_send_watchlist_alert_format(self):
+        """send_watchlist_alert sends properly formatted Polish message."""
+        from notifiers.telegram import TelegramNotifier
+
+        notifier = TelegramNotifier("fake-token", "fake-chat")
+        deal = type("Deal", (), {
+            "id": "pepper:123",
+            "title": "Canyon Endurace CF 7",
+            "price": 8499,
+            "link": "https://pepper.pl/123",
+            "source": "pepper",
+            "regular_price": 0,
+            "alt_links": [],
+        })()
+        with patch.object(notifier, "_send_message") as mock_send:
+            notifier.send_watchlist_alert(deal, target_price=9000, current_price=8499)
+            msg = mock_send.call_args[0][0]
+            assert "CEL CENOWY" in msg
+            assert "Canyon" in msg
+
+    def test_send_watchlist_alert_no_alt_links(self):
+        """send_watchlist_alert works without alt_links attribute."""
+        from notifiers.telegram import TelegramNotifier
+
+        notifier = TelegramNotifier("fake-token", "fake-chat")
+        deal = type("Deal", (), {
+            "id": "pepper:123",
+            "title": "Test Deal",
+            "price": 7000,
+            "link": "https://example.com",
+            "source": "pepper",
+            "regular_price": 0,
+            "alt_links": [],
+        })()
+        with patch.object(notifier, "_send_message") as mock_send:
+            notifier.send_watchlist_alert(deal, target_price=8000, current_price=7000)
+            mock_send.assert_called_once()

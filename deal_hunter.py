@@ -617,6 +617,21 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
             if db and result.score >= threshold:
                 category = _detect_category(deal, profile, profile_name)
                 db.upsert_deal(deal, profile_name, result.score, category)
+                # Check watchlist triggers
+                trigger = db.check_watchlist_triggers(deal.id, deal.price)
+                if trigger and telegram:
+                    telegram.send_watchlist_alert(
+                        deal,
+                        target_price=trigger["target_price"],
+                        current_price=deal.price,
+                        topic_id=tg_topic,
+                        currency=currency,
+                    )
+                    db.mark_watchlist_triggered(deal.id)
+                    logger.info(
+                        f"Watchlist triggered: {deal.title[:40]} "
+                        f"(target: {trigger['target_price']}, current: {deal.price})"
+                    )
 
             if result.score >= threshold:
                 alert_plus = list(result.plus)

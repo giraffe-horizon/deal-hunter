@@ -168,6 +168,30 @@ class TelegramNotifier:
         keyboard = build_deal_keyboard(deal.link, deal.id)
         self._send_message(msg, topic_id=topic_id, reply_markup=keyboard)
 
+    def send_watchlist_alert(
+        self,
+        deal,
+        target_price: int,
+        current_price: int,
+        topic_id: int | None = None,
+        currency: str = "PLN",
+    ) -> None:
+        """Send watchlist target price alert (messages in Polish for end users)."""
+        target_str = f"{target_price:,} {currency}".replace(",", " ")
+        current_str = f"{current_price:,} {currency}".replace(",", " ")
+
+        safe_title = html.escape(deal.title)
+        safe_link = html.escape(deal.link)
+
+        msg = "\U0001f3af <b>CEL CENOWY OSIĄGNIĘTY</b>\n"
+        msg += f"<b>{safe_title}</b>\n\n"
+        msg += f"Twój próg: {html.escape(target_str)}\n"
+        msg += f"Obecna cena: <b>{html.escape(current_str)}</b>\n"
+        msg += f'\n\U0001f517 <a href="{safe_link}">Otwórz</a>'
+
+        keyboard = build_deal_keyboard(deal.link, deal.id)
+        self._send_message(msg, topic_id=topic_id, reply_markup=keyboard)
+
     def send_digest(
         self,
         drops: list[dict],
