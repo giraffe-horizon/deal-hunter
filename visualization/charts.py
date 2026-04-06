@@ -15,9 +15,11 @@ def _import_matplotlib():
     """
     try:
         import matplotlib
+
         matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
+        import matplotlib.pyplot as plt
+
         return plt, mdates
     except ImportError:
         raise ImportError(
@@ -56,14 +58,26 @@ def generate_price_chart(deal_id: str, db, output_path: str | None = None) -> Pa
     # Mark lowest price with red dot
     min_price = min(prices)
     min_idx = prices.index(min_price)
-    ax.plot(dates[min_idx], min_price, "ro", markersize=12, zorder=5,
-            label=f"Najniższa: {min_price:,} PLN".replace(",", " "))
+    ax.plot(
+        dates[min_idx],
+        min_price,
+        "ro",
+        markersize=12,
+        zorder=5,
+        label=f"Najniższa: {min_price:,} PLN".replace(",", " "),
+    )
 
     # Mark highest price with green dot
     max_price = max(prices)
     max_idx = prices.index(max_price)
-    ax.plot(dates[max_idx], max_price, "go", markersize=12, zorder=5,
-            label=f"Najwyższa: {max_price:,} PLN".replace(",", " "))
+    ax.plot(
+        dates[max_idx],
+        max_price,
+        "go",
+        markersize=12,
+        zorder=5,
+        label=f"Najwyższa: {max_price:,} PLN".replace(",", " "),
+    )
 
     title = deal.get("title", deal_id)[:60]
     source = deal.get("source", "")
@@ -77,9 +91,7 @@ def generate_price_chart(deal_id: str, db, output_path: str | None = None) -> Pa
     ax.xaxis.set_major_locator(mdates.AutoDateLocator())
     fig.autofmt_xdate()
 
-    ax.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda x, p: f"{int(x):,}".replace(",", " "))
-    )
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(x):,}".replace(",", " ")))
 
     plt.tight_layout()
 
@@ -119,11 +131,11 @@ def generate_digest_chart(drops: list[dict], output_path: str | None = None) -> 
     colors = []
     for pct in percents:
         if pct > 20:
-            colors.append("#F44336")   # red
+            colors.append("#F44336")  # red
         elif pct > 10:
-            colors.append("#FF9800")   # orange
+            colors.append("#FF9800")  # orange
         else:
-            colors.append("#FFC107")   # yellow
+            colors.append("#FFC107")  # yellow
 
     fig, ax = plt.subplots(figsize=(10, 5))
     bars = ax.bar(range(len(titles)), percents, color=colors)
@@ -140,7 +152,10 @@ def generate_digest_chart(drops: list[dict], output_path: str | None = None) -> 
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.5,
             f"-{pct:.0f}%",
-            ha="center", va="bottom", fontsize=9, fontweight="bold",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
         )
 
     plt.tight_layout()
@@ -156,9 +171,7 @@ def generate_digest_chart(drops: list[dict], output_path: str | None = None) -> 
     return path
 
 
-def generate_trend_chart(
-    profile: str, db, days: int = 30, output_path: str | None = None
-) -> Path:
+def generate_trend_chart(profile: str, db, days: int = 30, output_path: str | None = None) -> Path:
     """Generate a line chart showing average prices in a profile over the last N days.
 
     Args:
@@ -201,10 +214,18 @@ def generate_trend_chart(
     max_prices = [max(daily_prices[d]) for d in sorted_dates]
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(dates, avg_prices, marker="o", linewidth=2, color="#2196F3",
-            markersize=4, label="Średnia cena")
-    ax.fill_between(dates, min_prices, max_prices, alpha=0.15, color="#2196F3",
-                    label="Zakres (min–max)")
+    ax.plot(
+        dates,
+        avg_prices,
+        marker="o",
+        linewidth=2,
+        color="#2196F3",
+        markersize=4,
+        label="Średnia cena",
+    )
+    ax.fill_between(
+        dates, min_prices, max_prices, alpha=0.15, color="#2196F3", label="Zakres (min–max)"
+    )
 
     ax.set_title(f"Trend cenowy: {profile} (ostatnie {days} dni)", fontsize=12, pad=10)
     ax.set_xlabel("Data")
@@ -216,9 +237,7 @@ def generate_trend_chart(
     ax.xaxis.set_major_locator(mdates.AutoDateLocator())
     fig.autofmt_xdate()
 
-    ax.yaxis.set_major_formatter(
-        plt.FuncFormatter(lambda x, p: f"{int(x):,}".replace(",", " "))
-    )
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(x):,}".replace(",", " ")))
 
     plt.tight_layout()
 

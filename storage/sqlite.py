@@ -170,9 +170,7 @@ class SQLiteStorage:
     def get_deal(self, deal_id: str) -> dict | None:
         """Get a single deal by ID."""
         try:
-            row = self._conn.execute(
-                "SELECT * FROM deals WHERE id = ?", (deal_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM deals WHERE id = ?", (deal_id,)).fetchone()
             return dict(row) if row else None
         except sqlite3.Error as e:
             logger.error(f"Failed to get deal {deal_id}: {e}")
@@ -220,8 +218,21 @@ class SQLiteStorage:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                    last_seen = MAX(deals.last_seen, excluded.last_seen)""",
-                (deal_id, title, price, "", source, "", "", profile, 0, "",
-                 first_seen, last_seen, "active"),
+                (
+                    deal_id,
+                    title,
+                    price,
+                    "",
+                    source,
+                    "",
+                    "",
+                    profile,
+                    0,
+                    "",
+                    first_seen,
+                    last_seen,
+                    "active",
+                ),
             )
         except sqlite3.Error as e:
             logger.error(f"Failed to import legacy deal {deal_id}: {e}")
@@ -327,14 +338,16 @@ class SQLiteStorage:
                 is_lowest = lowest is not None and new_price <= lowest
 
                 seen_deals.add(deal_id)
-                results.append({
-                    **dict(row),
-                    "old_price": old_price,
-                    "new_price": new_price,
-                    "diff_pln": diff_pln,
-                    "diff_percent": round(diff_percent, 1),
-                    "is_lowest_ever": is_lowest,
-                })
+                results.append(
+                    {
+                        **dict(row),
+                        "old_price": old_price,
+                        "new_price": new_price,
+                        "diff_pln": diff_pln,
+                        "diff_percent": round(diff_percent, 1),
+                        "is_lowest_ever": is_lowest,
+                    }
+                )
 
             return results
         except sqlite3.Error as e:

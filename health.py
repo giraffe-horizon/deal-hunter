@@ -5,8 +5,6 @@ Tracks run results, source health, and provides watchdog/status checking.
 
 import json
 import logging
-import os
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 

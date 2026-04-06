@@ -1,14 +1,10 @@
 """Tests for visualization/charts.py — chart generation and send_photo."""
 
-import os
-import struct
-import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ── Fixtures ──
 
@@ -29,15 +25,39 @@ def mock_db():
 
     now = datetime.now()
     db.get_price_history.return_value = [
-        {"deal_id": "pepper:12345", "price": 12999, "recorded_at": (now - timedelta(days=10)).isoformat()},
-        {"deal_id": "pepper:12345", "price": 11999, "recorded_at": (now - timedelta(days=7)).isoformat()},
-        {"deal_id": "pepper:12345", "price": 10999, "recorded_at": (now - timedelta(days=3)).isoformat()},
+        {
+            "deal_id": "pepper:12345",
+            "price": 12999,
+            "recorded_at": (now - timedelta(days=10)).isoformat(),
+        },
+        {
+            "deal_id": "pepper:12345",
+            "price": 11999,
+            "recorded_at": (now - timedelta(days=7)).isoformat(),
+        },
+        {
+            "deal_id": "pepper:12345",
+            "price": 10999,
+            "recorded_at": (now - timedelta(days=3)).isoformat(),
+        },
         {"deal_id": "pepper:12345", "price": 10499, "recorded_at": now.isoformat()},
     ]
 
     db.get_deals.return_value = [
-        {"id": "pepper:12345", "title": "Canyon Endurace CF 8 Di2", "price": 10499, "source": "pepper", "profile": "bikes"},
-        {"id": "pepper:67890", "title": "Giant Defy Advanced 2", "price": 8999, "source": "pepper", "profile": "bikes"},
+        {
+            "id": "pepper:12345",
+            "title": "Canyon Endurace CF 8 Di2",
+            "price": 10499,
+            "source": "pepper",
+            "profile": "bikes",
+        },
+        {
+            "id": "pepper:67890",
+            "title": "Giant Defy Advanced 2",
+            "price": 8999,
+            "source": "pepper",
+            "profile": "bikes",
+        },
     ]
 
     return db
@@ -47,9 +67,30 @@ def mock_db():
 def sample_drops():
     """Sample price drops for digest chart."""
     return [
-        {"title": "Canyon Endurace CF 8 Di2", "old_price": 12999, "new_price": 10499, "diff_percent": 19.2, "diff_pln": 2500, "is_lowest_ever": True},
-        {"title": "Giant Defy Advanced 2", "old_price": 8999, "new_price": 7999, "diff_percent": 11.1, "diff_pln": 1000, "is_lowest_ever": False},
-        {"title": "Shimano 105 Di2 Group", "old_price": 5999, "new_price": 5499, "diff_percent": 8.3, "diff_pln": 500, "is_lowest_ever": False},
+        {
+            "title": "Canyon Endurace CF 8 Di2",
+            "old_price": 12999,
+            "new_price": 10499,
+            "diff_percent": 19.2,
+            "diff_pln": 2500,
+            "is_lowest_ever": True,
+        },
+        {
+            "title": "Giant Defy Advanced 2",
+            "old_price": 8999,
+            "new_price": 7999,
+            "diff_percent": 11.1,
+            "diff_pln": 1000,
+            "is_lowest_ever": False,
+        },
+        {
+            "title": "Shimano 105 Di2 Group",
+            "old_price": 5999,
+            "new_price": 5499,
+            "diff_percent": 8.3,
+            "diff_pln": 500,
+            "is_lowest_ever": False,
+        },
     ]
 
 
@@ -167,11 +208,9 @@ class TestGenerateTrendChart:
 
 class TestLazyImport:
     def test_import_error_message(self):
-        import importlib
-        import sys
 
         # Temporarily hide matplotlib
-        real_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+        real_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
 
         def mock_import(name, *args, **kwargs):
             if name == "matplotlib" or name.startswith("matplotlib."):
@@ -181,6 +220,7 @@ class TestLazyImport:
         # Need to reload charts module with mocked import
         with patch("builtins.__import__", side_effect=mock_import):
             from visualization.charts import _import_matplotlib
+
             with pytest.raises(ImportError, match="matplotlib is required"):
                 _import_matplotlib()
 
@@ -201,8 +241,10 @@ class TestSendPhoto:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        with patch("notifiers.telegram.requests.post", return_value=mock_response) as mock_post, \
-             patch("notifiers.telegram.time.sleep"):
+        with (
+            patch("notifiers.telegram.requests.post", return_value=mock_response) as mock_post,
+            patch("notifiers.telegram.time.sleep"),
+        ):
             notifier.send_photo(str(photo), caption="Test caption", topic_id=42)
 
         mock_post.assert_called_once()
@@ -227,8 +269,12 @@ class TestSendPhoto:
         resp_200 = MagicMock()
         resp_200.status_code = 200
 
-        with patch("notifiers.telegram.requests.post", side_effect=[resp_429, resp_200]) as mock_post, \
-             patch("notifiers.telegram.time.sleep"):
+        with (
+            patch(
+                "notifiers.telegram.requests.post", side_effect=[resp_429, resp_200]
+            ) as mock_post,
+            patch("notifiers.telegram.time.sleep"),
+        ):
             notifier.send_photo(str(photo))
 
         assert mock_post.call_count == 2
@@ -244,8 +290,10 @@ class TestSendPhoto:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        with patch("notifiers.telegram.requests.post", return_value=mock_response) as mock_post, \
-             patch("notifiers.telegram.time.sleep"):
+        with (
+            patch("notifiers.telegram.requests.post", return_value=mock_response) as mock_post,
+            patch("notifiers.telegram.time.sleep"),
+        ):
             notifier.send_photo(str(photo))
 
         call_kwargs = mock_post.call_args

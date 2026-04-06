@@ -1,14 +1,12 @@
 """Tests for Telegram feedback bot — SQLite additions, callback parsing, inline keyboard."""
 
-import html
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from notifiers.telegram import build_deal_keyboard
 from sources.base import Deal
 from storage.sqlite import SQLiteStorage
-from notifiers.telegram import build_deal_keyboard
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -89,9 +87,14 @@ class TestGetDealsByStatus:
     def test_limit(self, db):
         for i in range(5):
             d = Deal(
-                id=f"test:{i}", title=f"Deal {i}", price=1000,
-                link="https://example.com", source="test",
-                description="", temperature=0, image_url="",
+                id=f"test:{i}",
+                title=f"Deal {i}",
+                price=1000,
+                link="https://example.com",
+                source="test",
+                description="",
+                temperature=0,
+                image_url="",
                 published_at="2026-04-01T10:00:00",
             )
             db.upsert_deal(d, "test", 50)

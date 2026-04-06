@@ -44,14 +44,16 @@ def _base_profile(**overrides) -> dict:
 
 def _bike_profile(**overrides) -> dict:
     base = _base_profile()
-    base.update({
-        "custom_data": {
-            "brand_sizes": {"giant": ["XL", "L"], "trek": ["58", "60"]},
-            "generic_good_sizes": ["XL", "58", "59", "60"],
-            "excluded_colors": ["yellow", "pink"],
-            "race_keywords": ["aero", "race", "sprint"],
-        },
-    })
+    base.update(
+        {
+            "custom_data": {
+                "brand_sizes": {"giant": ["XL", "L"], "trek": ["58", "60"]},
+                "generic_good_sizes": ["XL", "58", "59", "60"],
+                "excluded_colors": ["yellow", "pink"],
+                "race_keywords": ["aero", "race", "sprint"],
+            },
+        }
+    )
     base.update(overrides)
     return base
 
@@ -260,8 +262,12 @@ class TestVerboseOutput:
         buf = StringIO()
         with patch("sys.stdout", buf):
             _print_verbose_plain(
-                [(deal, result)], [], threshold=40, threshold_alert=80,
-                currency="PLN", top=None,
+                [(deal, result)],
+                [],
+                threshold=40,
+                threshold_alert=80,
+                currency="PLN",
+                top=None,
             )
         output = buf.getvalue()
 
@@ -281,7 +287,9 @@ class TestVerboseOutput:
 
         buf = StringIO()
         with patch("sys.stdout", buf):
-            _print_verbose_plain([], [(deal, result)], threshold=40, threshold_alert=80, currency="PLN", top=None)
+            _print_verbose_plain(
+                [], [(deal, result)], threshold=40, threshold_alert=80, currency="PLN", top=None
+            )
         output = buf.getvalue()
 
         assert "REJECTED" in output
@@ -304,7 +312,11 @@ class TestVerboseOutput:
         with patch("sys.stdout", buf):
             _print_verbose_plain(
                 [(deal_good, result_good), (deal_bad, result_bad)],
-                [], threshold=40, threshold_alert=80, currency="PLN", top=None,
+                [],
+                threshold=40,
+                threshold_alert=80,
+                currency="PLN",
+                top=None,
             )
         output = buf.getvalue()
         assert "\u2705" in output
@@ -341,8 +353,12 @@ class TestVerboseOutput:
             buf = StringIO()
             with patch("sys.stdout", buf):
                 _print_verbose(
-                    [(deal, result)], [], threshold=40, threshold_alert=80,
-                    currency="PLN", top=None,
+                    [(deal, result)],
+                    [],
+                    threshold=40,
+                    threshold_alert=80,
+                    currency="PLN",
+                    top=None,
                 )
             output = buf.getvalue()
             assert "\u250c" in output  # plain text fallback used

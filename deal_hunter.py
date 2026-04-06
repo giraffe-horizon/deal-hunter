@@ -174,9 +174,16 @@ def check_price_changes(
     if deal.price <= 0:
         return None
 
-    pt_config = get_price_tracking_config(profile) if profile else {
-        "enabled": True, "min_drop_percent": 10, "min_drop_amount": 200, "track_increases": False,
-    }
+    pt_config = (
+        get_price_tracking_config(profile)
+        if profile
+        else {
+            "enabled": True,
+            "min_drop_percent": 10,
+            "min_drop_amount": 200,
+            "track_increases": False,
+        }
+    )
 
     if not pt_config["enabled"]:
         return None
@@ -406,8 +413,11 @@ def deduplicate(deals: list) -> list:
 
 
 def run_profile(
-    profile_name: str, verify: bool = False, validate_only: bool = False,
-    verbose: bool = False, top: int | None = None,
+    profile_name: str,
+    verify: bool = False,
+    validate_only: bool = False,
+    verbose: bool = False,
+    top: int | None = None,
 ) -> dict | None:
     """Run a single profile. Returns profile result dict for health tracking (None in verify/validate mode)."""
     profile = load_profile(profile_name)
@@ -423,7 +433,13 @@ def run_profile(
                 print(f"  - {err}")
             return None
         logger.error(f"Profile '{profile_name}' has validation errors, skipping")
-        return {"status": "error", "deals_found": 0, "new_alerts": 0, "errors": [f"validation: {e}" for e in errors], "source_results": {}}
+        return {
+            "status": "error",
+            "deals_found": 0,
+            "new_alerts": 0,
+            "errors": [f"validation: {e}" for e in errors],
+            "source_results": {},
+        }
 
     if validate_only:
         print(f"\u2705 Profile '{profile_name}' is valid")
@@ -549,7 +565,9 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                 emoji=emoji,
                 currency=currency,
             )
-        logger.info(f"Sent {min(len(price_drop_alerts), max_alerts)} price drop alerts for {profile_name}")
+        logger.info(
+            f"Sent {min(len(price_drop_alerts), max_alerts)} price drop alerts for {profile_name}"
+        )
 
     # Console output for price drops
     for pda in price_drop_alerts:
@@ -558,9 +576,11 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         old_str = f"{pc['old_price']:,} {currency}".replace(",", " ")
         new_str = f"{pc['new_price']:,} {currency}".replace(",", " ")
         print(f"{emoji} \U0001f4c9 PRICE DROP: {d.title[:60]}")
-        print(f"  {old_str} -> {new_str} (-{pc['diff_percent']:.0f}%, -{pc['diff_pln']} {currency})")
+        print(
+            f"  {old_str} -> {new_str} (-{pc['diff_percent']:.0f}%, -{pc['diff_pln']} {currency})"
+        )
         if pc.get("is_lowest_ever"):
-            print(f"  \U0001f525 Najniższa cena w historii!")
+            print("  \U0001f525 Najniższa cena w historii!")
         print(f"  {d.link}")
         print()
 
@@ -620,7 +640,9 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         print()
 
     total_alerts = len(alerts) + len(price_drop_alerts)
-    logger.info(f"Profile {profile_name}: {len(alerts)} new deal alerts, {len(price_drop_alerts)} price drop alerts")
+    logger.info(
+        f"Profile {profile_name}: {len(alerts)} new deal alerts, {len(price_drop_alerts)} price drop alerts"
+    )
     return total_alerts
 
 
@@ -653,8 +675,12 @@ def _format_breakdown_line(entry: dict) -> str:
 
 
 def _print_verbose_plain(
-    scored: list[tuple], rejected_deals: list[tuple],
-    threshold: int, threshold_alert: int, currency: str, top: int | None,
+    scored: list[tuple],
+    rejected_deals: list[tuple],
+    threshold: int,
+    threshold_alert: int,
+    currency: str,
+    top: int | None,
 ) -> None:
     """Print verbose scoring breakdown using box-drawing characters."""
     all_entries = list(scored)
@@ -662,14 +688,17 @@ def _print_verbose_plain(
         all_entries = all_entries[:top]
 
     for deal, result in all_entries:
-        price_str = f"{deal.price:,} {currency}".replace(",", " ") if deal.price > 0 else "no price"
         status = "\u2705" if result.score >= threshold else "\u274c"
         print(f"\u250c\u2500 {deal.title[:70]} \u2014 SCORE: {result.score} {status}")
 
         for entry in result.breakdown:
             print(_format_breakdown_line(entry))
 
-        tier = "ALERT" if result.score >= threshold_alert else ("PASS" if result.score >= threshold else "BELOW")
+        tier = (
+            "ALERT"
+            if result.score >= threshold_alert
+            else ("PASS" if result.score >= threshold else "BELOW")
+        )
         print(f"\u2514\u2500 Final: {result.score} (threshold: {threshold}) \u2192 {tier} {status}")
         print()
 
@@ -689,13 +718,16 @@ def _print_verbose_plain(
 
 
 def _print_verbose_rich(
-    scored: list[tuple], rejected_deals: list[tuple],
-    threshold: int, threshold_alert: int, currency: str, top: int | None,
+    scored: list[tuple],
+    rejected_deals: list[tuple],
+    threshold: int,
+    threshold_alert: int,
+    currency: str,
+    top: int | None,
 ) -> None:
     """Print verbose scoring breakdown using the rich library."""
     from rich.console import Console
     from rich.panel import Panel
-    from rich.text import Text
 
     console = Console()
     all_entries = list(scored)
@@ -704,7 +736,11 @@ def _print_verbose_rich(
 
     for deal, result in all_entries:
         status = "\u2705" if result.score >= threshold else "\u274c"
-        tier = "ALERT" if result.score >= threshold_alert else ("PASS" if result.score >= threshold else "BELOW")
+        tier = (
+            "ALERT"
+            if result.score >= threshold_alert
+            else ("PASS" if result.score >= threshold else "BELOW")
+        )
 
         lines = []
         for entry in result.breakdown:
@@ -746,27 +782,42 @@ def _print_verbose_rich(
         lines = []
         for deal, result in rejected_deals:
             lines.append(f"[red]\u274c[/red] {deal.title[:60]} \u2014 {result.reject_reason}")
-        console.print(Panel("\n".join(lines), title=f"REJECTED ({len(rejected_deals)})", border_style="dim", expand=False))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title=f"REJECTED ({len(rejected_deals)})",
+                border_style="dim",
+                expand=False,
+            )
+        )
 
     if top is not None and len(scored) > top:
         console.print(f"\n  ... and {len(scored) - top} more scored deals\n")
 
 
 def _print_verbose(
-    scored: list[tuple], rejected_deals: list[tuple],
-    threshold: int, threshold_alert: int, currency: str, top: int | None,
+    scored: list[tuple],
+    rejected_deals: list[tuple],
+    threshold: int,
+    threshold_alert: int,
+    currency: str,
+    top: int | None,
 ) -> None:
     """Print verbose scoring breakdown. Uses rich if available, falls back to plain text."""
     try:
         import rich  # noqa: F401
+
         _print_verbose_rich(scored, rejected_deals, threshold, threshold_alert, currency, top)
     except ImportError:
         _print_verbose_plain(scored, rejected_deals, threshold, threshold_alert, currency, top)
 
 
 def _run_verify(
-    deals: list, deal_filter: BaseFilter, profile: dict,
-    verbose: bool = False, top: int | None = None,
+    deals: list,
+    deal_filter: BaseFilter,
+    profile: dict,
+    verbose: bool = False,
+    top: int | None = None,
 ) -> None:
     """Verify mode — analyze all deals without state tracking."""
     emoji = profile.get("emoji", "\U0001f50d")
@@ -802,7 +853,9 @@ def _run_verify(
 
         limit = top if top is not None else 20
         for deal, result in scored[:limit]:
-            price_str = f"{deal.price:,} {currency}".replace(",", " ") if deal.price > 0 else "no price"
+            price_str = (
+                f"{deal.price:,} {currency}".replace(",", " ") if deal.price > 0 else "no price"
+            )
             temp_str = f" | temp: {deal.temperature}\u00b0" if deal.temperature else ""
 
             if result.score >= threshold_alert:
@@ -837,7 +890,9 @@ def run_digest() -> None:
     tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
     if not tg_token or not tg_chat:
         logger.warning("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — cannot send digest")
-        print("Warning: Telegram not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env")
+        print(
+            "Warning: Telegram not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env"
+        )
         return
 
     db: SQLiteStorage | None = None
@@ -866,7 +921,9 @@ def run_digest() -> None:
         old_str = f"{d['old_price']:,} PLN".replace(",", " ")
         new_str = f"{d['new_price']:,} PLN".replace(",", " ")
         lowest = " \U0001f525" if d.get("is_lowest_ever") else ""
-        print(f"  \U0001f4c9 {d['title'][:60]}: {old_str} -> {new_str} (-{d['diff_percent']}%){lowest}")
+        print(
+            f"  \U0001f4c9 {d['title'][:60]}: {old_str} -> {new_str} (-{d['diff_percent']}%){lowest}"
+        )
 
     # Send Telegram digest
     topic_id = _parse_topic_id()
@@ -877,13 +934,14 @@ def run_digest() -> None:
     # Generate and send digest bar chart
     try:
         from visualization.charts import generate_digest_chart
+
         chart_path = generate_digest_chart(drops)
         telegram.send_photo(
             str(chart_path),
             caption="📊 Największe spadki cen (ostatni tydzień)",
             topic_id=topic_id,
         )
-        print(f"Digest chart sent to Telegram.")
+        print("Digest chart sent to Telegram.")
     except ImportError:
         logger.info("matplotlib not installed — skipping digest chart")
     except Exception as e:
@@ -917,7 +975,9 @@ def run_price_chart(deal_id: str) -> None:
     if tg_token and tg_chat:
         topic_id = _parse_topic_id()
         telegram = TelegramNotifier(tg_token, tg_chat)
-        telegram.send_photo(str(chart_path), caption=f"📈 Historia cen: {deal_id}", topic_id=topic_id)
+        telegram.send_photo(
+            str(chart_path), caption=f"📈 Historia cen: {deal_id}", topic_id=topic_id
+        )
         print("Chart sent to Telegram.")
     else:
         print("Telegram not configured — chart not sent.")
@@ -950,15 +1010,19 @@ def run_trend_chart(profile_name: str) -> None:
     if tg_token and tg_chat:
         topic_id = _parse_topic_id()
         telegram = TelegramNotifier(tg_token, tg_chat)
-        telegram.send_photo(str(chart_path), caption=f"📊 Trend cenowy: {profile_name}", topic_id=topic_id)
+        telegram.send_photo(
+            str(chart_path), caption=f"📊 Trend cenowy: {profile_name}", topic_id=topic_id
+        )
         print("Chart sent to Telegram.")
     else:
         print("Telegram not configured — chart not sent.")
 
 
 def _run_with_health_tracking(
-    profile_names: list[str], verify: bool = False,
-    verbose: bool = False, top: int | None = None,
+    profile_names: list[str],
+    verify: bool = False,
+    verbose: bool = False,
+    top: int | None = None,
 ) -> None:
     """Run profiles and write health.json with results."""
     start = time.monotonic()
@@ -1018,7 +1082,7 @@ def _send_source_failure_alert(failing_sources: list[str], sources_health: dict)
         last = data.get("last_success", "never")
         lines.append(f"  • {name}: {count} consecutive failures (last success: {last})")
 
-    msg = f"⚠️ Deal Hunter: source failures detected!\n\n" + "\n".join(lines)
+    msg = "⚠️ Deal Hunter: source failures detected!\n\n" + "\n".join(lines)
     telegram.send_text(msg, topic_id=topic_id)
 
 
@@ -1054,11 +1118,15 @@ def main() -> None:
         "--digest", action="store_true", help="Send weekly price drop digest from SQLite"
     )
     parser.add_argument(
-        "--price-chart", type=str, metavar="DEAL_ID",
+        "--price-chart",
+        type=str,
+        metavar="DEAL_ID",
         help="Generate price history chart for a deal and send to Telegram",
     )
     parser.add_argument(
-        "--trend-chart", type=str, metavar="PROFILE",
+        "--trend-chart",
+        type=str,
+        metavar="PROFILE",
         help="Generate trend chart for a profile and send to Telegram",
     )
     parser.add_argument("--version", action="version", version=f"Deal Hunter {__version__}")
@@ -1126,7 +1194,9 @@ def main() -> None:
         return
 
     if args.profile:
-        _run_with_health_tracking([args.profile], verify=args.verify, verbose=args.verbose, top=args.top)
+        _run_with_health_tracking(
+            [args.profile], verify=args.verify, verbose=args.verbose, top=args.top
+        )
         return
 
     parser.print_help()

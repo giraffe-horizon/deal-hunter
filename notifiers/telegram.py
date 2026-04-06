@@ -171,7 +171,7 @@ class TelegramNotifier:
             msg += "\n"
 
             if len(msg) > 3500:
-                msg += f"\n... i wi\u0119cej spadk\u00f3w"
+                msg += "\n... i wi\u0119cej spadk\u00f3w"
                 break
 
         self._send_message(msg, topic_id=topic_id, disable_preview=True)
@@ -195,9 +195,7 @@ class TelegramNotifier:
             try:
                 time.sleep(1.5)  # Rate limiting
                 with open(photo_path, "rb") as f:
-                    resp = requests.post(
-                        url, data=data, files={"photo": f}, timeout=30
-                    )
+                    resp = requests.post(url, data=data, files={"photo": f}, timeout=30)
                 if resp.status_code == 200:
                     logger.info(f"Telegram: sent photo {photo_path}")
                     return

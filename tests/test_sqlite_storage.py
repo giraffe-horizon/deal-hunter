@@ -1,8 +1,5 @@
 """Tests for SQLite storage layer."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
 
 from sources.base import Deal

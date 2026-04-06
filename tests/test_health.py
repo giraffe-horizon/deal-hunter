@@ -4,14 +4,13 @@ import json
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import health
-
 
 # ──────────────── Fixtures ────────────────
 
@@ -118,26 +117,44 @@ class TestUpdateSourcesHealth:
         assert result["pepper"]["consecutive_failures"] == 1
 
     def test_consecutive_failures_increment(self):
-        existing = _make_health(sources_health={
-            "pepper": {"status": "degraded", "last_success": "2026-04-01T10:00:00", "consecutive_failures": 2},
-        })
+        existing = _make_health(
+            sources_health={
+                "pepper": {
+                    "status": "degraded",
+                    "last_success": "2026-04-01T10:00:00",
+                    "consecutive_failures": 2,
+                },
+            }
+        )
         result = health.update_sources_health(existing, {"pepper": False})
         assert result["pepper"]["consecutive_failures"] == 3
         assert result["pepper"]["status"] == "down"
         assert result["pepper"]["last_success"] == "2026-04-01T10:00:00"
 
     def test_success_resets_failures(self):
-        existing = _make_health(sources_health={
-            "pepper": {"status": "down", "last_success": "2026-04-01T10:00:00", "consecutive_failures": 5},
-        })
+        existing = _make_health(
+            sources_health={
+                "pepper": {
+                    "status": "down",
+                    "last_success": "2026-04-01T10:00:00",
+                    "consecutive_failures": 5,
+                },
+            }
+        )
         result = health.update_sources_health(existing, {"pepper": True})
         assert result["pepper"]["consecutive_failures"] == 0
         assert result["pepper"]["status"] == "ok"
 
     def test_preserves_unseen_sources(self):
-        existing = _make_health(sources_health={
-            "canyon": {"status": "ok", "last_success": "2026-04-01T10:00:00", "consecutive_failures": 0},
-        })
+        existing = _make_health(
+            sources_health={
+                "canyon": {
+                    "status": "ok",
+                    "last_success": "2026-04-01T10:00:00",
+                    "consecutive_failures": 0,
+                },
+            }
+        )
         result = health.update_sources_health(existing, {"pepper": True})
         assert "canyon" in result
         assert result["canyon"]["status"] == "ok"
@@ -200,7 +217,9 @@ class TestPrintHealthStatus:
         data = _make_health(
             status="ok",
             minutes_ago=5,
-            profile_results={"bikes": {"status": "ok", "deals_found": 100, "new_alerts": 2, "errors": []}},
+            profile_results={
+                "bikes": {"status": "ok", "deals_found": 100, "new_alerts": 2, "errors": []}
+            },
             sources_health={"pepper": {"status": "ok", "consecutive_failures": 0}},
         )
         _write_health(use_tmp_health_file, data)
@@ -217,7 +236,12 @@ class TestPrintHealthStatus:
             minutes_ago=10,
             profile_results={
                 "bikes": {"status": "ok", "deals_found": 50, "new_alerts": 1, "errors": []},
-                "nas": {"status": "error", "deals_found": 0, "new_alerts": 0, "errors": ["Pepper timeout"]},
+                "nas": {
+                    "status": "error",
+                    "deals_found": 0,
+                    "new_alerts": 0,
+                    "errors": ["Pepper timeout"],
+                },
             },
         )
         _write_health(use_tmp_health_file, data)

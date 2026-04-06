@@ -94,7 +94,9 @@ async def cmd_watch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text(f"Nie znaleziono oferty: {html.escape(deal_id)}")
             return
         storage.record_feedback(deal_id, "watch")
-        await update.message.reply_text(f"\u2b50 Oferta {html.escape(deal_id)} dodana do obserwowanych")
+        await update.message.reply_text(
+            f"\u2b50 Oferta {html.escape(deal_id)} dodana do obserwowanych"
+        )
     finally:
         storage.close()
 

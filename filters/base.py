@@ -81,10 +81,15 @@ class BaseFilter:
             if matched:
                 result.rejected = True
                 result.reject_reason = f"excluded word: {word}"
-                result.breakdown.append({
-                    "rule": str(word), "points": 0, "source": source,
-                    "match": match_text, "type": "excluded",
-                })
+                result.breakdown.append(
+                    {
+                        "rule": str(word),
+                        "points": 0,
+                        "source": source,
+                        "match": match_text,
+                        "type": "excluded",
+                    }
+                )
                 return result
 
         # Check required_any (at least one must match)
@@ -104,15 +109,25 @@ class BaseFilter:
             if not any_matched:
                 result.rejected = True
                 result.reject_reason = "none of required_any matched"
-                result.breakdown.append({
-                    "rule": "required_any", "points": 0, "source": "",
-                    "match": "", "type": "required_any",
-                })
+                result.breakdown.append(
+                    {
+                        "rule": "required_any",
+                        "points": 0,
+                        "source": "",
+                        "match": "",
+                        "type": "required_any",
+                    }
+                )
                 return result
-            result.breakdown.append({
-                "rule": matched_rule, "points": 0, "source": matched_source,
-                "match": matched_text, "type": "required_any",
-            })
+            result.breakdown.append(
+                {
+                    "rule": matched_rule,
+                    "points": 0,
+                    "source": matched_source,
+                    "match": matched_text,
+                    "type": "required_any",
+                }
+            )
 
         # Positive score rules
         for keyword, points in self.score_rules.items():
@@ -121,10 +136,15 @@ class BaseFilter:
                 result.score += points
                 result.plus.append(f"+{points} {keyword}")
                 match_type = "regex" if str(keyword).startswith("r/") else "keyword"
-                result.breakdown.append({
-                    "rule": str(keyword), "points": points, "source": source,
-                    "match": match_text, "type": match_type,
-                })
+                result.breakdown.append(
+                    {
+                        "rule": str(keyword),
+                        "points": points,
+                        "source": source,
+                        "match": match_text,
+                        "type": match_type,
+                    }
+                )
 
         # Penalties
         for keyword, penalty in self.penalties.items():
@@ -132,10 +152,15 @@ class BaseFilter:
             if matched:
                 result.score += penalty  # penalty is negative
                 result.minus.append(f"{penalty} {keyword}")
-                result.breakdown.append({
-                    "rule": str(keyword), "points": penalty, "source": source,
-                    "match": match_text, "type": "penalty",
-                })
+                result.breakdown.append(
+                    {
+                        "rule": str(keyword),
+                        "points": penalty,
+                        "source": source,
+                        "match": match_text,
+                        "type": "penalty",
+                    }
+                )
 
         # Budget check
         price = deal.price
@@ -143,56 +168,91 @@ class BaseFilter:
             if price < self.budget_min:
                 result.score -= 20
                 result.minus.append(f"-20 too cheap ({price} PLN)")
-                result.breakdown.append({
-                    "rule": "budget", "points": -20, "source": "price",
-                    "match": f"{price} PLN (min: {self.budget_min})", "type": "budget",
-                })
+                result.breakdown.append(
+                    {
+                        "rule": "budget",
+                        "points": -20,
+                        "source": "price",
+                        "match": f"{price} PLN (min: {self.budget_min})",
+                        "type": "budget",
+                    }
+                )
             elif price > self.budget_max:
                 result.score -= 30
                 result.minus.append(f"-30 too expensive ({price} PLN)")
-                result.breakdown.append({
-                    "rule": "budget", "points": -30, "source": "price",
-                    "match": f"{price} PLN (max: {self.budget_max})", "type": "budget",
-                })
+                result.breakdown.append(
+                    {
+                        "rule": "budget",
+                        "points": -30,
+                        "source": "price",
+                        "match": f"{price} PLN (max: {self.budget_max})",
+                        "type": "budget",
+                    }
+                )
             else:
                 result.score += 5
                 result.plus.append(f"+5 in budget ({price} PLN)")
-                result.breakdown.append({
-                    "rule": "budget", "points": 5, "source": "price",
-                    "match": f"{price} PLN", "type": "budget",
-                })
+                result.breakdown.append(
+                    {
+                        "rule": "budget",
+                        "points": 5,
+                        "source": "price",
+                        "match": f"{price} PLN",
+                        "type": "budget",
+                    }
+                )
 
         # Temperature bonus (Pepper social proof)
         temp = deal.temperature
         if temp >= 100:
             result.score += 10
             result.plus.append(f"+10 hot deal ({temp}\u00b0)")
-            result.breakdown.append({
-                "rule": "temperature", "points": 10, "source": "temperature",
-                "match": f"{temp}\u00b0", "type": "temperature",
-            })
+            result.breakdown.append(
+                {
+                    "rule": "temperature",
+                    "points": 10,
+                    "source": "temperature",
+                    "match": f"{temp}\u00b0",
+                    "type": "temperature",
+                }
+            )
         elif temp >= 50:
             result.score += 5
             result.plus.append(f"+5 warm deal ({temp}\u00b0)")
-            result.breakdown.append({
-                "rule": "temperature", "points": 5, "source": "temperature",
-                "match": f"{temp}\u00b0", "type": "temperature",
-            })
+            result.breakdown.append(
+                {
+                    "rule": "temperature",
+                    "points": 5,
+                    "source": "temperature",
+                    "match": f"{temp}\u00b0",
+                    "type": "temperature",
+                }
+            )
         elif temp < -10:
             result.score -= 10
             result.minus.append(f"-10 cold deal ({temp}\u00b0)")
-            result.breakdown.append({
-                "rule": "temperature", "points": -10, "source": "temperature",
-                "match": f"{temp}\u00b0", "type": "temperature",
-            })
+            result.breakdown.append(
+                {
+                    "rule": "temperature",
+                    "points": -10,
+                    "source": "temperature",
+                    "match": f"{temp}\u00b0",
+                    "type": "temperature",
+                }
+            )
 
         # No publication date + cold = suspicious
         if not deal.published_at and temp < 0:
             result.score -= 15
             result.minus.append(f"-15 no date + cold deal ({temp}\u00b0)")
-            result.breakdown.append({
-                "rule": "no_date_cold", "points": -15, "source": "metadata",
-                "match": f"no date + {temp}\u00b0", "type": "penalty",
-            })
+            result.breakdown.append(
+                {
+                    "rule": "no_date_cold",
+                    "points": -15,
+                    "source": "metadata",
+                    "match": f"no date + {temp}\u00b0",
+                    "type": "penalty",
+                }
+            )
 
         return result

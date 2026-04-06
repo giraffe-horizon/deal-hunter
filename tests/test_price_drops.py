@@ -1,10 +1,7 @@
 """Tests for configurable price drop alerts and weekly digest."""
 
-import html
-import tempfile
 from datetime import datetime, timedelta
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -12,7 +9,6 @@ from deal_hunter import check_price_changes, get_price_tracking_config
 from notifiers.telegram import TelegramNotifier
 from sources.base import Deal
 from storage.sqlite import SQLiteStorage
-
 
 # ──────────────── FIXTURES ────────────────
 
@@ -144,11 +140,7 @@ class TestCheckPriceChanges:
     def test_same_price_no_change(self, deal, profile_with_tracking):
         state = {
             "seen": {},
-            "prices": {
-                "pepper:12345": [
-                    {"price": 10499, "ts": "2026-04-01T10:00:00"}
-                ]
-            },
+            "prices": {"pepper:12345": [{"price": 10499, "ts": "2026-04-01T10:00:00"}]},
         }
         result = check_price_changes(deal, state, "bikes", profile_with_tracking)
         assert result is None
@@ -157,11 +149,7 @@ class TestCheckPriceChanges:
         """Drop of 19% should trigger with min_drop_percent=15."""
         state = {
             "seen": {},
-            "prices": {
-                "pepper:12345": [
-                    {"price": 12999, "ts": "2026-04-01T10:00:00"}
-                ]
-            },
+            "prices": {"pepper:12345": [{"price": 12999, "ts": "2026-04-01T10:00:00"}]},
         }
         result = check_price_changes(deal, state, "bikes", profile_with_tracking)
         assert result is not None
@@ -175,11 +163,7 @@ class TestCheckPriceChanges:
         """Drop of 300 PLN (2.8%) should trigger with min_drop_amount=200."""
         state = {
             "seen": {},
-            "prices": {
-                "pepper:12345": [
-                    {"price": 10799, "ts": "2026-04-01T10:00:00"}
-                ]
-            },
+            "prices": {"pepper:12345": [{"price": 10799, "ts": "2026-04-01T10:00:00"}]},
         }
         result = check_price_changes(deal, state, "bikes", profile_with_tracking)
         assert result is not None
@@ -189,17 +173,19 @@ class TestCheckPriceChanges:
     def test_small_drop_below_thresholds(self, profile_with_tracking):
         """Drop of 100 PLN (1%) should NOT trigger with min_drop_amount=200 and min_drop_percent=15."""
         deal = Deal(
-            id="test:1", title="Some Bike", price=9900,
-            link="http://x", source="pepper", description="",
-            temperature=0, image_url="", published_at="",
+            id="test:1",
+            title="Some Bike",
+            price=9900,
+            link="http://x",
+            source="pepper",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
         )
         state = {
             "seen": {},
-            "prices": {
-                "test:1": [
-                    {"price": 10000, "ts": "2026-04-01T10:00:00"}
-                ]
-            },
+            "prices": {"test:1": [{"price": 10000, "ts": "2026-04-01T10:00:00"}]},
         }
         result = check_price_changes(deal, state, "bikes", profile_with_tracking)
         assert result is None
@@ -207,17 +193,19 @@ class TestCheckPriceChanges:
     def test_price_increase_ignored_by_default(self, profile_with_tracking):
         """Price increase should return None when track_increases=False."""
         deal = Deal(
-            id="test:1", title="Some Bike", price=12000,
-            link="http://x", source="pepper", description="",
-            temperature=0, image_url="", published_at="",
+            id="test:1",
+            title="Some Bike",
+            price=12000,
+            link="http://x",
+            source="pepper",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
         )
         state = {
             "seen": {},
-            "prices": {
-                "test:1": [
-                    {"price": 10000, "ts": "2026-04-01T10:00:00"}
-                ]
-            },
+            "prices": {"test:1": [{"price": 10000, "ts": "2026-04-01T10:00:00"}]},
         }
         result = check_price_changes(deal, state, "bikes", profile_with_tracking)
         assert result is None
@@ -228,17 +216,19 @@ class TestCheckPriceChanges:
             "price_tracking": {"track_increases": True},
         }
         deal = Deal(
-            id="test:1", title="Some Bike", price=12000,
-            link="http://x", source="pepper", description="",
-            temperature=0, image_url="", published_at="",
+            id="test:1",
+            title="Some Bike",
+            price=12000,
+            link="http://x",
+            source="pepper",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
         )
         state = {
             "seen": {},
-            "prices": {
-                "test:1": [
-                    {"price": 10000, "ts": "2026-04-01T10:00:00"}
-                ]
-            },
+            "prices": {"test:1": [{"price": 10000, "ts": "2026-04-01T10:00:00"}]},
         }
         result = check_price_changes(deal, state, "bikes", profile)
         assert result is not None
@@ -248,20 +238,22 @@ class TestCheckPriceChanges:
     def test_disabled_tracking_returns_none(self, deal, profile_tracking_disabled):
         state = {
             "seen": {},
-            "prices": {
-                "pepper:12345": [
-                    {"price": 15000, "ts": "2026-04-01T10:00:00"}
-                ]
-            },
+            "prices": {"pepper:12345": [{"price": 15000, "ts": "2026-04-01T10:00:00"}]},
         }
         result = check_price_changes(deal, state, "bikes", profile_tracking_disabled)
         assert result is None
 
     def test_zero_price_ignored(self, profile_with_tracking):
         deal = Deal(
-            id="test:1", title="Free Bike", price=0,
-            link="http://x", source="pepper", description="",
-            temperature=0, image_url="", published_at="",
+            id="test:1",
+            title="Free Bike",
+            price=0,
+            link="http://x",
+            source="pepper",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
         )
         state = {"seen": {}, "prices": {}}
         result = check_price_changes(deal, state, "bikes", profile_with_tracking)
@@ -286,9 +278,15 @@ class TestCheckPriceChanges:
         """Price drops but was lower before — not lowest ever."""
         profile = {"name": "test", "price_tracking": {"min_drop_percent": 5, "min_drop_amount": 50}}
         deal = Deal(
-            id="test:1", title="Some Bike", price=11000,
-            link="http://x", source="pepper", description="",
-            temperature=0, image_url="", published_at="",
+            id="test:1",
+            title="Some Bike",
+            price=11000,
+            link="http://x",
+            source="pepper",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
         )
         state = {
             "seen": {},
@@ -329,11 +327,7 @@ class TestCheckPriceChanges:
         """check_price_changes works without profile arg (uses defaults)."""
         state = {
             "seen": {},
-            "prices": {
-                "pepper:12345": [
-                    {"price": 15000, "ts": "2026-04-01T10:00:00"}
-                ]
-            },
+            "prices": {"pepper:12345": [{"price": 15000, "ts": "2026-04-01T10:00:00"}]},
         }
         result = check_price_changes(deal, state, "bikes")
         assert result is not None
@@ -342,14 +336,26 @@ class TestCheckPriceChanges:
     def test_cross_source_no_false_drop(self, profile_with_tracking):
         """Same product from different sources should NOT trigger false price drop."""
         deal_a = Deal(
-            id="sprint:100", title="BMC URS TWO", price=13900,
-            link="http://sprint.pl/100", source="sprint", description="",
-            temperature=0, image_url="", published_at="",
+            id="sprint:100",
+            title="BMC URS TWO",
+            price=13900,
+            link="http://sprint.pl/100",
+            source="sprint",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
         )
         deal_b = Deal(
-            id="centrumrowerowe:200", title="BMC URS TWO", price=8999,
-            link="http://cr.pl/200", source="centrumrowerowe", description="",
-            temperature=0, image_url="", published_at="",
+            id="centrumrowerowe:200",
+            title="BMC URS TWO",
+            price=8999,
+            link="http://cr.pl/200",
+            source="centrumrowerowe",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
         )
         state = {"seen": {}, "prices": {}}
 
@@ -368,9 +374,15 @@ class TestCheckPriceChanges:
     def test_cooldown_suppresses_rapid_drops(self, profile_with_tracking):
         """Price drop within 24h of a previous change should be suppressed."""
         deal = Deal(
-            id="test:1", title="Some Bike", price=8000,
-            link="http://x", source="pepper", description="",
-            temperature=0, image_url="", published_at="",
+            id="test:1",
+            title="Some Bike",
+            price=8000,
+            link="http://x",
+            source="pepper",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
         )
         now = datetime.now()
         recent_ts = (now - timedelta(hours=2)).isoformat()
@@ -390,9 +402,15 @@ class TestCheckPriceChanges:
     def test_cooldown_allows_after_24h(self, profile_with_tracking):
         """Price drop after 24h cooldown should be allowed."""
         deal = Deal(
-            id="test:1", title="Some Bike", price=8000,
-            link="http://x", source="pepper", description="",
-            temperature=0, image_url="", published_at="",
+            id="test:1",
+            title="Some Bike",
+            price=8000,
+            link="http://x",
+            source="pepper",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
         )
         old_ts = (datetime.now() - timedelta(hours=25)).isoformat()
         state = {
@@ -576,9 +594,15 @@ class TestTelegramPriceDropAlert:
     def test_price_drop_message_no_lowest(self):
         tg = TelegramNotifier("token", "chat_id")
         deal = Deal(
-            id="test:1", title="Some Bike", price=11000,
-            link="http://x", source="pepper", description="",
-            temperature=0, image_url="", published_at="",
+            id="test:1",
+            title="Some Bike",
+            price=11000,
+            link="http://x",
+            source="pepper",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
         )
         price_change = {
             "type": "drop",

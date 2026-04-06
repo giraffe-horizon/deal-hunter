@@ -27,10 +27,15 @@ class BikeFilter(BaseFilter):
         size_result = self._check_size(text)
         if size_result == "wrong":
             result = ScoreResult(score=0, rejected=True, reject_reason="wrong size")
-            result.breakdown.append({
-                "rule": "size", "points": 0, "source": "title",
-                "match": "wrong size", "type": "size",
-            })
+            result.breakdown.append(
+                {
+                    "rule": "size",
+                    "points": 0,
+                    "source": "title",
+                    "match": "wrong size",
+                    "type": "size",
+                }
+            )
             return result
 
         # Run base scoring
@@ -42,17 +47,27 @@ class BikeFilter(BaseFilter):
         if size_result == "good":
             result.score += 10
             result.plus.append("+10 good size")
-            result.breakdown.append({
-                "rule": "size", "points": 10, "source": "title",
-                "match": "good size", "type": "size",
-            })
+            result.breakdown.append(
+                {
+                    "rule": "size",
+                    "points": 10,
+                    "source": "title",
+                    "match": "good size",
+                    "type": "size",
+                }
+            )
         elif size_result == "unknown":
             result.score -= 30
             result.minus.append("-30 no size info")
-            result.breakdown.append({
-                "rule": "size", "points": -30, "source": "title",
-                "match": "no size info", "type": "size",
-            })
+            result.breakdown.append(
+                {
+                    "rule": "size",
+                    "points": -30,
+                    "source": "title",
+                    "match": "no size info",
+                    "type": "size",
+                }
+            )
 
         # Color exclusion
         for color in self.excluded_colors:
@@ -60,10 +75,15 @@ class BikeFilter(BaseFilter):
                 color_source = "title" if color.lower() in deal.title.lower() else "description"
                 result.score -= 100
                 result.minus.append(f"-100 color {color}")
-                result.breakdown.append({
-                    "rule": f"color:{color}", "points": -100, "source": color_source,
-                    "match": color.lower(), "type": "color",
-                })
+                result.breakdown.append(
+                    {
+                        "rule": f"color:{color}",
+                        "points": -100,
+                        "source": color_source,
+                        "match": color.lower(),
+                        "type": "color",
+                    }
+                )
 
         # Tire width scoring
         tire_match = re.search(r"(\d{2})\s*(?:mm|c)\b", text)
@@ -72,24 +92,39 @@ class BikeFilter(BaseFilter):
             if 38 <= tire_width <= 50:
                 result.score += 20
                 result.plus.append(f"+20 tire {tire_width}mm (ideal)")
-                result.breakdown.append({
-                    "rule": "tire_width", "points": 20, "source": "title",
-                    "match": f"{tire_width}mm (ideal)", "type": "tire",
-                })
+                result.breakdown.append(
+                    {
+                        "rule": "tire_width",
+                        "points": 20,
+                        "source": "title",
+                        "match": f"{tire_width}mm (ideal)",
+                        "type": "tire",
+                    }
+                )
             elif 32 <= tire_width <= 37:
                 result.score += 10
                 result.plus.append(f"+10 tire {tire_width}mm (OK)")
-                result.breakdown.append({
-                    "rule": "tire_width", "points": 10, "source": "title",
-                    "match": f"{tire_width}mm (OK)", "type": "tire",
-                })
+                result.breakdown.append(
+                    {
+                        "rule": "tire_width",
+                        "points": 10,
+                        "source": "title",
+                        "match": f"{tire_width}mm (OK)",
+                        "type": "tire",
+                    }
+                )
             elif 23 <= tire_width <= 27:
                 result.score -= 10
                 result.minus.append(f"-10 narrow tire {tire_width}mm")
-                result.breakdown.append({
-                    "rule": "tire_width", "points": -10, "source": "title",
-                    "match": f"{tire_width}mm (narrow)", "type": "tire",
-                })
+                result.breakdown.append(
+                    {
+                        "rule": "tire_width",
+                        "points": -10,
+                        "source": "title",
+                        "match": f"{tire_width}mm (narrow)",
+                        "type": "tire",
+                    }
+                )
 
         # Race keywords penalty
         race_count = sum(1 for kw in self.race_keywords if kw.lower() in text)
@@ -97,10 +132,15 @@ class BikeFilter(BaseFilter):
             penalty = race_count * -15
             result.score += penalty
             result.minus.append(f"{penalty} race keywords (x{race_count})")
-            result.breakdown.append({
-                "rule": "race_keywords", "points": penalty, "source": "title",
-                "match": f"x{race_count} race keywords", "type": "race",
-            })
+            result.breakdown.append(
+                {
+                    "rule": "race_keywords",
+                    "points": penalty,
+                    "source": "title",
+                    "match": f"x{race_count} race keywords",
+                    "type": "race",
+                }
+            )
 
         return result
 
