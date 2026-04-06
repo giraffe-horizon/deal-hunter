@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.4.3 (2026-04-06)
+
+### Bug Fixes
+
+- Stop scanning examples/ directory as real profiles
+  ([`b3e13fa`](https://github.com/giraffe-horizon/deal-hunter/commit/b3e13fa86fc7a7f8f4931d373115360519fd9da6))
+
+- Remove EXAMPLES_DIR fallback from load_profile and list_profiles - Remove COPY examples/ from
+  Dockerfile - examples/ is reference documentation only, not auto-discovered
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.4.2 (2026-04-06)
 
 ### Bug Fixes
