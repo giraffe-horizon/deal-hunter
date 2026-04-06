@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS alert_queue (
     created_at DATETIME NOT NULL,
     sent_at DATETIME
 );
+
+CREATE TABLE IF NOT EXISTS watchlist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    deal_id TEXT NOT NULL,
+    target_price INTEGER NOT NULL,
+    created_at DATETIME NOT NULL,
+    triggered_at DATETIME,
+    UNIQUE(deal_id)
+);
 """
 
 
@@ -539,6 +548,59 @@ class SQLiteStorage:
             self._conn.commit()
         except sqlite3.Error as e:
             logger.error(f"Failed to mark alerts as sent: {e}")
+
+    # ── Watchlist ──
+
+    def add_to_watchlist(self, deal_id: str, target_price: int) -> bool:
+        """Add a deal to the watchlist. Returns False if already exists."""
+        try:
+            self._conn.execute(
+                "INSERT INTO watchlist (deal_id, target_price, created_at) VALUES (?, ?, ?)",
+                (deal_id, target_price, datetime.now().isoformat()),
+            )
+            self._conn.commit()
+            return True
+        except Exception:
+            return False
+
+    def remove_from_watchlist(self, deal_id: str) -> bool:
+        """Remove a deal from the watchlist. Returns True if found and removed."""
+        cursor = self._conn.execute(
+            "DELETE FROM watchlist WHERE deal_id = ?", (deal_id,)
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
+
+    def get_watchlist(self) -> list[dict]:
+        """Get all watchlist items with deal info."""
+        cursor = self._conn.execute(
+            """SELECT w.deal_id, w.target_price, w.created_at, w.triggered_at,
+                      d.title, d.price as current_price, d.link, d.source
+               FROM watchlist w
+               LEFT JOIN deals d ON w.deal_id = d.id
+               ORDER BY w.created_at DESC"""
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def check_watchlist_triggers(self, deal_id: str, current_price: int) -> dict | None:
+        """Check if a deal's current price meets the watchlist target.
+        Returns the watchlist entry if triggered, None otherwise."""
+        cursor = self._conn.execute(
+            "SELECT deal_id, target_price FROM watchlist WHERE deal_id = ? AND triggered_at IS NULL",
+            (deal_id,),
+        )
+        row = cursor.fetchone()
+        if row and current_price <= row["target_price"]:
+            return dict(row)
+        return None
+
+    def mark_watchlist_triggered(self, deal_id: str) -> None:
+        """Mark a watchlist entry as triggered."""
+        self._conn.execute(
+            "UPDATE watchlist SET triggered_at = ? WHERE deal_id = ?",
+            (datetime.now().isoformat(), deal_id),
+        )
+        self._conn.commit()
 
     def close(self) -> None:
         """Close the database connection."""
