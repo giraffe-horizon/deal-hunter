@@ -82,11 +82,11 @@ class YamlSource(Source):
 
     @property
     def _store_name(self) -> str:
-        return self._store_def.get("name", "yaml")
+        return str(self._store_def.get("name", "yaml"))
 
     @property
     def _base_url(self) -> str:
-        return self._store_def.get("base_url", "")
+        return str(self._store_def.get("base_url", ""))
 
     def fetch_deals(self, config: dict) -> list[Deal]:
         store_type = self._store_def.get("type", "catalog")
@@ -123,7 +123,7 @@ class YamlSource(Source):
             template = self._store_def["search_url_category"]
         else:
             template = self._store_def.get("search_url", "")
-        return template.replace("{query}", encoded).replace("{category}", category)
+        return str(template).replace("{query}", encoded).replace("{category}", category)
 
     # ── Catalog-type stores ──
 
@@ -453,7 +453,7 @@ class YamlSource(Source):
                 if el:
                     text = el.get_text(strip=True)
                     if text:
-                        return text
+                        return str(text)
 
         return ""
 
@@ -485,7 +485,7 @@ class YamlSource(Source):
         if link:
             matches = re.findall(r"/(\d+)", link)
             if matches:
-                return matches[-1]
+                return str(matches[-1])
 
         # Fallback to sanitized title
         return re.sub(r"\W+", "_", title[:60])

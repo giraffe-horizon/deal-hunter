@@ -21,7 +21,7 @@ def load_health() -> dict | None:
         return None
     try:
         with open(HEALTH_FILE, encoding="utf-8") as f:
-            return json.load(f)
+            return dict(json.load(f))
     except (json.JSONDecodeError, OSError) as e:
         logger.error(f"Failed to read health file: {e}")
         return None

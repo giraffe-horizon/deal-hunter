@@ -273,7 +273,7 @@ class SQLiteStorage:
             ).fetchall()
             # rows[0] is current, rows[1] is previous
             if len(rows) >= 2:
-                return rows[1]["price"]
+                return int(rows[1]["price"])
             return None
         except sqlite3.Error as e:
             logger.error(f"Failed to get previous price for {deal_id}: {e}")
