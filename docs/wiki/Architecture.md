@@ -26,8 +26,7 @@ deal-hunter/
 │   ├── base.py                 Scoring engine (keywords, budget, temperature)
 │   └── bike_filter.py          Extended scorer for bikes
 ├── notifiers/
-│   ├── telegram.py             Telegram Bot API with retry
-│   └── notion.py               Notion API integration
+│   └── telegram.py             Telegram Bot API with retry
 ├── utils/
 │   ├── validation.py           Profile YAML validation
 │   └── init_profile.py         Interactive profile creator
@@ -55,7 +54,7 @@ deal-hunter/
         ↓
 6. Filter by thresholds (hot/good/meh)
         ↓
-7. Notify (Telegram, Notion)
+7. Notify (Telegram)
         ↓
 8. Save state (seen deals, prices, timestamps)
 ```

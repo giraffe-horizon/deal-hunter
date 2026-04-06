@@ -7,7 +7,7 @@ Run Deal Hunter as an automated cron job in Docker.
 ```bash
 # Configure
 cp .env.example .env
-# Edit .env with your Telegram/Notion tokens
+# Edit .env with your Telegram token
 
 # Create a profile
 mkdir -p profiles
@@ -100,7 +100,7 @@ docker-compose up -d
 - Uses [supercronic](https://github.com/aptible/supercronic) instead of system cron (no root needed)
 - Uses [tini](https://github.com/krallin/tini) as PID 1 for proper signal handling
 - Secrets in `.env` are mounted read-only
-- No ports are exposed (outbound-only: HTTP to stores, Telegram API, Notion API)
+- No ports are exposed (outbound-only: HTTP to stores, Telegram API)
 
 ## Troubleshooting
 

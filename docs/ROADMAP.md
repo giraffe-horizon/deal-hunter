@@ -265,21 +265,20 @@
 
 ## Podsumowanie
 
-| Faza | Feature | Effort | Priorytet |
-|------|---------|--------|-----------|
-| 0 | Notion removal | S (2h) | 🔴 Teraz |
-| 1.1 | Health monitoring | S (3h) | 🔴 Teraz |
-| 1.2 | CHANGELOG + semver | S (1h) | 🟡 Soon |
-| 1.3 | Docker Compose | M (4h) | 🟡 Soon |
-| 2.1 | Price drop alerts | M (6h) | 🟡 Soon |
-| 2.2 | Verbose scoring | S (4h) | 🟡 Soon |
-| 2.3 | Telegram inline KB | L (8h) | 🟢 Later |
-| 3.1 | SQLite persistence | M (6h) | 🟢 Later |
-| 3.2 | Price charts | M (5h) | 🟢 Later |
-| 3.3 | Dashboard | L (16h) | 🟢 Later |
+| Faza | Feature | Effort | Status |
+|------|---------|--------|--------|
+| 0 | Notion removal | S (2h) | ✅ Done |
+| 1.1 | Health monitoring | S (3h) | ✅ Done |
+| 1.2 | CHANGELOG + semver | S (1h) | 🟡 Backlog |
+| 1.3 | Docker Compose | M (4h) | ✅ Done |
+| 2.1 | Price drop alerts | M (6h) | ✅ Done |
+| 2.2 | Verbose scoring | S (4h) | ✅ Done |
+| 2.3 | Telegram inline KB | L (8h) | ✅ Done |
+| 3.1 | SQLite persistence | M (6h) | ✅ Done |
+| 3.2 | Price charts | M (5h) | ✅ Done |
+| 3.3 | Dashboard | L (16h) | ✅ Done |
 
-**Total estimated effort:** ~55h
-**Sugerowana kolejność:** 0 → 3.1 → 1.1 → 2.1 → 2.2 → 2.3 → 3.2 → 1.3 → 3.3 → 1.2
+**Roadmap v1.0 complete** (2026-04-06). Remaining: 1.2 CHANGELOG (nice-to-have).
 
 **Uwagi po review rady nadzorczej (2026-04-04):**
 - SQLite (3.1) przesunięty zaraz po Notion cleanup — fundament pod wszystko

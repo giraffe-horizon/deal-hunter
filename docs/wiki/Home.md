@@ -1,6 +1,6 @@
 # Deal Hunter Wiki
 
-Welcome to the Deal Hunter documentation! Deal Hunter is a universal deal monitoring tool that scans websites, scores offers using smart rules, and sends alerts to Telegram and Notion.
+Welcome to the Deal Hunter documentation! Deal Hunter is a universal deal monitoring tool that scans websites, scores offers using smart rules, and sends alerts to Telegram.
 
 ## Quick Navigation
 
@@ -20,7 +20,6 @@ Welcome to the Deal Hunter documentation! Deal Hunter is a universal deal monito
 | 🇵🇱 Polish sites built-in | Pepper.pl, Ceneo.pl, Proshop.pl + 5 bike shops |
 | 🎯 Smart scoring | Keyword matching, regex, budget ranges, temperature |
 | 📱 Telegram alerts | Tiered notifications (🔥 hot / ✅ good / 💤 meh) |
-| 📋 Notion database | Track deals in a structured database |
 | 💰 Price tracking | Detects price drops and increases |
 | 🔄 Deduplication | Cross-source dedup by title normalization |
 | 🐳 Docker ready | Cron-based deployment with docker-compose |

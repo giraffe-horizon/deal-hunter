@@ -4,7 +4,6 @@
 
 - Python 3.12+
 - Telegram bot token (optional, for alerts)
-- Notion API key (optional, for database tracking)
 
 ## Installation
 

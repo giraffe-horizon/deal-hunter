@@ -218,8 +218,8 @@ class SQLiteStorage:
             row = self._conn.execute(
                 """SELECT
                     COUNT(*) as total,
-                    SUM(CASE WHEN score >= ? THEN 1 ELSE 0 END) as high_score,
-                    SUM(CASE WHEN first_seen LIKE ? THEN 1 ELSE 0 END) as new_today
+                    COALESCE(SUM(CASE WHEN score >= ? THEN 1 ELSE 0 END), 0) as high_score,
+                    COALESCE(SUM(CASE WHEN first_seen LIKE ? THEN 1 ELSE 0 END), 0) as new_today
                 FROM deals""",
                 (score_threshold, f"{today}%"),
             ).fetchone()

@@ -99,14 +99,27 @@ def deals_page(
     )
     total_pages = max(1, math.ceil(total_filtered / DEALS_PER_PAGE))
 
+    # Build filter query string for pagination links
+    filter_params = ""
+    if profile:
+        filter_params += f"&profile={profile}"
+    if source:
+        filter_params += f"&source={source}"
+    if min_score is not None:
+        filter_params += f"&min_score={min_score}"
+    if category:
+        filter_params += f"&category={category}"
+    if status:
+        filter_params += f"&status={status}"
+
     # HTMX partial refresh — return only the table fragment
     if request.headers.get("HX-Request"):
-        return templates.TemplateResponse("partials/deals_table.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "partials/deals_table.html", {
             "deals": deals,
             "page": page,
             "total_pages": total_pages,
             "total_filtered": total_filtered,
+            "filter_params": filter_params,
         })
 
     # Compute metrics via SQL aggregates (no full table scan)
@@ -122,8 +135,7 @@ def deals_page(
     filter_opts = db.get_filter_options()
     profiles = _get_profiles()
 
-    return templates.TemplateResponse("deals.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "deals.html", {
         "deals": deals,
         "total_deals": total_deals,
         "high_score_pct": high_score_pct,
@@ -141,6 +153,7 @@ def deals_page(
         "page": page,
         "total_pages": total_pages,
         "total_filtered": total_filtered,
+        "filter_params": filter_params,
     })
 
 
@@ -160,8 +173,7 @@ def health_page(request: Request):
             for err in result.get("errors", []):
                 errors.append({"profile": name, "message": err})
 
-    return templates.TemplateResponse("health.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "health.html", {
         "health": health,
         "total_deals": total_deals,
         "total_alerts": total_alerts,
@@ -203,8 +215,7 @@ def price_trends_page(
         if trend:
             category_trends[cat_name] = trend
 
-    return templates.TemplateResponse("price_trends.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "price_trends.html", {
         "drops": drops,
         "days": days,
         "total_drops": total_drops,
@@ -229,8 +240,7 @@ def deal_detail_page(
     lowest_price = db.get_lowest_price(deal_id)
     previous_price = db.get_previous_price(deal_id)
 
-    return templates.TemplateResponse("deal_detail.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "deal_detail.html", {
         "deal": deal,
         "price_history": price_history,
         "lowest_price": lowest_price,
@@ -266,14 +276,31 @@ def api_update_deal_status(
     ok = db.update_deal_status(deal_id, status)
     if not ok:
         return JSONResponse({"error": "Deal not found"}, status_code=404)
-    # Return HTML fragment for HTMX swap
-    label = {"watching": "Watching", "rejected": "Skipped", "active": "Active"}[status]
-    icon = {"watching": "visibility", "rejected": "block", "active": "check_circle"}[status]
-    color = {"watching": "text-primary", "rejected": "text-error", "active": "text-tertiary"}[status]
+    # Return HTML fragment for HTMX swap — must include full action buttons
+    # so the user can change status again
+    deal = db.get_deal(deal_id)
+    link = deal["link"] if deal else "#"
+    encoded_id = deal_id.replace(":", "%3A")
+
+    status_badge = {
+        "watching": '<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-primary-container text-primary">Watching</span>',
+        "rejected": '<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-error-container/30 text-error">Skipped</span>',
+        "active": '<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-tertiary-container/30 text-tertiary">Active</span>',
+    }[status]
+
     return HTMLResponse(
-        f'<span class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium {color}">'
-        f'<span class="material-symbols-outlined text-[18px]">{icon}</span>'
-        f'{label}</span>'
+        f'<a href="{link}" target="_blank" rel="noopener noreferrer"'
+        f'   class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">'
+        f'  <span class="material-symbols-outlined text-[18px]">open_in_new</span>Open Link</a>'
+        f'<button hx-post="/api/deals/{encoded_id}/status" hx-vals=\'{{"status": "watching"}}\''
+        f'        hx-target="#action-buttons" hx-swap="innerHTML"'
+        f'        class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container-high text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-highest transition-colors">'
+        f'  <span class="material-symbols-outlined text-[18px]">visibility</span>Watch</button>'
+        f'<button hx-post="/api/deals/{encoded_id}/status" hx-vals=\'{{"status": "rejected"}}\''
+        f'        hx-target="#action-buttons" hx-swap="innerHTML"'
+        f'        class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container-high text-on-surface-variant rounded-card text-sm font-medium hover:bg-error-container/20 hover:text-error transition-colors">'
+        f'  <span class="material-symbols-outlined text-[18px]">block</span>Skip</button>'
+        f'{status_badge}'
     )
 
 

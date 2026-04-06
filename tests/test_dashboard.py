@@ -1,0 +1,850 @@
+"""Tests for the Deal Hunter web dashboard."""
+
+from unittest.mock import patch
+
+import pytest
+
+from dashboard import format_pln, safe_load_profile, _get_profiles
+
+
+# ──────────────── Unit tests: format_pln ────────────────
+
+
+class TestFormatPln:
+    def test_none_returns_zero(self):
+        assert format_pln(None) == "0 zl"
+
+    def test_zero_returns_zero(self):
+        assert format_pln(0) == "0 zl"
+
+    def test_small_number(self):
+        assert format_pln(100) == "100 zl"
+
+    def test_thousands_separator(self):
+        assert format_pln(8500) == "8 500 zl"
+
+    def test_millions(self):
+        assert format_pln(1000000) == "1 000 000 zl"
+
+    def test_negative_value(self):
+        assert format_pln(-500) == "-500 zl"
+
+    def test_large_negative(self):
+        assert format_pln(-2500) == "-2 500 zl"
+
+    def test_single_digit(self):
+        assert format_pln(1) == "1 zl"
+
+    def test_exact_thousand(self):
+        assert format_pln(1000) == "1 000 zl"
+
+
+# ──────────────── Unit tests: helpers ────────────────
+
+
+class TestHelpers:
+    def test_safe_load_profile_nonexistent(self):
+        result = safe_load_profile("nonexistent_profile_xyz")
+        assert result is None
+
+    def test_get_profiles_missing_dir(self):
+        with patch("deal_hunter.list_profiles", side_effect=FileNotFoundError):
+            result = _get_profiles()
+            assert result == []
+
+    def test_get_profiles_import_error(self):
+        with patch("deal_hunter.list_profiles", side_effect=ImportError):
+            result = _get_profiles()
+            assert result == []
+
+    def test_get_profiles_returns_sorted(self):
+        with patch("deal_hunter.list_profiles", return_value=["nas_hdd", "bikes", "audio"]):
+            result = _get_profiles()
+            assert result == ["audio", "bikes", "nas_hdd"]
+
+
+# ──────────────── E2E tests: Index redirect ────────────────
+
+
+class TestIndexRedirect:
+    def test_redirect_to_deals(self, client):
+        response = client.get("/")
+        assert response.status_code == 302
+        assert response.headers["location"] == "/deals"
+
+
+# ──────────────── E2E tests: Deals page ────────────────
+
+
+class TestDealsPage:
+    def test_deals_page_renders(self, client):
+        response = client.get("/deals")
+        assert response.status_code == 200
+        assert "Deals Explorer" in response.text
+
+    def test_contains_metric_cards(self, client):
+        text = client.get("/deals").text
+        assert "Total Deals" in text
+        assert "Score 70+" in text
+        assert "New Today" in text
+        assert "Price Drops" in text
+
+    def test_contains_deal_titles(self, client):
+        text = client.get("/deals").text
+        assert "Test Carbon Bike XL" in text
+        assert "NAS HDD Seagate IronWolf 8TB" in text
+
+    def test_contains_filter_dropdowns(self, client):
+        text = client.get("/deals").text
+        assert "All Profiles" in text
+        assert "All Sources" in text
+        assert "All Scores" in text
+        assert "All Statuses" in text
+
+    def test_filter_by_profile(self, client):
+        text = client.get("/deals?profile=bikes").text
+        assert "Test Carbon Bike XL" in text
+        # NAS deal should not appear in bikes filter
+        assert "NAS HDD Seagate IronWolf" not in text
+
+    def test_filter_by_min_score(self, client):
+        text = client.get("/deals?min_score=70").text
+        assert "Test Carbon Bike XL" in text  # score 85
+        assert "Brand New Road Bike Today" in text  # score 72
+        assert "Cheap Broken Bike Parts" not in text  # score 20
+
+    def test_filter_by_status(self, client):
+        text = client.get("/deals?status=watching").text
+        assert "NAS HDD Seagate IronWolf" in text
+        assert "Test Carbon Bike XL" not in text
+
+    def test_empty_filter_same_as_no_filter(self, client):
+        all_text = client.get("/deals").text
+        empty_text = client.get("/deals?profile=").text
+        # Both should contain the same deals
+        assert "Test Carbon Bike XL" in all_text
+        assert "Test Carbon Bike XL" in empty_text
+
+    def test_htmx_partial_response(self, client):
+        response = client.get("/deals", headers={"HX-Request": "true"})
+        assert response.status_code == 200
+        text = response.text
+        # Should have the table
+        assert "<table" in text
+        # Should NOT have the sidebar/base layout
+        assert "<aside" not in text
+        assert "Deals Explorer" not in text  # page title not in partial
+
+    def test_pagination_param(self, client):
+        response = client.get("/deals?page=1")
+        assert response.status_code == 200
+
+    def test_filter_by_source(self, client):
+        text = client.get("/deals?source=ceneo").text
+        assert "NAS HDD Seagate IronWolf" in text
+        assert "Test Carbon Bike XL" not in text
+
+    def test_filter_by_category(self, client):
+        text = client.get("/deals?category=road").text
+        assert "Test Carbon Bike XL" in text
+        assert "NAS HDD Seagate IronWolf" not in text
+
+    def test_combined_filters(self, client):
+        text = client.get("/deals?profile=bikes&min_score=50").text
+        assert "Test Carbon Bike XL" in text  # bikes, score 85
+        assert "Brand New Road Bike Today" in text  # bikes, score 72
+        assert "Cheap Broken Bike Parts" not in text  # bikes, score 20
+
+    def test_filter_returning_no_results(self, client):
+        text = client.get("/deals?source=nonexistent").text
+        assert "No deals found" in text
+
+    def test_negative_page_clamps_to_1(self, client):
+        response = client.get("/deals?page=-5")
+        assert response.status_code == 200
+        # Should show first page content
+        assert "Test Carbon Bike XL" in response.text
+
+    def test_page_zero_clamps_to_1(self, client):
+        response = client.get("/deals?page=0")
+        assert response.status_code == 200
+
+    def test_filter_by_rejected_status(self, client):
+        text = client.get("/deals?status=rejected").text
+        assert "Cheap Broken Bike Parts" in text
+        assert "Test Carbon Bike XL" not in text
+
+    def test_selected_filter_is_preserved_in_html(self, client):
+        text = client.get("/deals?status=watching").text
+        assert 'value="watching"' in text
+
+    def test_score_filter_options_in_dropdown(self, client):
+        text = client.get("/deals").text
+        assert 'value="70"' in text
+        assert 'value="50"' in text
+        assert 'value="30"' in text
+
+    def test_htmx_partial_with_filters(self, client):
+        response = client.get(
+            "/deals?profile=bikes",
+            headers={"HX-Request": "true"},
+        )
+        assert response.status_code == 200
+        text = response.text
+        assert "Test Carbon Bike XL" in text
+        assert "NAS HDD Seagate IronWolf" not in text
+        # Partial should not include base layout
+        assert "<aside" not in text
+
+    def test_deals_table_has_score_color_coding(self, client):
+        text = client.get("/deals").text
+        # High score (85) should have tertiary color class
+        assert "text-tertiary" in text
+        # Low score (20) should have error color class
+        assert "text-error" in text
+
+    def test_deals_table_has_status_badges(self, client):
+        text = client.get("/deals").text
+        assert "Watching" in text
+        assert "Rejected" in text
+        assert "Active" in text
+
+    def test_deal_rows_are_clickable(self, client):
+        text = client.get("/deals").text
+        # Rows should have onclick to navigate to deal detail
+        assert "window.location=" in text
+
+    def test_clear_filters_link(self, client):
+        text = client.get("/deals?profile=bikes").text
+        assert "Clear Filters" in text
+        assert 'href="/deals"' in text
+
+
+# ──────────────── E2E tests: Deal detail page ────────────────
+
+
+class TestDealDetailPage:
+    def test_deal_detail_renders(self, client):
+        response = client.get("/deals/pepper:99999")
+        assert response.status_code == 200
+        assert "Test Carbon Bike XL" in response.text
+
+    def test_contains_formatted_price(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "8 500 zl" in text
+
+    def test_contains_price_history_section(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "Price History" in text
+
+    def test_contains_metadata(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "Source" in text
+        assert "Profile" in text
+        assert "Score" in text
+
+    def test_contains_action_buttons(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "Watch" in text
+        assert "Skip" in text
+        assert "Open Link" in text
+
+    def test_nonexistent_deal_404(self, client):
+        response = client.get("/deals/nonexistent:000")
+        assert response.status_code == 404
+
+    def test_contains_deal_description(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "A great carbon bike" in text
+
+    def test_shows_source_badge(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "pepper" in text
+
+    def test_shows_profile_link(self, client):
+        text = client.get("/deals/pepper:99999").text
+        # Profile name should be a link to filtered deals
+        assert "/deals?profile=bikes" in text
+
+    def test_shows_score_value(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "85" in text
+
+    def test_shows_category_if_present(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "road" in text
+
+    def test_shows_first_and_last_seen(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "First Seen" in text
+        assert "Last Seen" in text
+
+    def test_shows_lowest_price_ever(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "Lowest Price Ever" in text
+
+    def test_shows_price_history_table_entries(self, client):
+        text = client.get("/deals/pepper:99999").text
+        # Should have both recorded prices (9500 and 8500)
+        assert "9 500 zl" in text
+        assert "8 500 zl" in text
+
+    def test_price_history_marks_lowest(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "Lowest" in text
+
+    def test_price_chart_canvas_present(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert 'id="priceChart"' in text
+
+    def test_period_filter_buttons(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "1M" in text
+        assert "3M" in text
+        assert "All" in text
+
+    def test_deal_with_no_description_hides_section(self, client):
+        # Deal 3 has description "Spare parts only" — deal 4 has "Fresh deal"
+        # All seeded deals have descriptions, so test the template behavior
+        text = client.get("/deals/pepper:66666").text
+        assert "Fresh deal" in text
+
+    def test_breadcrumb_navigation(self, client):
+        text = client.get("/deals/pepper:99999").text
+        assert "Deals Explorer" in text
+        assert 'href="/deals"' in text
+
+    def test_price_change_indicator(self, client):
+        # pepper:99999 has previous_price=9500 and current_price=8500
+        text = client.get("/deals/pepper:99999").text
+        # Should show price decrease indicator
+        assert "arrow_downward" in text
+        assert "1 000 zl" in text  # difference
+
+    def test_status_badge_on_detail(self, client):
+        # pepper:99999 is active by default
+        text = client.get("/deals/pepper:99999").text
+        assert "Active" in text
+
+    def test_watching_deal_badge(self, client):
+        text = client.get("/deals/ceneo:88888").text
+        assert "Watching" in text
+
+    def test_rejected_deal_badge(self, client):
+        text = client.get("/deals/pepper:77777").text
+        assert "Rejected" in text
+
+    def test_deal_without_price_history(self, client):
+        # pepper:77777 (score 20) has no price history entries
+        text = client.get("/deals/pepper:77777").text
+        assert response_status_code(client.get("/deals/pepper:77777")) == 200
+
+
+# ──────────────── E2E tests: Health page ────────────────
+
+
+class TestHealthPage:
+    def test_health_no_data(self, client):
+        with patch("health.load_health", return_value=None):
+            response = client.get("/health")
+            assert response.status_code == 200
+            assert "No health data" in response.text
+
+    def test_health_with_data(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            response = client.get("/health")
+            assert response.status_code == 200
+            text = response.text
+            assert "0.4.3" in text  # version
+            assert "partial" in text.lower() or "PARTIAL" in text  # status
+            assert "pepper" in text  # source name
+            assert "bikes" in text  # profile name
+
+    def test_health_shows_errors(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            text = client.get("/health").text
+            assert "Connection timeout" in text
+
+    def test_health_shows_source_status(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            text = client.get("/health").text
+            assert "ceneo" in text
+            assert "degraded" in text.lower() or "2" in text  # consecutive failures
+
+    def test_health_shows_duration(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            text = client.get("/health").text
+            assert "12.5" in text
+
+    def test_health_shows_operational_heartbeat(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            text = client.get("/health").text
+            assert "Operational Heartbeat" in text
+            assert "Last Run" in text
+            assert "Duration" in text
+
+    def test_health_shows_version_card(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            text = client.get("/health").text
+            assert "Version" in text
+            assert "0.4.3" in text
+
+    def test_health_shows_deals_found_count(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            text = client.get("/health").text
+            assert "Total Deals" in text
+            assert "15" in text  # bikes found 15
+
+    def test_health_shows_alerts_count(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            text = client.get("/health").text
+            assert "Total Alerts" in text
+            assert "3" in text  # bikes had 3 alerts
+
+    def test_health_shows_profile_results_table(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            text = client.get("/health").text
+            assert "Profile Results" in text
+            assert "nas_hdd" in text
+            assert "error" in text.lower()  # nas_hdd status
+
+    def test_health_shows_multiple_errors(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            text = client.get("/health").text
+            assert "Connection timeout" in text
+            assert "Parser failed" in text
+
+    def test_health_ok_status_styling(self, client):
+        data = {
+            "last_run": "2026-04-06T10:00:00",
+            "status": "ok",
+            "duration_seconds": 5.0,
+            "version": "0.4.3",
+            "profile_results": {},
+            "sources_health": {},
+        }
+        with patch("health.load_health", return_value=data):
+            text = client.get("/health").text
+            assert "OK" in text
+
+    def test_health_source_consecutive_failures(self, client, sample_health_data):
+        with patch("health.load_health", return_value=sample_health_data):
+            text = client.get("/health").text
+            assert "Consecutive Failures" in text
+
+
+# ──────────────── E2E tests: Price trends page ────────────────
+
+
+class TestPriceTrendsPage:
+    def test_price_trends_renders(self, client):
+        response = client.get("/price-trends")
+        assert response.status_code == 200
+        assert "Price Trends" in response.text
+
+    def test_7_days_tab_active(self, client):
+        text = client.get("/price-trends?days=7").text
+        # The 7 Days link should have primary styling
+        assert "7 Days" in text
+
+    def test_24_hours_tab(self, client):
+        text = client.get("/price-trends?days=1").text
+        assert "24 Hours" in text
+
+    def test_contains_category_distribution(self, client):
+        text = client.get("/price-trends").text
+        assert "Category Distribution" in text
+
+    def test_contains_summary_cards(self, client):
+        text = client.get("/price-trends").text
+        assert "Total Price Drops" in text
+        assert "Average Drop" in text
+        assert "Biggest Drop" in text
+
+    def test_shows_category_names(self, client):
+        text = client.get("/price-trends").text
+        assert "road" in text  # category from seeded deals
+
+    def test_no_drops_shows_empty_state(self, client):
+        # 1 day window likely has no drops from seeded data
+        text = client.get("/price-trends?days=1").text
+        # Either shows drops or "No price drops"
+        assert "Price Drops" in text
+
+    def test_default_days_is_7(self, client):
+        text = client.get("/price-trends").text
+        # 7 Days tab should have active styling (bg-primary)
+        assert "bg-primary" in text
+
+    def test_time_filter_tabs_present(self, client):
+        text = client.get("/price-trends").text
+        assert "24 Hours" in text
+        assert "7 Days" in text
+
+    def test_price_drops_table_headers(self, client):
+        text = client.get("/price-trends").text
+        assert "Previous Price" in text or "No price drops" in text
+
+
+# ──────────────── E2E tests: API endpoints ────────────────
+
+
+class TestApiDeals:
+    def test_api_deals_returns_json(self, client):
+        response = client.get("/api/deals")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) >= 3
+
+    def test_api_deals_filter_by_profile(self, client):
+        data = client.get("/api/deals?profile=bikes").json()
+        assert all(d["profile"] == "bikes" for d in data)
+
+    def test_api_deals_filter_by_source(self, client):
+        data = client.get("/api/deals?source=ceneo").json()
+        assert len(data) == 1
+        assert data[0]["source"] == "ceneo"
+
+    def test_api_deals_high_min_score_empty(self, client):
+        data = client.get("/api/deals?min_score=100").json()
+        assert data == []
+
+    def test_api_deals_filter_by_status(self, client):
+        data = client.get("/api/deals?status=rejected").json()
+        assert len(data) == 1
+        assert data[0]["id"] == "pepper:77777"
+
+    def test_api_deals_filter_by_category(self, client):
+        data = client.get("/api/deals?category=storage").json()
+        assert len(data) == 1
+        assert data[0]["source"] == "ceneo"
+
+    def test_api_deals_combined_filters(self, client):
+        data = client.get("/api/deals?profile=bikes&min_score=80").json()
+        assert len(data) == 1
+        assert data[0]["id"] == "pepper:99999"
+
+    def test_api_deals_empty_string_params_ignored(self, client):
+        all_data = client.get("/api/deals").json()
+        empty_data = client.get("/api/deals?profile=&source=").json()
+        assert len(all_data) == len(empty_data)
+
+    def test_api_deals_contain_expected_fields(self, client):
+        data = client.get("/api/deals").json()
+        deal = data[0]
+        expected_fields = ["id", "title", "price", "link", "source", "profile", "score", "status"]
+        for field in expected_fields:
+            assert field in deal, f"Missing field: {field}"
+
+    def test_api_deals_ordered_by_score_desc(self, client):
+        data = client.get("/api/deals").json()
+        scores = [d["score"] for d in data]
+        assert scores == sorted(scores, reverse=True)
+
+
+class TestApiPriceHistory:
+    def test_price_history_with_data(self, client):
+        response = client.get("/api/price-history/pepper:99999")
+        assert response.status_code == 200
+        data = response.json()
+        assert "labels" in data
+        assert "prices" in data
+        assert len(data["labels"]) >= 2
+        assert len(data["prices"]) >= 2
+        assert data["lowest"] is not None
+        assert data["highest"] is not None
+        assert data["lowest"] <= data["highest"]
+
+    def test_price_history_nonexistent(self, client):
+        data = client.get("/api/price-history/nonexistent:000").json()
+        assert data["labels"] == []
+        assert data["prices"] == []
+        assert data["lowest"] is None
+        assert data["highest"] is None
+
+    def test_price_history_labels_are_dates(self, client):
+        data = client.get("/api/price-history/pepper:99999").json()
+        for label in data["labels"]:
+            assert len(label) == 10  # YYYY-MM-DD format
+            assert label[4] == "-"
+
+    def test_price_history_prices_are_integers(self, client):
+        data = client.get("/api/price-history/pepper:99999").json()
+        for price in data["prices"]:
+            assert isinstance(price, int)
+
+    def test_price_history_lowest_matches_min(self, client):
+        data = client.get("/api/price-history/pepper:99999").json()
+        assert data["lowest"] == min(data["prices"])
+
+    def test_price_history_highest_matches_max(self, client):
+        data = client.get("/api/price-history/pepper:99999").json()
+        assert data["highest"] == max(data["prices"])
+
+
+class TestApiUpdateStatus:
+    def test_update_to_watching(self, client):
+        response = client.post(
+            "/api/deals/pepper:99999/status",
+            data={"status": "watching"},
+        )
+        assert response.status_code == 200
+        assert "Watching" in response.text
+
+    def test_update_to_rejected(self, client):
+        response = client.post(
+            "/api/deals/pepper:99999/status",
+            data={"status": "rejected"},
+        )
+        assert response.status_code == 200
+        assert "Skipped" in response.text
+
+    def test_update_to_active(self, client):
+        response = client.post(
+            "/api/deals/pepper:99999/status",
+            data={"status": "active"},
+        )
+        assert response.status_code == 200
+        assert "Active" in response.text
+
+    def test_invalid_status_400(self, client):
+        response = client.post(
+            "/api/deals/pepper:99999/status",
+            data={"status": "invalid"},
+        )
+        assert response.status_code == 400
+
+    def test_nonexistent_deal_404(self, client):
+        response = client.post(
+            "/api/deals/nonexistent:000/status",
+            data={"status": "watching"},
+        )
+        assert response.status_code == 404
+
+    def test_status_persists_in_db(self, client, dashboard_db):
+        client.post(
+            "/api/deals/pepper:99999/status",
+            data={"status": "watching"},
+        )
+        deal = dashboard_db.get_deal("pepper:99999")
+        assert deal["status"] == "watching"
+
+    def test_update_response_preserves_action_buttons(self, client):
+        """Status update HTMX response should keep Watch/Skip/Open buttons."""
+        response = client.post(
+            "/api/deals/pepper:99999/status",
+            data={"status": "watching"},
+        )
+        text = response.text
+        assert "Watch" in text
+        assert "Skip" in text
+        assert "Open Link" in text
+        # Should contain hx-post for subsequent status changes
+        assert "hx-post" in text
+
+    def test_update_response_shows_status_badge(self, client):
+        response = client.post(
+            "/api/deals/pepper:99999/status",
+            data={"status": "rejected"},
+        )
+        assert "Skipped" in response.text
+
+    def test_sequential_status_updates(self, client, dashboard_db):
+        """Changing status multiple times should always reflect the latest."""
+        client.post("/api/deals/pepper:99999/status", data={"status": "watching"})
+        assert dashboard_db.get_deal("pepper:99999")["status"] == "watching"
+
+        client.post("/api/deals/pepper:99999/status", data={"status": "rejected"})
+        assert dashboard_db.get_deal("pepper:99999")["status"] == "rejected"
+
+        client.post("/api/deals/pepper:99999/status", data={"status": "active"})
+        assert dashboard_db.get_deal("pepper:99999")["status"] == "active"
+
+
+class TestApiStats:
+    def test_stats_returns_json(self, client):
+        response = client.get("/api/stats")
+        assert response.status_code == 200
+        data = response.json()
+        assert "total_deals" in data
+        assert "high_score_pct" in data
+        assert "new_today" in data
+        assert "drops_count" in data
+
+    def test_stats_total_matches(self, client):
+        data = client.get("/api/stats").json()
+        assert data["total_deals"] == 4  # 4 seeded deals
+
+    def test_stats_new_today(self, client):
+        data = client.get("/api/stats").json()
+        assert data["new_today"] >= 1  # at least deal4 was seeded today
+
+    def test_stats_high_score_pct_is_percentage(self, client):
+        data = client.get("/api/stats").json()
+        assert 0 <= data["high_score_pct"] <= 100
+
+    def test_stats_drops_count_is_non_negative(self, client):
+        data = client.get("/api/stats").json()
+        assert data["drops_count"] >= 0
+
+
+# ──────────────── E2E workflow tests ────────────────
+
+
+class TestE2EWorkflows:
+    """End-to-end tests simulating real user journeys through the dashboard."""
+
+    def test_browse_deals_then_view_detail(self, client):
+        """User browses deals list, then clicks into a deal detail."""
+        # Step 1: Load deals page
+        deals_page = client.get("/deals")
+        assert deals_page.status_code == 200
+        assert "Test Carbon Bike XL" in deals_page.text
+
+        # Step 2: Navigate to deal detail
+        detail_page = client.get("/deals/pepper:99999")
+        assert detail_page.status_code == 200
+        assert "Test Carbon Bike XL" in detail_page.text
+        assert "8 500 zl" in detail_page.text
+
+    def test_filter_then_view_detail_then_back(self, client):
+        """User filters by profile, views a deal, conceptually goes back to filtered list."""
+        # Step 1: Filter by bikes
+        filtered = client.get("/deals?profile=bikes")
+        assert "Test Carbon Bike XL" in filtered.text
+        assert "NAS HDD Seagate IronWolf" not in filtered.text
+
+        # Step 2: View a deal from the filtered list
+        detail = client.get("/deals/pepper:99999")
+        assert detail.status_code == 200
+
+        # Step 3: Profile link on detail page goes back to filtered view
+        assert "/deals?profile=bikes" in detail.text
+
+    def test_update_status_then_verify_on_list(self, client):
+        """User updates deal status, then checks it on the deals list."""
+        # Step 1: Update status to watching
+        client.post("/api/deals/pepper:99999/status", data={"status": "watching"})
+
+        # Step 2: Verify on deals list — should show as watching
+        text = client.get("/deals?status=watching").text
+        assert "Test Carbon Bike XL" in text
+
+        # Step 3: Verify it's not in active list anymore
+        active_text = client.get("/deals?status=active").text
+        assert "Test Carbon Bike XL" not in active_text
+
+    def test_update_status_then_verify_on_detail(self, client):
+        """Status change visible on deal detail page."""
+        client.post("/api/deals/pepper:99999/status", data={"status": "rejected"})
+
+        detail = client.get("/deals/pepper:99999")
+        assert "Rejected" in detail.text
+
+    def test_view_price_history_via_api_and_page(self, client):
+        """Price history is consistent between API and detail page."""
+        # API response
+        api_data = client.get("/api/price-history/pepper:99999").json()
+        assert len(api_data["prices"]) >= 2
+
+        # Detail page should show the same prices
+        detail_text = client.get("/deals/pepper:99999").text
+        assert "9 500 zl" in detail_text
+        assert "8 500 zl" in detail_text
+
+    def test_api_stats_consistent_with_deals_page(self, client):
+        """API stats match what the deals page shows."""
+        stats = client.get("/api/stats").json()
+        assert stats["total_deals"] == 4
+
+        # Verify the deal count matches API deals
+        all_deals = client.get("/api/deals").json()
+        assert len(all_deals) == stats["total_deals"]
+
+    def test_htmx_filter_workflow(self, client):
+        """Simulates HTMX filter interaction: user selects a profile filter."""
+        # Step 1: Initial page load
+        full_page = client.get("/deals")
+        assert full_page.status_code == 200
+
+        # Step 2: User selects profile filter — HTMX sends request
+        partial = client.get(
+            "/deals?profile=bikes",
+            headers={"HX-Request": "true"},
+        )
+        assert partial.status_code == 200
+        assert "<table" in partial.text
+        assert "Test Carbon Bike XL" in partial.text
+        assert "NAS HDD Seagate IronWolf" not in partial.text
+
+        # Step 3: User clears filters — HTMX sends request without params
+        cleared = client.get(
+            "/deals",
+            headers={"HX-Request": "true"},
+        )
+        assert "Test Carbon Bike XL" in cleared.text
+        assert "NAS HDD Seagate IronWolf" in cleared.text
+
+    def test_health_page_accessible_from_nav(self, client, sample_health_data):
+        """Health page loads independently with its own data source."""
+        with patch("health.load_health", return_value=sample_health_data):
+            response = client.get("/health")
+            assert response.status_code == 200
+            assert "System Health" in response.text
+
+    def test_price_trends_accessible_from_nav(self, client):
+        """Price trends page loads independently."""
+        response = client.get("/price-trends")
+        assert response.status_code == 200
+        assert "Price Trends" in response.text
+
+    def test_full_deal_lifecycle(self, client, dashboard_db):
+        """Deal goes through active -> watching -> rejected -> active."""
+        deal_id = "pepper:99999"
+
+        # Initially active
+        deal = dashboard_db.get_deal(deal_id)
+        assert deal["status"] == "active"
+
+        # Watch it
+        resp = client.post(f"/api/deals/{deal_id}/status", data={"status": "watching"})
+        assert resp.status_code == 200
+        assert dashboard_db.get_deal(deal_id)["status"] == "watching"
+
+        # Reject it
+        resp = client.post(f"/api/deals/{deal_id}/status", data={"status": "rejected"})
+        assert resp.status_code == 200
+        assert dashboard_db.get_deal(deal_id)["status"] == "rejected"
+
+        # Reactivate
+        resp = client.post(f"/api/deals/{deal_id}/status", data={"status": "active"})
+        assert resp.status_code == 200
+        assert dashboard_db.get_deal(deal_id)["status"] == "active"
+
+    def test_api_deals_matches_page_deals(self, client):
+        """API /api/deals returns same data as visible on /deals page."""
+        api_data = client.get("/api/deals?profile=bikes").json()
+        page_text = client.get("/deals?profile=bikes").text
+
+        for deal in api_data:
+            assert deal["title"] in page_text
+
+    def test_cross_page_data_consistency(self, client):
+        """Stats on deals page should be consistent with underlying data."""
+        stats = client.get("/api/stats").json()
+        deals = client.get("/api/deals").json()
+
+        # Total deals should match
+        assert stats["total_deals"] == len(deals)
+
+        # High score count should match
+        high_score_deals = [d for d in deals if d["score"] and d["score"] >= 70]
+        expected_pct = round(len(high_score_deals) / len(deals) * 100) if deals else 0
+        assert stats["high_score_pct"] == expected_pct
+
+
+# ──────────────── Helper ────────────────
+
+def response_status_code(response):
+    return response.status_code

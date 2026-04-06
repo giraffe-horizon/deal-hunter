@@ -59,9 +59,6 @@ notifications:
   telegram:
     enabled: true
     topic_id: null           # null = DM, number = group topic
-  notion:
-    enabled: false
-    category: "Electronics"
 ```
 
 ## Profile Fields Reference
@@ -173,9 +170,6 @@ notifications:
   telegram:
     enabled: true
     topic_id: 12345    # group topic ID, null for DM
-  notion:
-    enabled: true
-    category: "Electronics"
 ```
 
 If omitted, no notifications are sent (useful with `--verify`).
