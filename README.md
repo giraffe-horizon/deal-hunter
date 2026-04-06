@@ -157,20 +157,41 @@ docker pull ghcr.io/giraffe-horizon/deal-hunter:latest
 # Option 2: Build locally
 # (docker-compose.yml builds by default — uncomment `image:` to use pre-built)
 
-# Start (runs --all every 30 minutes by default)
+# Start both services (deal scanner + feedback bot)
 docker compose up -d
 
-# Custom schedule (every 15 minutes)
-CRON_SCHEDULE="*/15 * * * *" docker compose up -d
-
-# One-off run inside the container
-docker compose run --rm deal-hunter --profile my_product --verify
-
 # View logs
-docker compose logs -f
+docker compose logs -f              # all services
+docker compose logs -f deal-hunter   # cron service only
+docker compose logs -f deal-hunter-bot  # bot only
+
+# One-off commands
+docker compose exec deal-hunter python deal_hunter.py --list
+docker compose exec deal-hunter python deal_hunter.py --profile bikes --verify
+docker compose exec deal-hunter python deal_hunter.py --health
 ```
 
-The container mounts `profiles/` and `state/` as volumes, so your data persists across restarts.
+**Services:**
+
+| Service | Role | Default schedule |
+|---------|------|-----------------|
+| `deal-hunter` | Cron: scans deals, watchdog, digest | `--all` every 30m, `--watchdog` every 1h, `--digest` Mon 8am |
+| `deal-hunter-bot` | Telegram feedback bot (long-running) | Always on |
+
+**Schedule customization** via environment variables:
+
+```bash
+CRON_SCHEDULE="*/15 * * * *" WATCHDOG_SCHEDULE="0 */2 * * *" docker compose up -d
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CRON_SCHEDULE` | `*/30 * * * *` | How often to scan all profiles |
+| `WATCHDOG_SCHEDULE` | `0 */1 * * *` | How often to check run freshness |
+| `DIGEST_SCHEDULE` | `0 8 * * 1` | When to send weekly price digest |
+| `TZ` | `Europe/Warsaw` | Timezone for schedules |
+
+Both containers mount `profiles/` and `state/` as volumes, so your data persists across restarts.
 
 ## Profiles
 
