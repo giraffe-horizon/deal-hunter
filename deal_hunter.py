@@ -74,6 +74,18 @@ _setup_logging()
 logger = logging.getLogger("deal_hunter")
 
 
+def _parse_topic_id() -> int | None:
+    """Parse TELEGRAM_TOPIC_ID from environment, returning None if unset or invalid."""
+    raw = os.environ.get("TELEGRAM_TOPIC_ID")
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning(f"Invalid TELEGRAM_TOPIC_ID: {raw!r}, ignoring")
+        return None
+
+
 # ──────────────── STATE ────────────────
 
 
@@ -88,7 +100,7 @@ def load_state(profile_name: str) -> dict:
     if not path.exists():
         return {"seen": {}, "prices": {}}
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             state = json.load(f)
 
         # Backwards compat: old format was flat list
@@ -115,7 +127,7 @@ def save_state(profile_name: str, state: dict) -> None:
     """Save state to disk."""
     path = _state_path(profile_name)
     try:
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
     except Exception as e:
         logger.error(f"Error saving state for {profile_name}: {e}")
@@ -273,7 +285,11 @@ def load_profile(name: str) -> dict:
         logger.error(f"Profile not found: {name}")
         sys.exit(1)
     with open(path, encoding="utf-8") as f:
-        return dict(yaml.safe_load(f))
+        data = yaml.safe_load(f)
+    if data is None:
+        logger.error(f"Profile is empty: {name}")
+        sys.exit(1)
+    return dict(data)
 
 
 def list_profiles(include_disabled: bool = True) -> list[str]:
@@ -853,8 +869,7 @@ def run_digest() -> None:
         print(f"  \U0001f4c9 {d['title'][:60]}: {old_str} -> {new_str} (-{d['diff_percent']}%){lowest}")
 
     # Send Telegram digest
-    topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
-    topic_id = int(topic_id_str) if topic_id_str else None
+    topic_id = _parse_topic_id()
     telegram = TelegramNotifier(tg_token, tg_chat)
     telegram.send_digest(drops, topic_id=topic_id)
     print(f"\nDigest sent to Telegram ({len(drops)} drops).")
@@ -900,8 +915,7 @@ def run_price_chart(deal_id: str) -> None:
     tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
     if tg_token and tg_chat:
-        topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
-        topic_id = int(topic_id_str) if topic_id_str else None
+        topic_id = _parse_topic_id()
         telegram = TelegramNotifier(tg_token, tg_chat)
         telegram.send_photo(str(chart_path), caption=f"📈 Historia cen: {deal_id}", topic_id=topic_id)
         print("Chart sent to Telegram.")
@@ -934,8 +948,7 @@ def run_trend_chart(profile_name: str) -> None:
     tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
     if tg_token and tg_chat:
-        topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
-        topic_id = int(topic_id_str) if topic_id_str else None
+        topic_id = _parse_topic_id()
         telegram = TelegramNotifier(tg_token, tg_chat)
         telegram.send_photo(str(chart_path), caption=f"📊 Trend cenowy: {profile_name}", topic_id=topic_id)
         print("Chart sent to Telegram.")
@@ -995,8 +1008,7 @@ def _send_source_failure_alert(failing_sources: list[str], sources_health: dict)
     if not tg_token or not tg_chat:
         return
 
-    topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
-    topic_id = int(topic_id_str) if topic_id_str else None
+    topic_id = _parse_topic_id()
 
     telegram = TelegramNotifier(tg_token, tg_chat)
     lines = []
@@ -1073,8 +1085,7 @@ def main() -> None:
             tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
             tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
             if tg_token and tg_chat:
-                topic_id_str = os.environ.get("TELEGRAM_TOPIC_ID")
-                topic_id = int(topic_id_str) if topic_id_str else None
+                topic_id = _parse_topic_id()
                 telegram = TelegramNotifier(tg_token, tg_chat)
                 telegram.send_text(f"⚠️ Deal Hunter watchdog: {message}", topic_id=topic_id)
             sys.exit(1)

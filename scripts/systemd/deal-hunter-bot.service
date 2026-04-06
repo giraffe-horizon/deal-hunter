@@ -10,6 +10,7 @@ ExecStart=%h/Projects/deal-hunter/venv/bin/python feedback_bot.py
 Restart=on-failure
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=%h/Projects/deal-hunter/.env
 
 [Install]
 WantedBy=default.target

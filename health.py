@@ -22,7 +22,7 @@ def load_health() -> dict | None:
     if not HEALTH_FILE.exists():
         return None
     try:
-        with open(HEALTH_FILE) as f:
+        with open(HEALTH_FILE, encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         logger.error(f"Failed to read health file: {e}")
@@ -34,7 +34,7 @@ def save_health(data: dict) -> None:
     HEALTH_FILE.parent.mkdir(exist_ok=True)
     tmp = HEALTH_FILE.with_suffix(".tmp")
     try:
-        with open(tmp, "w") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         tmp.replace(HEALTH_FILE)
     except OSError as e:

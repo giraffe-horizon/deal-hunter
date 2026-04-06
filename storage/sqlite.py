@@ -127,7 +127,6 @@ class SQLiteStorage:
                 "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
                 (deal_id, price, now),
             )
-            self._conn.commit()
         except sqlite3.Error as e:
             logger.error(f"Failed to record price for {deal_id}: {e}")
 
@@ -385,5 +384,5 @@ class SQLiteStorage:
         """Close the database connection."""
         try:
             self._conn.close()
-        except sqlite3.Error:
-            pass
+        except sqlite3.Error as e:
+            logger.debug(f"Error closing database: {e}")
