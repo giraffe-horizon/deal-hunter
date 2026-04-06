@@ -66,6 +66,19 @@
                 <span class="material-symbols-outlined text-[18px]">block</span>
                 Skip
             </button>
+            <form hx-post="/api/watchlist"
+                  hx-swap="outerHTML"
+                  class="flex items-center gap-1">
+                <input type="hidden" name="deal_id" value="{{ deal.id }}">
+                <input type="number" name="target_price" placeholder="Target PLN"
+                       class="w-28 px-3 py-2.5 bg-surface-container-high text-on-surface rounded-card text-sm border-0 focus:ring-2 focus:ring-primary"
+                       min="1">
+                <button type="submit"
+                        class="inline-flex items-center gap-1 px-3 py-2.5 bg-tertiary text-on-tertiary rounded-card text-sm font-medium hover:opacity-90 transition-opacity">
+                    <span class="material-symbols-outlined text-[18px]">bookmark_add</span>
+                    Target
+                </button>
+            </form>
         </div>
     </div>
 </div>

@@ -359,3 +359,40 @@ def api_stats(db: SQLiteStorage = Depends(get_db)):
         "new_today": stats["new_today"],
         "drops_count": len(drops),
     }
+
+
+@app.get("/watchlist", response_class=HTMLResponse)
+async def watchlist_page(request: Request, db: SQLiteStorage = Depends(get_db)):
+    """Watchlist page — deals with target price alerts."""
+    items = db.get_watchlist()
+    return templates.TemplateResponse(
+        request,
+        "watchlist.html",
+        {"items": items},
+    )
+
+
+@app.post("/api/watchlist")
+async def add_to_watchlist_api(
+    request: Request,
+    db: SQLiteStorage = Depends(get_db),
+):
+    """Add a deal to the watchlist."""
+    form = await request.form()
+    deal_id = form.get("deal_id", "")
+    target_price = int(form.get("target_price", 0))
+    if deal_id and target_price > 0:
+        db.add_to_watchlist(deal_id, target_price)
+    return HTMLResponse(
+        '<span class="text-sm text-tertiary font-medium">\u2713 Target set</span>'
+    )
+
+
+@app.delete("/api/watchlist/{deal_id:path}")
+async def remove_from_watchlist_api(
+    deal_id: str,
+    db: SQLiteStorage = Depends(get_db),
+):
+    """Remove a deal from the watchlist."""
+    db.remove_from_watchlist(deal_id)
+    return HTMLResponse("")

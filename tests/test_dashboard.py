@@ -839,3 +839,74 @@ class TestE2EWorkflows:
         high_score_deals = [d for d in deals if d["score"] and d["score"] >= 70]
         expected_pct = round(len(high_score_deals) / len(deals) * 100) if deals else 0
         assert stats["high_score_pct"] == expected_pct
+
+
+class TestWatchlistPage:
+    """Tests for the watchlist dashboard page."""
+
+    def test_watchlist_page_loads(self, client):
+        """GET /watchlist returns 200."""
+        response = client.get("/watchlist")
+        assert response.status_code == 200
+        assert "Watchlist" in response.text
+
+    def test_watchlist_in_sidebar(self, client):
+        """Sidebar contains Watchlist link."""
+        response = client.get("/deals")
+        assert "/watchlist" in response.text
+
+    def test_watchlist_empty_state(self, client):
+        """Empty watchlist shows the empty state message."""
+        response = client.get("/watchlist")
+        assert response.status_code == 200
+        assert "No watchlist items" in response.text
+
+    def test_add_to_watchlist_api(self, client):
+        """POST /api/watchlist adds a deal."""
+        response = client.post(
+            "/api/watchlist",
+            data={"deal_id": "pepper:99999", "target_price": "8000"},
+        )
+        assert response.status_code == 200
+
+    def test_add_to_watchlist_returns_confirmation(self, client):
+        """POST /api/watchlist returns confirmation text."""
+        response = client.post(
+            "/api/watchlist",
+            data={"deal_id": "pepper:99999", "target_price": "8000"},
+        )
+        assert "Target set" in response.text
+
+    def test_watchlist_shows_item_after_add(self, client):
+        """After adding, watchlist page shows the item."""
+        client.post(
+            "/api/watchlist",
+            data={"deal_id": "pepper:99999", "target_price": "8000"},
+        )
+        response = client.get("/watchlist")
+        assert "pepper:99999" in response.text or "Test Carbon Bike XL" in response.text
+
+    def test_remove_from_watchlist_api(self, client):
+        """DELETE /api/watchlist/{deal_id} removes a deal."""
+        client.post(
+            "/api/watchlist",
+            data={"deal_id": "pepper:99999", "target_price": "8000"},
+        )
+        response = client.delete("/api/watchlist/pepper:99999")
+        assert response.status_code == 200
+
+    def test_remove_returns_empty(self, client):
+        """DELETE /api/watchlist returns empty HTML (HTMX row removal)."""
+        client.post(
+            "/api/watchlist",
+            data={"deal_id": "pepper:99999", "target_price": "8000"},
+        )
+        response = client.delete("/api/watchlist/pepper:99999")
+        assert response.text == ""
+
+    def test_deal_detail_has_target_form(self, client):
+        """Deal detail page contains the target price form."""
+        text = client.get("/deals/pepper:99999").text
+        assert "target_price" in text
+        assert "Target" in text
+        assert "bookmark_add" in text
