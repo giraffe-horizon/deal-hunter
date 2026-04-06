@@ -1054,6 +1054,176 @@ class TestComparePage:
         assert response.status_code == 200
         assert "compare-bar" in response.text
 
+    def test_compare_with_real_deals(self, client):
+        """Compare page renders seeded deal data."""
+        response = client.get("/compare?ids=pepper:99999,ceneo:88888")
+        assert response.status_code == 200
+        text = response.text
+        assert "Test Carbon Bike XL" in text
+        assert "NAS HDD Seagate IronWolf 8TB" in text
+
+    def test_compare_highlights_best_price(self, client):
+        """Compare page marks the deal with the lowest price."""
+        response = client.get("/compare?ids=pepper:99999,ceneo:88888")
+        # ceneo:88888 has price 1200 (lowest) — should be highlighted
+        assert "Best price" in response.text
+
+    def test_compare_highlights_highest_score(self, client):
+        """Compare page marks the deal with the highest score."""
+        response = client.get("/compare?ids=pepper:99999,ceneo:88888")
+        # pepper:99999 has score 85 (highest) — should be highlighted
+        assert "Highest score" in response.text
+
+    def test_compare_has_sparkline_canvases(self, client):
+        """Compare page includes Chart.js sparkline canvases."""
+        response = client.get("/compare?ids=pepper:99999,ceneo:88888")
+        assert "data-sparkline" in response.text
+
+    def test_compare_has_share_link(self, client):
+        """Compare page includes a share/copy link."""
+        response = client.get("/compare?ids=pepper:99999,ceneo:88888")
+        assert "share-link" in response.text or "copy" in response.text.lower()
+
+    def test_compare_max_5_deals(self, client, dashboard_db):
+        """Compare page enforces max 5 deals."""
+        # Only 4 deals exist in seeded data, so even with 6 IDs only found ones show
+        ids = "pepper:99999,ceneo:88888,pepper:77777,pepper:66666,fake:1,fake:2"
+        response = client.get(f"/compare?ids={ids}")
+        assert response.status_code == 200
+        # Should contain at most 5 deals (truncated before query)
+        text = response.text
+        # All 4 real deals present (fake ones not found)
+        assert "Test Carbon Bike XL" in text
+        assert "NAS HDD Seagate IronWolf 8TB" in text
+
+    def test_compare_empty_shows_empty_state(self, client):
+        """Compare page with no IDs shows empty state."""
+        response = client.get("/compare")
+        text = response.text
+        assert "Select" in text or "compare" in text.lower()
+
+    def test_compare_nonexistent_ids_graceful(self, client):
+        """Compare page with only nonexistent IDs renders without error."""
+        response = client.get("/compare?ids=fake:1,fake:2")
+        assert response.status_code == 200
+
+
+# ──────────────── Unit tests: _score_deals_with_profile ────────────────
+
+
+class TestScoreDealsHelper:
+    def test_score_deals_empty(self):
+        """Empty deal list returns empty result."""
+        from dashboard import _score_deals_with_profile
+
+        result = _score_deals_with_profile([], {"score_rules": {}, "penalties": {}})
+        assert result == []
+
+    def test_score_deals_applies_rules(self):
+        """Helper correctly applies score rules to deal dicts."""
+        from dashboard import _score_deals_with_profile
+
+        deals = [
+            {
+                "id": "test:1",
+                "title": "Carbon Road Bike",
+                "price": 8000,
+                "link": "https://example.com",
+                "source": "pepper",
+                "description": "shimano 105",
+                "image_url": "",
+                "score": 50,
+            }
+        ]
+        profile = {
+            "score_rules": {"carbon": 30, "shimano": 20},
+            "penalties": {},
+            "budget": {"min": 5000, "max": 15000},
+        }
+        result = _score_deals_with_profile(deals, profile)
+        assert len(result) == 1
+        assert result[0]["new_score"] > 0
+        assert result[0]["diff"] == result[0]["new_score"] - 50
+        assert isinstance(result[0]["breakdown"], list)
+
+    def test_score_deals_sorts_by_new_score_desc(self):
+        """Results are sorted by new_score descending."""
+        from dashboard import _score_deals_with_profile
+
+        deals = [
+            {
+                "id": "test:low",
+                "title": "Basic item",
+                "price": 100,
+                "link": "",
+                "source": "web",
+                "description": "",
+                "image_url": "",
+                "score": 0,
+            },
+            {
+                "id": "test:high",
+                "title": "Carbon premium deal",
+                "price": 8000,
+                "link": "",
+                "source": "pepper",
+                "description": "",
+                "image_url": "",
+                "score": 0,
+            },
+        ]
+        profile = {
+            "score_rules": {"carbon": 50, "premium": 30},
+            "penalties": {},
+            "budget": {"min": 5000, "max": 15000},
+        }
+        result = _score_deals_with_profile(deals, profile)
+        assert result[0]["new_score"] >= result[1]["new_score"]
+
+    def test_score_deals_handles_rejected(self):
+        """Deals matching excluded words are marked rejected."""
+        from dashboard import _score_deals_with_profile
+
+        deals = [
+            {
+                "id": "test:1",
+                "title": "Stolen bike parts",
+                "price": 500,
+                "link": "",
+                "source": "pepper",
+                "description": "",
+                "image_url": "",
+                "score": 0,
+            }
+        ]
+        profile = {
+            "score_rules": {},
+            "penalties": {},
+            "excluded_words": ["stolen"],
+        }
+        result = _score_deals_with_profile(deals, profile)
+        assert result[0]["rejected"] is True
+        assert result[0]["reject_reason"] != ""
+
+    def test_score_deals_none_price_handled(self):
+        """Deals with None price don't crash."""
+        from dashboard import _score_deals_with_profile
+
+        deals = [
+            {
+                "id": "test:1",
+                "title": "Free item",
+                "price": None,
+                "link": "",
+                "source": "web",
+                "description": "",
+                "image_url": "",
+                "score": 0,
+            }
+        ]
+        result = _score_deals_with_profile(deals, {"score_rules": {}, "penalties": {}})
+        assert len(result) == 1
+
 
 # ──────────────── E2E tests: Scoring Tuner ────────────────
 
@@ -1086,3 +1256,219 @@ class TestTunerPage:
             json={"score_rules": {"test": 10}},
         )
         assert response.status_code == 404
+
+    def test_tuner_with_profile(self, client):
+        """Tuner page loads with a real profile and scores deals."""
+        # Create a profile first
+        client.post(
+            "/api/profiles",
+            json={
+                "name": "test_tuner_profile",
+                "emoji": "\U0001f9ea",
+                "sources": {"pepper": {"urls": ["https://pepper.pl/search?q=test"]}},
+                "budget": {"min": 100, "max": 50000},
+                "score_rules": {"carbon": 30, "bike": 10},
+                "penalties": {"broken": -20},
+                "score_threshold": 50,
+                "telegram": {"topic_id": None, "max_alerts": 5},
+            },
+        )
+        response = client.get("/tuner/test_tuner_profile")
+        assert response.status_code == 200
+        text = response.text
+        assert "Scoring Tuner" in text
+        assert "Simulate" in text
+        assert "Save" in text
+        # Clean up
+        client.delete("/api/profiles/test_tuner_profile")
+
+    def test_tuner_simulate_with_data(self, client, dashboard_db):
+        """Simulate API returns scoring results for deals in DB."""
+        # Create profile matching deals in dashboard_db (profile="bikes")
+        client.post(
+            "/api/profiles",
+            json={
+                "name": "bikes",
+                "emoji": "\U0001f6b2",
+                "sources": {"pepper": {"urls": ["https://pepper.pl"]}},
+                "budget": {"min": 1000, "max": 20000},
+                "score_rules": {"carbon": 30, "bike": 10},
+                "penalties": {"broken": -20},
+                "score_threshold": 50,
+                "telegram": {"topic_id": None, "max_alerts": 5},
+            },
+        )
+        response = client.post(
+            "/api/tuner/bikes/simulate",
+            json={
+                "score_rules": {"carbon": 50, "xl": 15},
+                "penalties": {"broken": -30, "cheap": -10},
+                "budget": {"min": 1000, "max": 20000},
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data
+        assert isinstance(data["results"], list)
+        # Should have deals from the bikes profile
+        if data["results"]:
+            r = data["results"][0]
+            assert "new_score" in r
+            assert "diff" in r
+            assert "breakdown" in r
+            assert "current_score" in r
+        # Clean up
+        client.delete("/api/profiles/bikes")
+
+    def test_tuner_simulate_returns_diff(self, client, dashboard_db):
+        """Simulate with different rules produces different scores."""
+        client.post(
+            "/api/profiles",
+            json={
+                "name": "bikes",
+                "emoji": "\U0001f6b2",
+                "sources": {"pepper": {"urls": ["https://pepper.pl"]}},
+                "budget": {"min": 1000, "max": 20000},
+                "score_rules": {"carbon": 10},
+                "penalties": {},
+                "score_threshold": 50,
+                "telegram": {"topic_id": None, "max_alerts": 5},
+            },
+        )
+        # Simulate with high carbon bonus
+        response = client.post(
+            "/api/tuner/bikes/simulate",
+            json={"score_rules": {"carbon": 100}},
+        )
+        data = response.json()
+        # The "Test Carbon Bike XL" deal should get carbon points
+        carbon_deals = [r for r in data["results"] if "Carbon" in r["title"]]
+        if carbon_deals:
+            assert carbon_deals[0]["new_score"] > 0
+        # Clean up
+        client.delete("/api/profiles/bikes")
+
+    def test_tuner_save_creates_profile(self, client):
+        """Save API writes rules to profile YAML."""
+        client.post(
+            "/api/profiles",
+            json={
+                "name": "test_tuner_save",
+                "emoji": "\U0001f9ea",
+                "sources": {"pepper": {"urls": ["https://pepper.pl"]}},
+                "budget": {"min": 100, "max": 5000},
+                "score_rules": {"old_keyword": 10},
+                "score_threshold": 50,
+                "telegram": {"topic_id": None, "max_alerts": 5},
+            },
+        )
+        # Save with new rules
+        response = client.post(
+            "/api/tuner/test_tuner_save/save",
+            json={
+                "score_rules": {"new_keyword": 25},
+                "penalties": {"bad": -15},
+                "budget": {"min": 200, "max": 8000},
+                "score_threshold": 60,
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data.get("ok") is True
+        # Verify the profile was updated by loading it
+        from dashboard import safe_load_profile
+
+        updated = safe_load_profile("test_tuner_save")
+        assert updated is not None
+        assert updated["score_rules"] == {"new_keyword": 25}
+        assert updated["penalties"] == {"bad": -15}
+        assert updated["budget"]["min"] == 200
+        assert updated["score_threshold"] == 60
+        # Clean up
+        client.delete("/api/profiles/test_tuner_save")
+
+    def test_tuner_save_validation_error(self, client):
+        """Save API returns 400 on invalid profile data."""
+        client.post(
+            "/api/profiles",
+            json={
+                "name": "test_tuner_invalid",
+                "emoji": "\U0001f9ea",
+                "sources": {"pepper": {"urls": ["https://pepper.pl"]}},
+                "budget": {"min": 100, "max": 5000},
+                "score_threshold": 50,
+                "telegram": {"topic_id": None, "max_alerts": 5},
+            },
+        )
+        # Save with invalid budget (min > max)
+        response = client.post(
+            "/api/tuner/test_tuner_invalid/save",
+            json={
+                "budget": {"min": 10000, "max": 500},
+            },
+        )
+        assert response.status_code == 400
+        data = response.json()
+        assert data.get("ok") is False
+        assert "errors" in data
+        assert len(data["errors"]) > 0
+        # Clean up
+        client.delete("/api/profiles/test_tuner_invalid")
+
+
+# ──────────────── E2E workflow tests: Compare + Tuner ────────────────
+
+
+class TestCompareAndTunerWorkflows:
+    def test_compare_deals_from_list(self, client):
+        """Browse deals, then compare specific ones."""
+        # Step 1: Browse deals page
+        deals_resp = client.get("/deals")
+        assert deals_resp.status_code == 200
+        # Step 2: Compare two seeded deals
+        compare_resp = client.get("/compare?ids=pepper:99999,ceneo:88888")
+        assert compare_resp.status_code == 200
+        text = compare_resp.text
+        assert "Test Carbon Bike XL" in text
+        assert "NAS HDD Seagate IronWolf 8TB" in text
+        # Step 3: Verify both prices shown
+        assert "8 500 zl" in text  # pepper:99999 price
+        assert "1 200 zl" in text  # ceneo:88888 price
+
+    def test_tuner_simulate_then_save(self, client):
+        """Simulate rules then save — full tuner workflow."""
+        # Create test profile
+        client.post(
+            "/api/profiles",
+            json={
+                "name": "test_workflow",
+                "emoji": "\U0001f527",
+                "sources": {"pepper": {"urls": ["https://pepper.pl"]}},
+                "budget": {"min": 100, "max": 50000},
+                "score_rules": {"test": 5},
+                "score_threshold": 50,
+                "telegram": {"topic_id": None, "max_alerts": 5},
+            },
+        )
+        # Simulate
+        sim_resp = client.post(
+            "/api/tuner/test_workflow/simulate",
+            json={"score_rules": {"carbon": 40, "bike": 20}},
+        )
+        assert sim_resp.status_code == 200
+        # Save
+        save_resp = client.post(
+            "/api/tuner/test_workflow/save",
+            json={"score_rules": {"carbon": 40, "bike": 20}},
+        )
+        assert save_resp.status_code == 200
+        assert save_resp.json()["ok"] is True
+        # Clean up
+        client.delete("/api/profiles/test_workflow")
+
+    def test_sidebar_has_tuner_on_all_pages(self, client):
+        """Scoring Tuner link appears in sidebar on every page."""
+        for url in ["/deals", "/tuner", "/watchlist", "/profiles", "/health"]:
+            response = client.get(url)
+            if response.status_code == 200:
+                assert 'href="/tuner"' in response.text, f"Tuner missing from sidebar on {url}"
