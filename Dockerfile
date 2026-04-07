@@ -17,7 +17,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY deal_hunter.py .
 COPY feedback_bot.py .
 COPY health.py .
-COPY dashboard.py .
 COPY dashboard/ dashboard/
 COPY sources/ sources/
 COPY filters/ filters/
