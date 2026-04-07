@@ -46,7 +46,9 @@ async def csrf_check(request: Request, call_next):
         if not has_htmx and not has_xhr:
             return JSONResponse(
                 status_code=403,
-                content={"detail": "CSRF check failed — missing HX-Request or X-Requested-With header"},
+                content={
+                    "detail": "CSRF check failed — missing HX-Request or X-Requested-With header"
+                },
             )
     return await call_next(request)
 

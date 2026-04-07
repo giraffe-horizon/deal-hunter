@@ -117,7 +117,9 @@ def validate_environment() -> None:
     required = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]
     missing = [v for v in required if not os.getenv(v)]
     if missing:
-        logger.warning("Missing env vars: %s — Telegram alerts will be disabled", ", ".join(missing))
+        logger.warning(
+            "Missing env vars: %s — Telegram alerts will be disabled", ", ".join(missing)
+        )
 
 
 def _parse_topic_id() -> int | None:

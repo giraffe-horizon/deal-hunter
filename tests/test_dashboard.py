@@ -1116,7 +1116,9 @@ class TestScoreDealsHelper:
         """Empty deal list returns empty result."""
         from dashboard.services import DealService
 
-        result = DealService(None).score_deals_with_profile([], {"score_rules": {}, "penalties": {}})
+        result = DealService(None).score_deals_with_profile(
+            [], {"score_rules": {}, "penalties": {}}
+        )
         assert result == []
 
     def test_score_deals_applies_rules(self):
@@ -1221,7 +1223,9 @@ class TestScoreDealsHelper:
                 "score": 0,
             }
         ]
-        result = DealService(None).score_deals_with_profile(deals, {"score_rules": {}, "penalties": {}})
+        result = DealService(None).score_deals_with_profile(
+            deals, {"score_rules": {}, "penalties": {}}
+        )
         assert len(result) == 1
 
 

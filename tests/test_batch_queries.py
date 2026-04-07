@@ -8,10 +8,28 @@ def test_get_price_histories_batch(tmp_path):
     try:
         from sources.base import Deal
 
-        deal1 = Deal(id="test:1", title="Deal 1", price=100, link="", source="test",
-                     description="", temperature=0, image_url="", published_at="")
-        deal2 = Deal(id="test:2", title="Deal 2", price=200, link="", source="test",
-                     description="", temperature=0, image_url="", published_at="")
+        deal1 = Deal(
+            id="test:1",
+            title="Deal 1",
+            price=100,
+            link="",
+            source="test",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
+        )
+        deal2 = Deal(
+            id="test:2",
+            title="Deal 2",
+            price=200,
+            link="",
+            source="test",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
+        )
         db.upsert_deal(deal1, "test_profile", 50)
         db.upsert_deal(deal2, "test_profile", 60)
 
@@ -45,8 +63,17 @@ def test_get_lowest_prices_batch(tmp_path):
     try:
         from sources.base import Deal
 
-        deal1 = Deal(id="test:1", title="Deal 1", price=100, link="", source="test",
-                     description="", temperature=0, image_url="", published_at="")
+        deal1 = Deal(
+            id="test:1",
+            title="Deal 1",
+            price=100,
+            link="",
+            source="test",
+            description="",
+            temperature=0,
+            image_url="",
+            published_at="",
+        )
         db.upsert_deal(deal1, "test_profile", 50)
         db.record_price("test:1", 100)
         db.record_price("test:1", 80)
