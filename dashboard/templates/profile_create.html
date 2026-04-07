@@ -133,55 +133,10 @@
 
 </form>
 
+<script src="/static/js/profile-form.js"></script>
 <script>
-function showErrors(containerId, errors) {
-    var container = document.getElementById(containerId);
-    while (container.firstChild) container.removeChild(container.firstChild);
-    if (!errors || !errors.length) return;
-    var wrapper = document.createElement('div');
-    wrapper.className = 'bg-error-container/20 text-error rounded-card p-4 text-sm';
-    errors.forEach(function(e) {
-        var item = document.createElement('div');
-        item.textContent = '\u2022 ' + e;
-        wrapper.appendChild(item);
-    });
-    container.appendChild(wrapper);
-}
-
 function addScoreRule(key, val) {
-    var list = document.getElementById('score-rules-list');
-
-    var row = document.createElement('div');
-    row.className = 'flex items-center gap-2';
-
-    var keyInput = document.createElement('input');
-    keyInput.type = 'text';
-    keyInput.name = 'score_rule_key[]';
-    keyInput.placeholder = 'keyword';
-    keyInput.value = key || '';
-    keyInput.className = 'flex-1 px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary';
-
-    var valInput = document.createElement('input');
-    valInput.type = 'number';
-    valInput.name = 'score_rule_val[]';
-    valInput.placeholder = 'pts';
-    valInput.value = val || '';
-    valInput.className = 'w-24 px-3 py-2 rounded-card border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:outline-none focus:border-primary';
-
-    var delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'p-2 text-on-surface-variant hover:text-error transition-colors';
-    delBtn.addEventListener('click', function() { row.remove(); });
-
-    var icon = document.createElement('span');
-    icon.className = 'material-symbols-outlined text-[18px]';
-    icon.textContent = 'delete';
-    delBtn.appendChild(icon);
-
-    row.appendChild(keyInput);
-    row.appendChild(valInput);
-    row.appendChild(delBtn);
-    list.appendChild(row);
+    addRule('score-rules-list', key, val);
 }
 
 document.getElementById('create-form').addEventListener('submit', function(e) {
