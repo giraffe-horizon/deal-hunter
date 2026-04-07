@@ -1,6 +1,31 @@
 # CHANGELOG
 
 
+## v0.11.2 (2026-04-07)
+
+### Bug Fixes
+
+- **ci**: Exclude E2E tests from CI — they require playwright browser
+  ([`4aa0e03`](https://github.com/giraffe-horizon/deal-hunter/commit/4aa0e037e524ba0ea424d032e102cb2767ce719d))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- Add 70 E2E browser tests covering all dashboard pages and features
+  ([`5b682e6`](https://github.com/giraffe-horizon/deal-hunter/commit/5b682e6ae3a972cf63766933cd4b7282bffb73b5))
+
+- Add pytest-playwright E2E infrastructure with live server fixture (uvicorn subprocess) - 12 test
+  modules: page loads, deals, deal detail, compare, watchlist, health, price trends, profiles CRUD,
+  tuner, sidebar, CSRF protection - Make dashboard dependencies (DB_PATH, PROFILES_DIR) overridable
+  via env vars for test isolation — safe_load_profile/get_profiles now read YAML directly instead of
+  delegating to deal_hunter.py - Make health.py state dir overridable via DEAL_HUNTER_STATE_DIR env
+  var - Register e2e pytest marker and add pytest-playwright optional dependency - Update unit tests
+  to match new dependencies.py implementation
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.11.1 (2026-04-07)
 
 ### Bug Fixes
