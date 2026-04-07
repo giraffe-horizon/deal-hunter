@@ -112,6 +112,14 @@ _setup_logging()
 logger = logging.getLogger("deal_hunter")
 
 
+def validate_environment() -> None:
+    """Check required environment variables and warn about missing ones."""
+    required = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]
+    missing = [v for v in required if not os.getenv(v)]
+    if missing:
+        logger.warning("Missing env vars: %s — Telegram alerts will be disabled", ", ".join(missing))
+
+
 def _parse_topic_id() -> int | None:
     """Parse TELEGRAM_TOPIC_ID from environment, returning None if unset or invalid."""
     raw = os.environ.get("TELEGRAM_TOPIC_ID")
@@ -1270,6 +1278,8 @@ def main() -> None:
     parser.add_argument("--version", action="version", version=f"Deal Hunter {__version__}")
 
     args = parser.parse_args()
+
+    validate_environment()
 
     if args.init:
         from utils.init_profile import run_init
