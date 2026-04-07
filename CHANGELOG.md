@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.12.1 (2026-04-07)
+
+### Bug Fixes
+
+- **storage**: Preserve deal status on upsert — stop resetting to active
+  ([`71ff75e`](https://github.com/giraffe-horizon/deal-hunter/commit/71ff75e707c05365e6a593d769bc8618b05d3039))
+
+upsert_deal() was always setting status='active' when updating existing deals, so every cron run
+  would overwrite user-set watching/rejected statuses back to active.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.12.0 (2026-04-07)
 
 ### Features
