@@ -2,6 +2,7 @@
 
 import importlib.metadata
 import math
+import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
@@ -46,6 +47,20 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+_PROFILE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
+PROFILES_DIR = BASE_DIR / "profiles"
+
+
+def safe_profile_path(name: str) -> Path:
+    """Validate profile name and return resolved path, or raise 400."""
+    if not _PROFILE_NAME_RE.match(name):
+        raise HTTPException(status_code=400, detail="Invalid profile name")
+    path = (PROFILES_DIR / f"{name}.yaml").resolve()
+    if not path.is_relative_to(PROFILES_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid profile name")
+    return path
 
 
 def safe_load_profile(name: str) -> dict | None:
@@ -447,7 +462,7 @@ async def profiles_page(request: Request):
 @app.get("/profiles/{name}/edit/yaml", response_class=HTMLResponse)
 async def profile_yaml_page(request: Request, name: str):
     """Raw YAML editor page."""
-    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    profile_path = safe_profile_path(name)
     if not profile_path.exists():
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
     yaml_content = profile_path.read_text(encoding="utf-8")
@@ -464,7 +479,7 @@ async def api_update_profile_yaml(request: Request, name: str):
 
     from utils.validation import validate_profile as _validate
 
-    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    profile_path = safe_profile_path(name)
     if not profile_path.exists():
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
 
@@ -512,7 +527,7 @@ async def api_create_profile(request: Request):
     body = await request.json()
     name = body.get("name", "")
 
-    if not name or not name.replace("-", "").replace("_", "").isalnum():
+    if not name or not _PROFILE_NAME_RE.match(name):
         return JSONResponse(
             {
                 "errors": [
@@ -521,7 +536,7 @@ async def api_create_profile(request: Request):
             }
         )
 
-    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    profile_path = safe_profile_path(name)
     if profile_path.exists():
         return JSONResponse({"errors": [f"Profile '{name}' already exists."]})
 
@@ -540,6 +555,7 @@ async def api_create_profile(request: Request):
 @app.get("/profiles/{name}", response_class=HTMLResponse)
 async def profile_detail_page(request: Request, name: str):
     """Profile detail page (read-only view)."""
+    safe_profile_path(name)
     profile = safe_load_profile(name)
     if not profile:
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
@@ -554,6 +570,7 @@ async def profile_detail_page(request: Request, name: str):
 @app.get("/profiles/{name}/edit", response_class=HTMLResponse)
 async def profile_edit_page(request: Request, name: str):
     """Profile form editor page."""
+    safe_profile_path(name)
     profile = safe_load_profile(name)
     if not profile:
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
@@ -572,6 +589,7 @@ async def api_update_profile(request: Request, name: str):
 
     from utils.validation import validate_profile as _validate
 
+    safe_profile_path(name)
     body = await request.json()
 
     existing = safe_load_profile(name)
@@ -591,7 +609,7 @@ async def api_update_profile(request: Request, name: str):
     if errors:
         return JSONResponse({"errors": errors})
 
-    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    profile_path = safe_profile_path(name)
     with open(profile_path, "w", encoding="utf-8") as f:
         _yaml.dump(body, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
@@ -601,7 +619,7 @@ async def api_update_profile(request: Request, name: str):
 @app.delete("/api/profiles/{name}")
 async def api_delete_profile(name: str):
     """Delete a profile YAML file."""
-    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    profile_path = safe_profile_path(name)
     if not profile_path.exists():
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
     profile_path.unlink()
@@ -613,7 +631,7 @@ async def api_toggle_profile(name: str):
     """Toggle a profile's enabled state."""
     import yaml as _yaml
 
-    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    profile_path = safe_profile_path(name)
     if not profile_path.exists():
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
 
@@ -634,7 +652,7 @@ async def api_run_profile(name: str):
     import html as _html
     import subprocess
 
-    profile_path = BASE_DIR / "profiles" / f"{name}.yaml"
+    profile_path = safe_profile_path(name)
     if not profile_path.exists():
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
 
@@ -715,6 +733,7 @@ async def tuner_index(request: Request):
 @app.get("/tuner/{profile}", response_class=HTMLResponse)
 async def tuner_profile(request: Request, profile: str, db: SQLiteStorage = Depends(get_db)):
     """Scoring Tuner for a specific profile — loads and scores 50 deals."""
+    safe_profile_path(profile)
     profile_data = safe_load_profile(profile)
     if profile_data is None:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -736,6 +755,7 @@ async def tuner_profile(request: Request, profile: str, db: SQLiteStorage = Depe
 @app.post("/api/tuner/{profile}/simulate")
 async def tuner_simulate(request: Request, profile: str, db: SQLiteStorage = Depends(get_db)):
     """Re-score deals with modified rules and return JSON results."""
+    safe_profile_path(profile)
     body = await request.json()
     profile_data = safe_load_profile(profile)
     if profile_data is None:
@@ -775,6 +795,7 @@ async def tuner_simulate(request: Request, profile: str, db: SQLiteStorage = Dep
 @app.post("/api/tuner/{profile}/save")
 async def tuner_save(request: Request, profile: str):
     """Save modified scoring rules to the profile YAML file."""
+    profile_path = safe_profile_path(profile)
     body = await request.json()
     profile_data = safe_load_profile(profile)
     if profile_data is None:
@@ -797,7 +818,6 @@ async def tuner_save(request: Request, profile: str):
         return JSONResponse({"ok": False, "errors": errors}, status_code=400)
     import yaml as _yaml_save
 
-    profile_path = BASE_DIR / "profiles" / f"{profile}.yaml"
     profile_path.write_text(
         _yaml_save.dump(
             profile_data, allow_unicode=True, default_flow_style=False, sort_keys=False
