@@ -43,4 +43,7 @@ VOLUME ["/app/profiles", "/app/state"]
 
 USER dealer
 
+HEALTHCHECK --interval=60s --timeout=5s --retries=3 \
+  CMD python deal_hunter.py --health || exit 1
+
 ENTRYPOINT ["tini", "--", "/entrypoint.sh"]
