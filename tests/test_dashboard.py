@@ -1114,14 +1114,14 @@ class TestComparePage:
 class TestScoreDealsHelper:
     def test_score_deals_empty(self):
         """Empty deal list returns empty result."""
-        from dashboard_services import DealService
+        from dashboard.services import DealService
 
         result = DealService(None).score_deals_with_profile([], {"score_rules": {}, "penalties": {}})
         assert result == []
 
     def test_score_deals_applies_rules(self):
         """Helper correctly applies score rules to deal dicts."""
-        from dashboard_services import DealService
+        from dashboard.services import DealService
 
         deals = [
             {
@@ -1148,7 +1148,7 @@ class TestScoreDealsHelper:
 
     def test_score_deals_sorts_by_new_score_desc(self):
         """Results are sorted by new_score descending."""
-        from dashboard_services import DealService
+        from dashboard.services import DealService
 
         deals = [
             {
@@ -1182,7 +1182,7 @@ class TestScoreDealsHelper:
 
     def test_score_deals_handles_rejected(self):
         """Deals matching excluded words are marked rejected."""
-        from dashboard_services import DealService
+        from dashboard.services import DealService
 
         deals = [
             {
@@ -1207,7 +1207,7 @@ class TestScoreDealsHelper:
 
     def test_score_deals_none_price_handled(self):
         """Deals with None price don't crash."""
-        from dashboard_services import DealService
+        from dashboard.services import DealService
 
         deals = [
             {
