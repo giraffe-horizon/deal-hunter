@@ -13,3 +13,6 @@ deal_hunter.egg-info/
 .playwright-mcp/
 screenshots/
 .worktrees/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

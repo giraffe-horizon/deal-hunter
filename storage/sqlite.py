@@ -199,7 +199,7 @@ class SQLiteStorage:
         if not ids:
             return []
         placeholders = ",".join("?" for _ in ids)
-        query = f"SELECT * FROM deals WHERE id IN ({placeholders})"
+        query = f"SELECT * FROM deals WHERE id IN ({placeholders})"  # noqa: S608
         rows = self._conn.execute(query, ids).fetchall()
         return [dict(row) for row in rows]
 
@@ -551,7 +551,7 @@ class SQLiteStorage:
         placeholders = ",".join("?" for _ in alert_ids)
         try:
             self._conn.execute(
-                f"UPDATE alert_queue SET sent_at = ? WHERE id IN ({placeholders})",
+                f"UPDATE alert_queue SET sent_at = ? WHERE id IN ({placeholders})",  # noqa: S608
                 [now, *alert_ids],
             )
             self._conn.commit()

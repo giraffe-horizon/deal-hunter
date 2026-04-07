@@ -276,7 +276,7 @@ def check_price_changes(
                     lowest = db.get_lowest_price(deal.id)
                     if lowest is None or deal.price <= lowest:
                         is_lowest = True
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
             else:
                 # Fallback: check state JSON history
@@ -439,7 +439,7 @@ def deduplicate(deals: list, dedup_config: dict | None = None) -> list:
 
         # Find matching existing deal to merge with
         merged = False
-        for i, (existing_title, existing_price, unique_idx) in enumerate(seen_keys):
+        for _i, (existing_title, existing_price, unique_idx) in enumerate(seen_keys):
             # Exact title+price match (only when price > 0)
             if d.price > 0 and (norm_title, d.price) == (existing_title, existing_price):
                 unique[unique_idx].alt_links.append(

@@ -639,8 +639,8 @@ async def api_run_profile(name: str):
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
 
     try:
-        result = subprocess.run(
-            ["python", "deal_hunter.py", "--profile", name, "--verify"],
+        result = subprocess.run(  # noqa: S603, S607
+            ["python", "deal_hunter.py", "--profile", name, "--verify"],  # noqa: S607
             capture_output=True,
             text=True,
             timeout=120,

@@ -51,7 +51,7 @@ class RssSource(Source):
     def _parse_feed(self, xml_content: str, source_name: str) -> list[Deal]:
         """Parse RSS 2.0 or Atom feed XML into Deal objects."""
         try:
-            root = ET.fromstring(xml_content)
+            root = ET.fromstring(xml_content)  # noqa: S314
         except ET.ParseError as e:
             logger.warning(f"Failed to parse RSS/Atom XML: {e}")
             return []
@@ -85,7 +85,7 @@ class RssSource(Source):
             if price == 0 and description:
                 price = self._find_price(description)
 
-            id_hash = hashlib.md5(guid.encode()).hexdigest()[:12]
+            id_hash = hashlib.md5(guid.encode()).hexdigest()[:12]  # noqa: S324
             deal_id = f"{source_name}:{id_hash}"
 
             deals.append(
@@ -124,7 +124,7 @@ class RssSource(Source):
             if price == 0 and summary:
                 price = self.extract_price(summary)
 
-            id_hash = hashlib.md5(entry_id.encode()).hexdigest()[:12]
+            id_hash = hashlib.md5(entry_id.encode()).hexdigest()[:12]  # noqa: S324
             deal_id = f"{source_name}:{id_hash}"
 
             deals.append(
