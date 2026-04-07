@@ -484,8 +484,9 @@ async def profile_yaml_page(request: Request, name: str):
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
     yaml_content = profile_path.read_text(encoding="utf-8")
     return templates.TemplateResponse(
+        request,
         "profile_yaml.html",
-        {"request": request, "name": name, "yaml_content": yaml_content},
+        {"name": name, "yaml_content": yaml_content},
     )
 
 
@@ -579,8 +580,9 @@ async def profile_detail_page(request: Request, name: str):
     profile.setdefault("emoji", "\U0001f50d")
     profile.setdefault("currency", "PLN")
     return templates.TemplateResponse(
+        request,
         "profile_detail.html",
-        {"request": request, "profile": profile},
+        {"profile": profile},
     )
 
 
@@ -594,8 +596,9 @@ async def profile_edit_page(request: Request, name: str):
     profile.setdefault("emoji", "\U0001f50d")
     profile.setdefault("currency", "PLN")
     return templates.TemplateResponse(
+        request,
         "profile_edit.html",
-        {"request": request, "profile": profile},
+        {"profile": profile},
     )
 
 
