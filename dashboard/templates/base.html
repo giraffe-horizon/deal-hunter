@@ -86,6 +86,13 @@
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
             vertical-align: middle;
         }
+        .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+        .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
+        .progress-bar { animation: progress-indeterminate 1.5s ease-in-out infinite; }
+        @keyframes progress-indeterminate {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
     </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen">
@@ -144,6 +151,9 @@
                 </button>
                 <h2 class="font-headline text-lg font-semibold min-w-0">{% block page_title %}Dashboard{% endblock %}</h2>
             </header>
+            <div class="htmx-indicator h-0.5 overflow-hidden bg-surface-container">
+                <div class="progress-bar h-full w-1/4 bg-primary rounded-full"></div>
+            </div>
 
             <!-- Page Content -->
             <div class="px-4 sm:px-8 py-6">

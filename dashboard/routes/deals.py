@@ -173,6 +173,7 @@ def api_update_deal_status(
     request: Request,
     deal_id: str,
     status: str = Form(...),
+    inline: str = Form(""),
     db: SQLiteStorage = Depends(get_db),
 ):
     if status not in ("watching", "rejected", "active"):
@@ -180,6 +181,12 @@ def api_update_deal_status(
     ok = db.update_deal_status(deal_id, status)
     if not ok:
         return JSONResponse({"error": "Deal not found"}, status_code=404)
+    if inline:
+        return templates.TemplateResponse(
+            request,
+            "partials/deal_row_status.html",
+            {"current_status": status},
+        )
     # Return HTML fragment for HTMX swap — must include full action buttons
     # so the user can change status again
     deal = db.get_deal(deal_id)

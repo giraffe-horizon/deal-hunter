@@ -1,0 +1,10 @@
+{# Inline status result after Watch/Skip from table row #}
+<div class="flex items-center gap-1">
+    {% if current_status == 'watching' %}
+        <span class="text-xs font-label px-2.5 py-1 rounded-full bg-primary-container text-primary font-medium">Watching</span>
+    {% elif current_status == 'rejected' %}
+        <span class="text-xs font-label px-2.5 py-1 rounded-full bg-error-container/30 text-error font-medium">Rejected</span>
+    {% else %}
+        <span class="text-xs font-label px-2.5 py-1 rounded-full bg-tertiary-container/30 text-tertiary font-medium">Active</span>
+    {% endif %}
+</div>

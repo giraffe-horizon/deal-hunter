@@ -8,6 +8,7 @@
             <th class="pb-3 hidden sm:table-cell">Profile</th>
             <th class="pb-3">Score</th>
             <th class="pb-3 pr-4">Status</th>
+            <th class="pb-3 pr-4 hidden sm:table-cell"></th>
         </tr>
     </thead>
     <tbody class="divide-y divide-surface-variant/30">
@@ -53,11 +54,35 @@
                         <span class="text-xs font-label px-2.5 py-1 rounded-full bg-tertiary-container/30 text-tertiary font-medium">Active</span>
                     {% endif %}
                 </td>
+                <td class="py-3 pr-4 hidden sm:table-cell" onclick="event.stopPropagation()">
+                    <div class="flex items-center gap-0.5">
+                    {% if deal.status != 'watching' %}
+                    <button hx-post="/api/deals/{{ deal.id | urlencode }}/status"
+                            hx-vals='{"status":"watching","inline":"1"}'
+                            hx-target="closest td"
+                            hx-swap="innerHTML"
+                            class="p-1 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary-container/30"
+                            title="Watch">
+                        <span class="material-symbols-outlined text-[18px]">visibility</span>
+                    </button>
+                    {% endif %}
+                    {% if deal.status != 'rejected' %}
+                    <button hx-post="/api/deals/{{ deal.id | urlencode }}/status"
+                            hx-vals='{"status":"rejected","inline":"1"}'
+                            hx-target="closest td"
+                            hx-swap="innerHTML"
+                            class="p-1 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error-container/30"
+                            title="Skip">
+                        <span class="material-symbols-outlined text-[18px]">block</span>
+                    </button>
+                    {% endif %}
+                    </div>
+                </td>
             </tr>
             {% endfor %}
         {% else %}
             <tr>
-                <td colspan="7" class="py-16 text-center">
+                <td colspan="8" class="py-16 text-center">
                     <span class="material-symbols-outlined text-[40px] text-outline-variant mb-3 block">search_off</span>
                     <p class="text-on-surface-variant text-sm">No deals found</p>
                 </td>
@@ -74,7 +99,7 @@
     </p>
     <div class="flex items-center gap-1">
         {% if page > 1 %}
-            <a href="/deals?page={{ page - 1 }}{{ fp }}" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">
+            <a hx-get="/deals?page={{ page - 1 }}{{ fp }}" hx-target="#deals-table" hx-swap="innerHTML" hx-push-url="true" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 <span class="material-symbols-outlined text-[16px] align-middle">chevron_left</span>
             </a>
         {% endif %}
@@ -82,13 +107,13 @@
             {% if p == page %}
                 <span class="px-3 py-1.5 text-xs font-label rounded-card bg-primary text-on-primary font-medium">{{ p }}</span>
             {% elif p <= 3 or p >= total_pages - 1 or (p >= page - 1 and p <= page + 1) %}
-                <a href="/deals?page={{ p }}{{ fp }}" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">{{ p }}</a>
+                <a hx-get="/deals?page={{ p }}{{ fp }}" hx-target="#deals-table" hx-swap="innerHTML" hx-push-url="true" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">{{ p }}</a>
             {% elif p == 4 or p == total_pages - 2 %}
                 <span class="px-1 text-xs text-on-surface-variant">&hellip;</span>
             {% endif %}
         {% endfor %}
         {% if page < total_pages %}
-            <a href="/deals?page={{ page + 1 }}{{ fp }}" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">
+            <a hx-get="/deals?page={{ page + 1 }}{{ fp }}" hx-target="#deals-table" hx-swap="innerHTML" hx-push-url="true" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 <span class="material-symbols-outlined text-[16px] align-middle">chevron_right</span>
             </a>
         {% endif %}
