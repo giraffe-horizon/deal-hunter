@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.staticfiles import StaticFiles
 
 from storage.sqlite import SQLiteStorage
 
@@ -25,6 +26,7 @@ except importlib.metadata.PackageNotFoundError:
     APP_VERSION = __version__
 
 app = FastAPI(title="Deal Hunter Dashboard", version=APP_VERSION)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "dashboard" / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "dashboard" / "templates"))
 templates.env.autoescape = True
 
