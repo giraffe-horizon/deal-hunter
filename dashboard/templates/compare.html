@@ -152,6 +152,7 @@
     {% endfor %}
 </div>
 
+<script src="/static/js/charts.js"></script>
 <script>
 (function() {
     const histories = {{ price_histories | tojson }};
@@ -159,27 +160,13 @@
         const dealId = el.dataset.sparkline;
         const history = histories[dealId] || [];
         if (!history.length) return;
-        const prices = history.map(h => h.price);
-        new Chart(el, {
-            type: 'line',
-            data: {
-                labels: history.map(h => h.recorded_at.slice(0, 10)),
-                datasets: [{
-                    data: prices,
-                    borderColor: '#005db5',
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    tension: 0.3,
-                    fill: false,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false }, tooltip: { enabled: false } },
-                scales: { x: { display: false }, y: { display: false } },
-            }
-        });
+        createSparkline(
+            el,
+            history.map(h => h.recorded_at.slice(0, 10)),
+            history.map(h => h.price),
+            null,
+            false
+        );
     });
 })();
 </script>

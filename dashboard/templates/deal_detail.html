@@ -232,6 +232,7 @@
     </div>
 </div>
 
+<script src="/static/js/charts.js"></script>
 <script>
 (function() {
     let allLabels = [];
@@ -251,7 +252,11 @@
                 return;
             }
 
-            renderChart(allLabels, allPrices, data.lowest, data.highest);
+            if (chart) chart.destroy();
+            chart = createPriceChart(
+                document.getElementById('priceChart'),
+                allLabels, allPrices, data.lowest, data.highest
+            );
         })
         .catch(() => {
             document.getElementById('chart-container').classList.add('hidden');
@@ -259,83 +264,7 @@
             document.getElementById('period-buttons').classList.add('hidden');
         });
 
-    function renderChart(labels, prices, lowest, highest) {
-        const ctx = document.getElementById('priceChart').getContext('2d');
-
-        if (chart) chart.destroy();
-
-        // Find indices of lowest and highest
-        const lowestIdx = lowest !== null ? prices.indexOf(lowest) : -1;
-        const highestIdx = highest !== null ? prices.indexOf(highest) : -1;
-
-        const pointBg = prices.map((p, i) => {
-            if (i === lowestIdx && lowest !== highest) return '#9f403d';
-            if (i === highestIdx && lowest !== highest) return '#006b62';
-            return '#005db5';
-        });
-        const pointRadius = prices.map((p, i) => {
-            if (i === lowestIdx || i === highestIdx) return 6;
-            return 3;
-        });
-
-        chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Price (PLN)',
-                    data: prices,
-                    borderColor: '#005db5',
-                    backgroundColor: 'rgba(0, 93, 181, 0.08)',
-                    fill: true,
-                    tension: 0.3,
-                    pointBackgroundColor: pointBg,
-                    pointBorderColor: pointBg,
-                    pointRadius: pointRadius,
-                    pointHoverRadius: 7,
-                    borderWidth: 2,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: '#060e20',
-                        titleFont: { family: 'Inter' },
-                        bodyFont: { family: 'Inter' },
-                        callbacks: {
-                            label: function(ctx) {
-                                return ctx.parsed.y.toLocaleString('pl-PL') + ' zl';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: { display: false },
-                        ticks: {
-                            font: { family: 'Inter', size: 11 },
-                            color: '#445d99',
-                            maxTicksLimit: 10
-                        }
-                    },
-                    y: {
-                        grid: { color: 'rgba(152, 177, 242, 0.15)' },
-                        ticks: {
-                            font: { family: 'Inter', size: 11 },
-                            color: '#445d99',
-                            callback: function(v) { return v.toLocaleString('pl-PL') + ' zl'; }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
     window.filterChart = function(period) {
-        // Update button styles
         document.querySelectorAll('.period-btn').forEach(btn => {
             if (btn.dataset.period === period) {
                 btn.className = 'period-btn px-3 py-1.5 text-xs font-label rounded-card transition-colors bg-primary text-on-primary';
@@ -364,7 +293,11 @@
 
         const lowest = filteredPrices.length ? Math.min(...filteredPrices) : null;
         const highest = filteredPrices.length ? Math.max(...filteredPrices) : null;
-        renderChart(filteredLabels, filteredPrices, lowest, highest);
+        if (chart) chart.destroy();
+        chart = createPriceChart(
+            document.getElementById('priceChart'),
+            filteredLabels, filteredPrices, lowest, highest
+        );
     };
 })();
 </script>
