@@ -37,6 +37,36 @@ def health_page(request: Request):
     )
 
 
+@router.get("/api/health-status")
+def api_health_status(request: Request):
+    """Compact health status for sidebar indicator."""
+    from datetime import datetime
+
+    from health import load_health
+
+    health = load_health()
+    status = health.get("status") if health else None
+    age = None
+    if health and health.get("last_run"):
+        try:
+            last_run = datetime.fromisoformat(health["last_run"])
+            delta = datetime.now() - last_run
+            if delta.days > 0:
+                age = f"{delta.days}d ago"
+            elif delta.seconds >= 3600:
+                age = f"{delta.seconds // 3600}h ago"
+            else:
+                age = f"{delta.seconds // 60}m ago"
+        except (ValueError, TypeError):
+            pass
+
+    return templates.TemplateResponse(
+        request,
+        "partials/health_indicator.html",
+        {"health_status": status, "health_age": age or "unknown"},
+    )
+
+
 @router.get("/price-trends")
 def price_trends_redirect(days: int = 7):
     """Redirect old Price Trends page to Deals Explorer drops view."""
