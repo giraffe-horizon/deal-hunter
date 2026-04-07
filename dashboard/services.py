@@ -25,8 +25,8 @@ class DealService:
 
     def get_sparklines(self, deals: list[dict]) -> dict[str, list[int]]:
         """Get sparkline price data for a list of deals."""
-        ids = [d["id"] for d in deals]
-        return self.db.get_sparkline_data_batch(ids)
+        ids = [d.get("id") or d.get("deal_id") for d in deals]
+        return self.db.get_sparkline_data_batch([i for i in ids if i])
 
     def score_single_deal(self, deal_dict: dict) -> dict | None:
         """Re-score a deal using its profile config. Returns breakdown or None."""

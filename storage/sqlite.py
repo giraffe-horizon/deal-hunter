@@ -640,6 +640,28 @@ class SQLiteStorage:
         )
         return [dict(row) for row in cursor.fetchall()]
 
+    def update_watchlist_target_price(self, deal_id: str, target_price: int) -> bool:
+        """Update the target price for a watchlist item."""
+        cursor = self._conn.execute(
+            "UPDATE watchlist SET target_price = ? WHERE deal_id = ?",
+            (target_price, deal_id),
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
+
+    def get_watchlist_item(self, deal_id: str) -> dict | None:
+        """Get a single watchlist item with deal info."""
+        cursor = self._conn.execute(
+            """SELECT w.deal_id, w.target_price, w.created_at, w.triggered_at,
+                      d.title, d.price as current_price, d.link, d.source
+               FROM watchlist w
+               LEFT JOIN deals d ON w.deal_id = d.id
+               WHERE w.deal_id = ?""",
+            (deal_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
     def check_watchlist_triggers(self, deal_id: str, current_price: int) -> dict | None:
         """Check if a deal's current price meets the watchlist target.
         Returns the watchlist entry if triggered, None otherwise."""
