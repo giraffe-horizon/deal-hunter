@@ -1,7 +1,7 @@
-"""Scoring Tuner routes: index, profile view, simulate, save."""
+"""Scoring Tuner routes: index, profile view (redirect), simulate, save."""
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from dashboard import templates
 from dashboard.dependencies import get_db, get_profiles, safe_load_profile, safe_profile_path
@@ -29,27 +29,9 @@ def tuner_index(request: Request):
 
 
 @router.get("/tuner/{profile}", response_class=HTMLResponse)
-def tuner_profile(request: Request, profile: str, db: SQLiteStorage = Depends(get_db)):
-    """Scoring Tuner for a specific profile — loads and scores 50 deals."""
-    safe_profile_path(profile)
-    profile_data = safe_load_profile(profile)
-    if profile_data is None:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail="Profile not found")
-    deals = db.get_deals(profile=profile, limit=50)
-    scored = DealService(db).score_deals_with_profile(deals, profile_data)
-    return templates.TemplateResponse(
-        request,
-        "tuner.html",
-        {
-            "active_page": "tuner",
-            "profiles": get_profiles(),
-            "selected_profile": profile,
-            "deals": scored,
-            "profile_data": profile_data,
-        },
-    )
+def tuner_profile(request: Request, profile: str):
+    """Redirect to unified profile page tuner tab."""
+    return RedirectResponse(f"/profiles/{profile}?tab=tuner", status_code=302)
 
 
 @router.post("/api/tuner/{profile}/simulate")

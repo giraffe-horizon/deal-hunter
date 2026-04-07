@@ -942,15 +942,17 @@ class TestProfilePages:
         response = client.get("/profiles/nonexistent_profile_xyz")
         assert response.status_code == 404
 
-    def test_profile_edit_page_not_found(self, client):
-        """GET /profiles/{name}/edit returns 404 for missing profile."""
+    def test_profile_edit_page_redirects(self, client):
+        """GET /profiles/{name}/edit redirects to unified page with tab=edit."""
         response = client.get("/profiles/nonexistent_xyz/edit")
-        assert response.status_code == 404
+        assert response.status_code == 302
+        assert "tab=edit" in response.headers["location"]
 
-    def test_profile_yaml_page_not_found(self, client):
-        """GET /profiles/{name}/edit/yaml returns 404 for missing profile."""
+    def test_profile_yaml_page_redirects(self, client):
+        """GET /profiles/{name}/edit/yaml redirects to unified page with tab=yaml."""
         response = client.get("/profiles/nonexistent_xyz/edit/yaml")
-        assert response.status_code == 404
+        assert response.status_code == 302
+        assert "tab=yaml" in response.headers["location"]
 
     def test_profile_create_page_loads(self, client):
         """GET /profiles/new returns 200."""
@@ -1240,16 +1242,11 @@ class TestTunerPage:
     def test_tuner_index_loads(self, client):
         response = client.get("/tuner")
         assert response.status_code == 200
-        assert "Scoring Tuner" in response.text
 
-    def test_tuner_in_sidebar(self, client):
-        response = client.get("/tuner")
-        assert response.status_code == 200
-        assert 'href="/tuner"' in response.text
-
-    def test_tuner_profile_not_found(self, client):
+    def test_tuner_profile_redirects(self, client):
         response = client.get("/tuner/nonexistent_profile_xyz")
-        assert response.status_code == 404
+        assert response.status_code == 302
+        assert "tab=tuner" in response.headers["location"]
 
     def test_tuner_simulate_not_found(self, client):
         response = client.post(
@@ -1281,10 +1278,13 @@ class TestTunerPage:
                 "telegram": {"topic_id": None, "max_alerts": 5},
             },
         )
+        # /tuner/{profile} now redirects to /profiles/{profile}?tab=tuner
         response = client.get("/tuner/test_tuner_profile")
+        assert response.status_code == 302
+        # Follow redirect to unified profile page
+        response = client.get("/profiles/test_tuner_profile?tab=tuner")
         assert response.status_code == 200
         text = response.text
-        assert "Scoring Tuner" in text
         assert "Simulate" in text
         assert "Save" in text
         # Clean up
@@ -1474,9 +1474,8 @@ class TestCompareAndTunerWorkflows:
         # Clean up
         client.delete("/api/profiles/test_workflow")
 
-    def test_sidebar_has_tuner_on_all_pages(self, client):
-        """Scoring Tuner link appears in sidebar on every page."""
-        for url in ["/deals", "/tuner", "/watchlist", "/profiles", "/health"]:
-            response = client.get(url)
-            if response.status_code == 200:
-                assert 'href="/tuner"' in response.text, f"Tuner missing from sidebar on {url}"
+    def test_sidebar_has_no_tuner_link(self, client):
+        """Scoring Tuner link was removed from sidebar (now a profile tab)."""
+        response = client.get("/deals")
+        assert response.status_code == 200
+        assert 'href="/tuner"' not in response.text
