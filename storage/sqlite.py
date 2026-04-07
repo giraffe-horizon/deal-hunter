@@ -103,7 +103,7 @@ class SQLiteStorage:
             if existing:
                 self._conn.execute(
                     """UPDATE deals
-                       SET last_seen = ?, score = ?, price = ?, status = 'active'
+                       SET last_seen = ?, score = ?, price = ?
                        WHERE id = ?""",
                     (now, score, deal.price, deal.id),
                 )
