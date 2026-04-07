@@ -228,7 +228,7 @@ document.getElementById('create-form').addEventListener('submit', function(e) {
 
     fetch('/api/profiles', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
         body: JSON.stringify(data),
     })
     .then(function(resp) { return resp.json(); })

@@ -28,6 +28,20 @@ app = FastAPI(title="Deal Hunter Dashboard", version=APP_VERSION)
 templates = Jinja2Templates(directory=str(BASE_DIR / "dashboard" / "templates"))
 
 
+@app.middleware("http")
+async def csrf_check(request: Request, call_next):
+    """Require HX-Request or X-Requested-With header on mutating requests."""
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        has_htmx = request.headers.get("HX-Request")
+        has_xhr = request.headers.get("X-Requested-With")
+        if not has_htmx and not has_xhr:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "CSRF check failed — missing HX-Request or X-Requested-With header"},
+            )
+    return await call_next(request)
+
+
 def format_pln(value: int | None) -> str:
     """Format integer price as PLN string: 8500 -> '8 500 zl'."""
     if value is None or value == 0:

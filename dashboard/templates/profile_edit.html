@@ -265,7 +265,7 @@ document.getElementById('profile-form').addEventListener('submit', function(e) {
 
     fetch('/api/profiles/' + encodeURIComponent(name), {
         method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
         body: JSON.stringify(body)
     })
     .then(function(resp) { return resp.json(); })

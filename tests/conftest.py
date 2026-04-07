@@ -137,9 +137,42 @@ def dashboard_db(tmp_path):
     db.close()
 
 
+class _CsrfTestClient:
+    """Wrapper around TestClient that auto-adds HX-Request header on mutating methods."""
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def _inject_csrf(self, kwargs):
+        headers = dict(kwargs.get("headers") or {})
+        # Don't override if caller already set a CSRF header
+        if "HX-Request" not in headers and "X-Requested-With" not in headers:
+            headers["HX-Request"] = "true"
+        kwargs["headers"] = headers
+        return kwargs
+
+    def get(self, *args, **kwargs):
+        return self._inner.get(*args, **kwargs)
+
+    def post(self, *args, **kwargs):
+        return self._inner.post(*args, **self._inject_csrf(kwargs))
+
+    def put(self, *args, **kwargs):
+        return self._inner.put(*args, **self._inject_csrf(kwargs))
+
+    def patch(self, *args, **kwargs):
+        return self._inner.patch(*args, **self._inject_csrf(kwargs))
+
+    def delete(self, *args, **kwargs):
+        return self._inner.delete(*args, **self._inject_csrf(kwargs))
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
 @pytest.fixture
-def client(dashboard_db):
-    """FastAPI TestClient with dashboard_db injected."""
+def raw_client(dashboard_db):
+    """FastAPI TestClient WITHOUT auto CSRF headers (for CSRF-specific tests)."""
     from fastapi.testclient import TestClient
 
     from dashboard import app, get_db
@@ -149,6 +182,21 @@ def client(dashboard_db):
 
     app.dependency_overrides[get_db] = _override
     yield TestClient(app, follow_redirects=False)
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client(dashboard_db):
+    """FastAPI TestClient with dashboard_db injected and auto CSRF headers."""
+    from fastapi.testclient import TestClient
+
+    from dashboard import app, get_db
+
+    def _override():
+        yield dashboard_db
+
+    app.dependency_overrides[get_db] = _override
+    yield _CsrfTestClient(TestClient(app, follow_redirects=False))
     app.dependency_overrides.clear()
 
 

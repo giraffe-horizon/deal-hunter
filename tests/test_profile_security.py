@@ -57,3 +57,9 @@ def test_profile_run_traversal(client: TestClient):
     """POST run with invalid name must return 400."""
     resp = client.post("/api/profiles/..passwd/run")
     assert resp.status_code == 400
+
+
+def test_csrf_blocks_before_path_validation(raw_client: TestClient):
+    """Without CSRF headers, mutating requests are blocked at 403 regardless of path."""
+    resp = raw_client.delete("/api/profiles/..passwd")
+    assert resp.status_code == 403

@@ -287,7 +287,7 @@ async function simulate() {
     try {
         const resp = await fetch('/api/tuner/{{ selected_profile }}/simulate', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
             body: JSON.stringify(rules),
         });
         const data = await resp.json();
@@ -451,7 +451,7 @@ async function saveProfile() {
     try {
         const resp = await fetch('/api/tuner/{{ selected_profile }}/save', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
             body: JSON.stringify(rules),
         });
         const data = await resp.json();
