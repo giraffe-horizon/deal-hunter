@@ -3,52 +3,14 @@
 {% block title %}Deals Explorer — DealMonitor{% endblock %}
 {% block page_title %}Deals Explorer{% endblock %}
 {% block content %}
+{% from "macros.html" import metric_card %}
 
 <!-- Metric Cards -->
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-    <!-- Total Deals -->
-    <div class="bg-surface-container-low rounded-card p-6">
-        <div class="flex items-start gap-3">
-            <span class="material-symbols-outlined text-primary text-[28px]">inventory_2</span>
-            <div>
-                <p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Total Deals</p>
-                <p class="font-headline text-2xl font-bold text-on-surface">{{ total_deals }}</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Above Alert Threshold -->
-    <div class="bg-surface-container-low rounded-card p-6">
-        <div class="flex items-start gap-3">
-            <span class="material-symbols-outlined text-tertiary text-[28px]">trending_up</span>
-            <div>
-                <p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Score {{ score_threshold }}+</p>
-                <p class="font-headline text-2xl font-bold text-on-surface">{{ high_score_pct }}%</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- New Today -->
-    <div class="bg-surface-container-low rounded-card p-6">
-        <div class="flex items-start gap-3">
-            <span class="material-symbols-outlined text-primary text-[28px]">new_releases</span>
-            <div>
-                <p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">New Today</p>
-                <p class="font-headline text-2xl font-bold text-on-surface">{{ new_today }}</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Active Price Drops -->
-    <div class="bg-surface-container-low rounded-card p-6">
-        <div class="flex items-start gap-3">
-            <span class="material-symbols-outlined text-error text-[28px]">price_change</span>
-            <div>
-                <p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Price Drops (7d)</p>
-                <p class="font-headline text-2xl font-bold text-on-surface">{{ drops_count }}</p>
-            </div>
-        </div>
-    </div>
+    {{ metric_card("inventory_2", "Total Deals", total_deals) }}
+    {{ metric_card("trending_up", "Score " ~ score_threshold ~ "+", high_score_pct ~ "%", "text-tertiary") }}
+    {{ metric_card("new_releases", "New Today", new_today) }}
+    {{ metric_card("price_change", "Price Drops (7d)", drops_count, "text-error") }}
 </div>
 
 <!-- Filter Bar -->

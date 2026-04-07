@@ -1,0 +1,84 @@
+{# ── Metric Card ── #}
+{% macro metric_card(icon, label, value, icon_color="text-primary") %}
+<div class="bg-surface-container-low rounded-card p-6">
+    <div class="flex items-start gap-3">
+        <span class="material-symbols-outlined {{ icon_color }} text-[28px]">{{ icon }}</span>
+        <div>
+            <p class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">{{ label }}</p>
+            <p class="font-headline text-2xl font-bold text-on-surface">{{ value }}</p>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# ── Breadcrumb ── #}
+{% macro breadcrumb(items) %}
+<div class="flex items-center gap-2 text-sm font-label text-on-surface-variant min-w-0">
+    {% for item in items %}
+        {% if not loop.last %}
+            <a href="{{ item.href }}" class="hover:text-primary transition-colors flex-shrink-0">{{ item.label }}</a>
+            <span class="material-symbols-outlined text-[16px] flex-shrink-0">chevron_right</span>
+        {% else %}
+            <span class="text-on-surface truncate">{{ item.label }}</span>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# ── Empty State ── #}
+{% macro empty_state(icon, title, description="", action_href="", action_label="") %}
+<div class="bg-surface-container-low rounded-card p-12 text-center">
+    <span class="material-symbols-outlined text-[48px] text-outline-variant mb-4 block">{{ icon }}</span>
+    <h2 class="font-headline text-lg font-semibold text-on-surface mb-2">{{ title }}</h2>
+    {% if description %}
+    <p class="text-sm text-on-surface-variant mb-4">{{ description }}</p>
+    {% endif %}
+    {% if action_href %}
+    <a href="{{ action_href }}"
+       class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+        {{ action_label }}
+    </a>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# ── Status Badge ── #}
+{% macro status_badge(status) %}
+{% if status == 'watching' %}
+    <span class="text-xs font-label px-2.5 py-1 rounded-full bg-primary-container text-primary font-medium">Watching</span>
+{% elif status == 'rejected' %}
+    <span class="text-xs font-label px-2.5 py-1 rounded-full bg-error-container/30 text-error font-medium">Rejected</span>
+{% else %}
+    <span class="text-xs font-label px-2.5 py-1 rounded-full bg-tertiary-container/30 text-tertiary font-medium">Active</span>
+{% endif %}
+{% endmacro %}
+
+{# ── Score Display ── #}
+{% macro score_display(score, size="text-lg") %}
+{% if score is not none %}
+    {% if score >= 70 %}
+        <span class="{{ size }} font-headline font-bold text-tertiary">{{ score }}</span>
+    {% elif score >= 40 %}
+        <span class="{{ size }} font-headline font-bold text-[#b8860b]">{{ score }}</span>
+    {% else %}
+        <span class="{{ size }} font-headline font-bold text-error">{{ score }}</span>
+    {% endif %}
+{% else %}
+    <span class="text-sm text-on-surface-variant">&mdash;</span>
+{% endif %}
+{% endmacro %}
+
+{# ── Section Card ── #}
+{% macro section_card(title, icon="") %}
+<div class="bg-surface-container-low rounded-card p-6">
+    {% if icon %}
+    <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary text-[20px]">{{ icon }}</span>
+        <h3 class="font-headline text-base font-semibold">{{ title }}</h3>
+    </div>
+    {% else %}
+    <h2 class="font-headline text-lg font-semibold text-on-surface mb-4">{{ title }}</h2>
+    {% endif %}
+    {{ caller() }}
+</div>
+{% endmacro %}

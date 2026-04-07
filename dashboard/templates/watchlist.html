@@ -56,11 +56,8 @@
     </div>
 </div>
 {% else %}
-<div class="bg-surface-container-low rounded-card p-12 text-center">
-    <span class="material-symbols-outlined text-[48px] text-outline-variant mb-4 block">bookmark_border</span>
-    <h2 class="font-headline text-lg font-semibold text-on-surface mb-2">No watchlist items</h2>
-    <p class="text-sm text-on-surface-variant">Set target prices on deal pages to start tracking.</p>
-</div>
+{% from "macros.html" import empty_state %}
+{{ empty_state("bookmark_border", "No watchlist items", "Set target prices on deal pages to start tracking.") }}
 {% endif %}
 
 {% endblock %}
