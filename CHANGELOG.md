@@ -1,6 +1,192 @@
 # CHANGELOG
 
 
+## v0.11.0 (2026-04-07)
+
+### Bug Fixes
+
+- Update TemplateResponse calls to Starlette 1.0 signature (request, name, context)
+  ([`7a17a3e`](https://github.com/giraffe-horizon/deal-hunter/commit/7a17a3e256f783f5f42f7221074cf320967a9e08))
+
+- **security**: Add CSRF protection middleware to dashboard
+  ([`6527f63`](https://github.com/giraffe-horizon/deal-hunter/commit/6527f63dc0ab249ab27d6f70e4f7831d93d6bb94))
+
+Require HX-Request or X-Requested-With header on all mutating requests (POST/PUT/DELETE/PATCH) to
+  prevent cross-site request forgery. HTMX sends HX-Request automatically; vanilla fetch() calls in
+  templates now include X-Requested-With. Test client auto-injects CSRF headers via a wrapper, with
+  raw_client available for explicit CSRF tests.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **security**: Add path traversal protection to all profile endpoints
+  ([`c54c314`](https://github.com/giraffe-horizon/deal-hunter/commit/c54c314ea64f226bf6c76b1ea6b3d3c2655e2d24))
+
+Add centralized safe_profile_path() validator that rejects profile names not matching
+  ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$ and verifies resolved path stays within the profiles directory.
+  Applied to all 11 profile endpoints.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **security**: Enable explicit Jinja2 autoescape
+  ([`cb0131d`](https://github.com/giraffe-horizon/deal-hunter/commit/cb0131d3b2a355c003d71267094028cb0c2d0a1b))
+
+### Chores
+
+- Add .worktrees to gitignore for isolated workspaces
+  ([`ed7e06f`](https://github.com/giraffe-horizon/deal-hunter/commit/ed7e06f5158e2c5e992bb8f2fa48242caff4800b))
+
+- Add Docker HEALTHCHECK instruction
+  ([`d067dbd`](https://github.com/giraffe-horizon/deal-hunter/commit/d067dbdcaac3b057fb750744793c9063886bd4d8))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add pre-commit hooks for ruff format and lint
+  ([`13afc80`](https://github.com/giraffe-horizon/deal-hunter/commit/13afc80e6170231d436be28a184300d7a531ac13))
+
+- Dead code cleanup — remove unused import, fix re-export lint warnings
+  ([`b4201c9`](https://github.com/giraffe-horizon/deal-hunter/commit/b4201c902cb11fee04dbf87c1df4c50d839ffeca))
+
+Remove unused HTMLResponse import from dashboard/routes/health.py and convert implicit re-exports in
+  dashboard/__init__.py to explicit form (PEP 484 compliant) to satisfy ruff F401 checks.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Tighten dependency pinning, expand ruff/mypy config, update gitignore
+  ([`7765c4e`](https://github.com/giraffe-horizon/deal-hunter/commit/7765c4ee002b454f6cde5eb8cd3fe1b83486a9ec))
+
+Pin minimum dependency versions, add security/complexity/bugbear ruff rules (S, C90, B, A),
+  strengthen mypy with per-module overrides instead of global ignore_missing_imports, and add cache
+  directories to gitignore.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Code Style
+
+- Apply ruff format to modified files
+  ([`aed43ae`](https://github.com/giraffe-horizon/deal-hunter/commit/aed43aeea6400177848a8bcbebae5e2eff1f2ea9))
+
+### Documentation
+
+- Add refactoring spec and implementation plan
+  ([`a94fd93`](https://github.com/giraffe-horizon/deal-hunter/commit/a94fd93053e40db23df95006ddf4abba8b4b06bc))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- Add batch price history and lowest price query methods to SQLiteStorage
+  ([`b3d6429`](https://github.com/giraffe-horizon/deal-hunter/commit/b3d6429d11dad2ae0fd2a8e8acba990f84e88f0c))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add environment variable validation on startup
+  ([`7f48d61`](https://github.com/giraffe-horizon/deal-hunter/commit/7f48d61bd28cde8a248e57dfa687b69a8cc67651))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Performance Improvements
+
+- Fix N+1 query in compare_deals using batch methods
+  ([`639de6c`](https://github.com/giraffe-horizon/deal-hunter/commit/639de6cbec067469e7d66b923cf5e4d5808a7e7b))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- Extract dashboard business logic into DealService
+  ([`42a6e1f`](https://github.com/giraffe-horizon/deal-hunter/commit/42a6e1fe0fef16b4e443071b5ae6269a443317f7))
+
+Move comparison data fetching and deal scoring logic from dashboard.py route handlers into a
+  dedicated DealService class in dashboard_services.py, separating business logic from HTTP routing
+  concerns.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Fix async/sync inconsistency in dashboard routes
+  ([`89783dc`](https://github.com/giraffe-horizon/deal-hunter/commit/89783dc32e17ce5f7800b82bdf31f97b2bb86b74))
+
+Convert 14 route handlers from async def to def where they never use await. FastAPI correctly runs
+  sync functions in a threadpool, which is appropriate for synchronous I/O like SQLite queries and
+  file reads. Only handlers that actually await (request.form(), request.json(), request.body(),
+  middleware call_next) remain async.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Replace try/finally DB pattern in feedback_bot with context manager
+  ([`6a135ba`](https://github.com/giraffe-horizon/deal-hunter/commit/6a135bab49d8c413f4568a4605c4c1f2cd672eaf))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Split dashboard.py into route modules with APIRouter
+  ([`b97c799`](https://github.com/giraffe-horizon/deal-hunter/commit/b97c79999bb18de806839a2596264615f3e00dba))
+
+Convert monolithic dashboard.py into a proper Python package with route modules (deals, profiles,
+  watchlist, tuner, health), shared dependencies, and the service layer moved into the package.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **frontend**: Create Jinja2 macro library, apply to all templates
+  ([`d60771c`](https://github.com/giraffe-horizon/deal-hunter/commit/d60771cbb5555ffde14401e6998a31e078529562))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **frontend**: Create static dir, extract sidebar JS from base.html
+  ([`0563402`](https://github.com/giraffe-horizon/deal-hunter/commit/0563402439c24be6f52c5c9be7548d840fc32f8a))
+
+Move inline toggleSidebar() script to dashboard/static/js/sidebar.js and mount static files via
+  Starlette StaticFiles in dashboard.py.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **frontend**: Extract Chart.js helpers to shared static file
+  ([`98dc341`](https://github.com/giraffe-horizon/deal-hunter/commit/98dc3416975f8d7f280aab7b3deb38b5fdc94d38))
+
+Move inline Chart.js configuration from three templates into dashboard/static/js/charts.js with
+  reusable createPriceChart, createSparkline, and createTrendSparkline functions.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **frontend**: Extract compare bar JS to static file
+  ([`e346b91`](https://github.com/giraffe-horizon/deal-hunter/commit/e346b910069f13d3a12e1c8833b0b8121279e223))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **frontend**: Extract tuner and profile form JS to static files
+  ([`e209c94`](https://github.com/giraffe-horizon/deal-hunter/commit/e209c94f27ef10bea3c7791ee45bc7601bc75933))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **frontend**: Move inline HTML from api_update_deal_status to partial template
+  ([`d17bff2`](https://github.com/giraffe-horizon/deal-hunter/commit/d17bff2a6aa2da01eacaf1d6b0ca39303a65ee63))
+
+Extract the inline HTML string construction for deal action buttons into a Jinja2 partial template
+  (partials/deal_action_buttons.html), replacing f-string HTML generation with TemplateResponse
+  rendering.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- Add 21 missing tests for comparator and scoring tuner
+  ([`44b50c0`](https://github.com/giraffe-horizon/deal-hunter/commit/44b50c0ff59742f8ca7d576c56effadfa8532651))
+
+Unit tests: - _score_deals_with_profile: empty input, rule application, sort order, rejected deals,
+  None price handling
+
+E2E tests (comparator): - Compare with real deals (renders titles, prices) - Best price and highest
+  score highlighting - Sparkline canvases present - Share link present - Max 5 deal limit enforced -
+  Empty state and nonexistent IDs graceful
+
+E2E tests (tuner): - Tuner loads with real profile - Simulate API returns score diffs for seeded
+  deals - Simulate with different rules produces different scores - Save API writes rules to YAML
+  and validates - Save API rejects invalid budget (min > max)
+
+Workflow tests: - Browse deals then compare specific ones - Simulate then save (full tuner workflow)
+  - Sidebar has tuner link on all pages
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.10.0 (2026-04-06)
 
 ### Chores
