@@ -387,6 +387,40 @@ class SQLiteStorage:
             logger.error(f"Failed to get lowest price for {deal_id}: {e}")
             return None
 
+    def get_price_histories_batch(self, deal_ids: list[str]) -> dict[str, list[dict]]:
+        """Fetch price history for multiple deals in one query."""
+        if not deal_ids:
+            return {}
+        result: dict[str, list[dict]] = {did: [] for did in deal_ids}
+        try:
+            placeholders = ",".join("?" for _ in deal_ids)
+            rows = self._conn.execute(
+                f"SELECT * FROM price_history WHERE deal_id IN ({placeholders}) ORDER BY recorded_at",  # noqa: S608
+                deal_ids,
+            ).fetchall()
+            for row in rows:
+                result[row["deal_id"]].append(dict(row))
+        except sqlite3.Error as e:
+            logger.error(f"Failed to batch get price histories: {e}")
+        return result
+
+    def get_lowest_prices_batch(self, deal_ids: list[str]) -> dict[str, int | None]:
+        """Fetch lowest price for multiple deals in one query."""
+        if not deal_ids:
+            return {}
+        result: dict[str, int | None] = {did: None for did in deal_ids}
+        try:
+            placeholders = ",".join("?" for _ in deal_ids)
+            rows = self._conn.execute(
+                f"SELECT deal_id, MIN(price) as lowest FROM price_history WHERE deal_id IN ({placeholders}) GROUP BY deal_id",  # noqa: S608
+                deal_ids,
+            ).fetchall()
+            for row in rows:
+                result[row["deal_id"]] = int(row["lowest"])
+        except sqlite3.Error as e:
+            logger.error(f"Failed to batch get lowest prices: {e}")
+        return result
+
     def get_previous_price(self, deal_id: str) -> int | None:
         """Get the most recent price before the current one."""
         try:
