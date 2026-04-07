@@ -5,12 +5,14 @@ Tracks run results, source health, and provides watchdog/status checking.
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-HEALTH_FILE = Path(__file__).parent / "state" / "health.json"
+_state_dir = Path(os.environ.get("DEAL_HUNTER_STATE_DIR", str(Path(__file__).parent / "state")))
+HEALTH_FILE = _state_dir / "health.json"
 STALE_THRESHOLD = timedelta(hours=2)
 CONSECUTIVE_FAILURE_ALERT_THRESHOLD = 3
 
