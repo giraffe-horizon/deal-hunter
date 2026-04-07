@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.11.1 (2026-04-07)
+
+### Bug Fixes
+
+- Remove stale COPY dashboard.py from Dockerfile (now dashboard/__init__.py)
+  ([`f43f4f0`](https://github.com/giraffe-horizon/deal-hunter/commit/f43f4f0a5e03b33115ffdf2d751a0131669986be))
+
+
 ## v0.11.0 (2026-04-07)
 
 ### Bug Fixes
