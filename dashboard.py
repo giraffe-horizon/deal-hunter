@@ -311,11 +311,9 @@ def compare_deals(request: Request, ids: str = "", db: SQLiteStorage = Depends(g
     deal_ids = [i.strip() for i in ids.split(",") if i.strip()] if ids else []
     deal_ids = deal_ids[:5]  # max 5
     deals = db.get_deals_by_ids(deal_ids) if deal_ids else []
-    price_histories = {}
-    lowest_prices = {}
-    for deal in deals:
-        price_histories[deal["id"]] = db.get_price_history(deal["id"])
-        lowest_prices[deal["id"]] = db.get_lowest_price(deal["id"])
+    id_list = [d["id"] for d in deals]
+    price_histories = db.get_price_histories_batch(id_list)
+    lowest_prices = db.get_lowest_prices_batch(id_list)
     return templates.TemplateResponse(
         request,
         "compare.html",
