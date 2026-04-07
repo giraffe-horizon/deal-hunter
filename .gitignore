@@ -12,3 +12,4 @@ profiles/*.yaml
 deal_hunter.egg-info/
 .playwright-mcp/
 screenshots/
+.worktrees/
