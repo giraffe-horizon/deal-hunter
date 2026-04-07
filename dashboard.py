@@ -26,6 +26,7 @@ except importlib.metadata.PackageNotFoundError:
 
 app = FastAPI(title="Deal Hunter Dashboard", version=APP_VERSION)
 templates = Jinja2Templates(directory=str(BASE_DIR / "dashboard" / "templates"))
+templates.env.autoescape = True
 
 
 @app.middleware("http")
