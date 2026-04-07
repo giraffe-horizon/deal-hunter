@@ -16,14 +16,20 @@ router = APIRouter()
 @router.get("/deals")
 def deals_page(
     request: Request,
+    view: str = "",
     profile: str | None = None,
     source: str | None = None,
     min_score: int | None = None,
     category: str | None = None,
     status: str | None = None,
     page: int = 1,
+    days: int = 7,
     db: SQLiteStorage = Depends(get_db),
 ):
+    # Price Drops view
+    if view == "drops":
+        return _price_drops_view(request, days, db)
+
     # Normalize empty string params to None
     profile = profile or None
     source = source or None
@@ -97,6 +103,7 @@ def deals_page(
         {
             "deals": deals,
             "sparklines": sparklines,
+            "view": "",
             "total_deals": total_deals,
             "high_score_pct": high_score_pct,
             "score_threshold": SCORE_THRESHOLD,
@@ -116,6 +123,46 @@ def deals_page(
             "filter_params": filter_params,
         },
     )
+
+
+def _price_drops_view(request: Request, days: int, db: SQLiteStorage):
+    """Build the price drops view (shared by /deals?view=drops and redirect)."""
+    drops = db.get_price_drops(days=days)
+    all_deals = db.get_deals()
+
+    total_drops = len(drops)
+    avg_drop_pct = (
+        round(sum(d["diff_percent"] for d in drops) / total_drops, 1) if total_drops else 0
+    )
+    biggest_drop = max((d["diff_pln"] for d in drops), default=0)
+
+    categories: dict[str, int] = {}
+    for deal in all_deals:
+        cat = deal.get("category") or "Uncategorized"
+        categories[cat] = categories.get(cat, 0) + 1
+    categories = dict(sorted(categories.items(), key=lambda x: x[1], reverse=True))
+
+    category_trends: dict[str, list[dict]] = {}
+    for cat_name in list(categories.keys())[:3]:
+        trend = db.get_category_price_trend(cat_name, days=30)
+        if trend:
+            category_trends[cat_name] = trend
+
+    context = {
+        "drops": drops,
+        "days": days,
+        "view": "drops",
+        "total_drops": total_drops,
+        "avg_drop_pct": avg_drop_pct,
+        "biggest_drop": biggest_drop,
+        "categories": categories,
+        "category_trends": category_trends,
+    }
+
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request, "partials/price_drops_view.html", context)
+
+    return templates.TemplateResponse(request, "deals.html", context)
 
 
 @router.get("/deals/{deal_id}")

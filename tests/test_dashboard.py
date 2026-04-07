@@ -438,52 +438,52 @@ class TestHealthPage:
 
 
 class TestPriceTrendsPage:
-    def test_price_trends_renders(self, client):
-        response = client.get("/price-trends")
-        assert response.status_code == 200
-        assert "Price Trends" in response.text
+    def test_price_trends_redirects(self, client):
+        response = client.get("/price-trends", follow_redirects=False)
+        assert response.status_code == 302
+        assert "view=drops" in response.headers["location"]
+
+    def test_price_drops_view_renders(self, client):
+        text = client.get("/deals?view=drops").text
+        assert "Price Drops" in text
 
     def test_7_days_tab_active(self, client):
-        text = client.get("/price-trends?days=7").text
-        # The 7 Days link should have primary styling
+        text = client.get("/deals?view=drops&days=7").text
         assert "7 Days" in text
 
     def test_24_hours_tab(self, client):
-        text = client.get("/price-trends?days=1").text
+        text = client.get("/deals?view=drops&days=1").text
         assert "24 Hours" in text
 
     def test_contains_category_distribution(self, client):
-        text = client.get("/price-trends").text
+        text = client.get("/deals?view=drops").text
         assert "Category Distribution" in text
 
     def test_contains_summary_cards(self, client):
-        text = client.get("/price-trends").text
+        text = client.get("/deals?view=drops").text
         assert "Total Price Drops" in text
         assert "Average Drop" in text
         assert "Biggest Drop" in text
 
     def test_shows_category_names(self, client):
-        text = client.get("/price-trends").text
+        text = client.get("/deals?view=drops").text
         assert "road" in text  # category from seeded deals
 
     def test_no_drops_shows_empty_state(self, client):
-        # 1 day window likely has no drops from seeded data
-        text = client.get("/price-trends?days=1").text
-        # Either shows drops or "No price drops"
+        text = client.get("/deals?view=drops&days=1").text
         assert "Price Drops" in text
 
     def test_default_days_is_7(self, client):
-        text = client.get("/price-trends").text
-        # 7 Days tab should have active styling (bg-primary)
+        text = client.get("/deals?view=drops").text
         assert "bg-primary" in text
 
     def test_time_filter_tabs_present(self, client):
-        text = client.get("/price-trends").text
+        text = client.get("/deals?view=drops").text
         assert "24 Hours" in text
         assert "7 Days" in text
 
     def test_price_drops_table_headers(self, client):
-        text = client.get("/price-trends").text
+        text = client.get("/deals?view=drops").text
         assert "Previous Price" in text or "No price drops" in text
 
 
@@ -794,11 +794,11 @@ class TestE2EWorkflows:
             assert response.status_code == 200
             assert "System Health" in response.text
 
-    def test_price_trends_accessible_from_nav(self, client):
-        """Price trends page loads independently."""
-        response = client.get("/price-trends")
-        assert response.status_code == 200
-        assert "Price Trends" in response.text
+    def test_price_trends_redirects_to_drops_view(self, client):
+        """Price trends URL redirects to deals explorer drops view."""
+        response = client.get("/price-trends", follow_redirects=False)
+        assert response.status_code == 302
+        assert "view=drops" in response.headers["location"]
 
     def test_full_deal_lifecycle(self, client, dashboard_db):
         """Deal goes through active -> watching -> rejected -> active."""

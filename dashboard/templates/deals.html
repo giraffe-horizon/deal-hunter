@@ -5,6 +5,24 @@
 {% block content %}
 {% from "macros.html" import metric_card %}
 
+<!-- View toggle -->
+<div class="flex gap-1 mb-6 bg-surface-container-low rounded-card p-1 w-fit">
+    <a hx-get="/deals" hx-target="#deals-content" hx-push-url="/deals"
+       class="px-4 py-2 rounded-card text-sm font-medium transition-colors
+              {% if view != 'drops' %}bg-primary text-on-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+        All Deals
+    </a>
+    <a hx-get="/deals?view=drops" hx-target="#deals-content" hx-push-url="/deals?view=drops"
+       class="px-4 py-2 rounded-card text-sm font-medium transition-colors
+              {% if view == 'drops' %}bg-primary text-on-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+        Price Drops
+    </a>
+</div>
+
+<div id="deals-content">
+{% if view == 'drops' %}
+{% include "partials/price_drops_view.html" %}
+{% else %}
 <!-- Metric Cards -->
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
     {{ metric_card("inventory_2", "Total Deals", total_deals) }}
@@ -113,5 +131,7 @@
 </div>
 
 <script src="/static/js/compare.js"></script>
+{% endif %}
+</div>
 
 {% endblock %}
