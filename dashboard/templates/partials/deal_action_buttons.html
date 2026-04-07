@@ -1,0 +1,18 @@
+<a href="{{ deal_link }}" target="_blank" rel="noopener noreferrer"
+   class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+  <span class="material-symbols-outlined text-[18px]">open_in_new</span>Open Link</a>
+<button hx-post="/api/deals/{{ deal_id_encoded }}/status" hx-vals='{"status": "watching"}'
+        hx-target="#action-buttons" hx-swap="innerHTML"
+        class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container-high text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-highest transition-colors">
+  <span class="material-symbols-outlined text-[18px]">visibility</span>Watch</button>
+<button hx-post="/api/deals/{{ deal_id_encoded }}/status" hx-vals='{"status": "rejected"}'
+        hx-target="#action-buttons" hx-swap="innerHTML"
+        class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container-high text-on-surface-variant rounded-card text-sm font-medium hover:bg-error-container/20 hover:text-error transition-colors">
+  <span class="material-symbols-outlined text-[18px]">block</span>Skip</button>
+{% if current_status == 'watching' %}
+<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-primary-container text-primary">Watching</span>
+{% elif current_status == 'rejected' %}
+<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-error-container/30 text-error">Skipped</span>
+{% else %}
+<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-tertiary-container/30 text-tertiary">Active</span>
+{% endif %}

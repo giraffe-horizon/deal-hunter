@@ -347,6 +347,7 @@ def api_price_history(deal_id: str, db: SQLiteStorage = Depends(get_db)):
 
 @app.post("/api/deals/{deal_id}/status")
 def api_update_deal_status(
+    request: Request,
     deal_id: str,
     status: str = Form(...),
     db: SQLiteStorage = Depends(get_db),
@@ -362,25 +363,14 @@ def api_update_deal_status(
     link = deal["link"] if deal else "#"
     encoded_id = deal_id.replace(":", "%3A")
 
-    status_badge = {
-        "watching": '<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-primary-container text-primary">Watching</span>',
-        "rejected": '<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-error-container/30 text-error">Skipped</span>',
-        "active": '<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-tertiary-container/30 text-tertiary">Active</span>',
-    }[status]
-
-    return HTMLResponse(
-        f'<a href="{link}" target="_blank" rel="noopener noreferrer"'
-        f'   class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">'
-        f'  <span class="material-symbols-outlined text-[18px]">open_in_new</span>Open Link</a>'
-        f'<button hx-post="/api/deals/{encoded_id}/status" hx-vals=\'{{"status": "watching"}}\''
-        f'        hx-target="#action-buttons" hx-swap="innerHTML"'
-        f'        class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container-high text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-highest transition-colors">'
-        f'  <span class="material-symbols-outlined text-[18px]">visibility</span>Watch</button>'
-        f'<button hx-post="/api/deals/{encoded_id}/status" hx-vals=\'{{"status": "rejected"}}\''
-        f'        hx-target="#action-buttons" hx-swap="innerHTML"'
-        f'        class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container-high text-on-surface-variant rounded-card text-sm font-medium hover:bg-error-container/20 hover:text-error transition-colors">'
-        f'  <span class="material-symbols-outlined text-[18px]">block</span>Skip</button>'
-        f"{status_badge}"
+    return templates.TemplateResponse(
+        request,
+        "partials/deal_action_buttons.html",
+        {
+            "deal_link": link,
+            "deal_id_encoded": encoded_id,
+            "current_status": status,
+        },
     )
 
 
