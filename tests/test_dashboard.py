@@ -1108,20 +1108,20 @@ class TestComparePage:
         assert response.status_code == 200
 
 
-# ──────────────── Unit tests: _score_deals_with_profile ────────────────
+# ──────────────── Unit tests: DealService.score_deals_with_profile ────────────────
 
 
 class TestScoreDealsHelper:
     def test_score_deals_empty(self):
         """Empty deal list returns empty result."""
-        from dashboard import _score_deals_with_profile
+        from dashboard_services import DealService
 
-        result = _score_deals_with_profile([], {"score_rules": {}, "penalties": {}})
+        result = DealService(None).score_deals_with_profile([], {"score_rules": {}, "penalties": {}})
         assert result == []
 
     def test_score_deals_applies_rules(self):
         """Helper correctly applies score rules to deal dicts."""
-        from dashboard import _score_deals_with_profile
+        from dashboard_services import DealService
 
         deals = [
             {
@@ -1140,7 +1140,7 @@ class TestScoreDealsHelper:
             "penalties": {},
             "budget": {"min": 5000, "max": 15000},
         }
-        result = _score_deals_with_profile(deals, profile)
+        result = DealService(None).score_deals_with_profile(deals, profile)
         assert len(result) == 1
         assert result[0]["new_score"] > 0
         assert result[0]["diff"] == result[0]["new_score"] - 50
@@ -1148,7 +1148,7 @@ class TestScoreDealsHelper:
 
     def test_score_deals_sorts_by_new_score_desc(self):
         """Results are sorted by new_score descending."""
-        from dashboard import _score_deals_with_profile
+        from dashboard_services import DealService
 
         deals = [
             {
@@ -1177,12 +1177,12 @@ class TestScoreDealsHelper:
             "penalties": {},
             "budget": {"min": 5000, "max": 15000},
         }
-        result = _score_deals_with_profile(deals, profile)
+        result = DealService(None).score_deals_with_profile(deals, profile)
         assert result[0]["new_score"] >= result[1]["new_score"]
 
     def test_score_deals_handles_rejected(self):
         """Deals matching excluded words are marked rejected."""
-        from dashboard import _score_deals_with_profile
+        from dashboard_services import DealService
 
         deals = [
             {
@@ -1201,13 +1201,13 @@ class TestScoreDealsHelper:
             "penalties": {},
             "excluded_words": ["stolen"],
         }
-        result = _score_deals_with_profile(deals, profile)
+        result = DealService(None).score_deals_with_profile(deals, profile)
         assert result[0]["rejected"] is True
         assert result[0]["reject_reason"] != ""
 
     def test_score_deals_none_price_handled(self):
         """Deals with None price don't crash."""
-        from dashboard import _score_deals_with_profile
+        from dashboard_services import DealService
 
         deals = [
             {
@@ -1221,7 +1221,7 @@ class TestScoreDealsHelper:
                 "score": 0,
             }
         ]
-        result = _score_deals_with_profile(deals, {"score_rules": {}, "penalties": {}})
+        result = DealService(None).score_deals_with_profile(deals, {"score_rules": {}, "penalties": {}})
         assert len(result) == 1
 
 

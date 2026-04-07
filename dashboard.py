@@ -10,13 +10,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.staticfiles import StaticFiles
 
+from dashboard_services import DEALS_PER_PAGE, SCORE_THRESHOLD, DealService
 from storage.sqlite import SQLiteStorage
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "state" / "deals.db"
-
-DEALS_PER_PAGE = 50
-SCORE_THRESHOLD = 70
 
 try:
     APP_VERSION = importlib.metadata.version("deal-hunter")
@@ -309,20 +307,11 @@ def deal_detail_page(
 @app.get("/compare", response_class=HTMLResponse)
 def compare_deals(request: Request, ids: str = "", db: SQLiteStorage = Depends(get_db)):
     deal_ids = [i.strip() for i in ids.split(",") if i.strip()] if ids else []
-    deal_ids = deal_ids[:5]  # max 5
-    deals = db.get_deals_by_ids(deal_ids) if deal_ids else []
-    id_list = [d["id"] for d in deals]
-    price_histories = db.get_price_histories_batch(id_list)
-    lowest_prices = db.get_lowest_prices_batch(id_list)
+    data = DealService(db).get_comparison_data(deal_ids)
     return templates.TemplateResponse(
         request,
         "compare.html",
-        {
-            "active_page": "deals",
-            "deals": deals,
-            "price_histories": price_histories,
-            "lowest_prices": lowest_prices,
-        },
+        {"active_page": "deals", **data},
     )
 
 
@@ -687,40 +676,6 @@ def api_run_profile(name: str):
     )
 
 
-def _score_deals_with_profile(deals: list[dict], profile_data: dict) -> list[dict]:
-    """Score a list of deal dicts using the given profile config. Returns enriched dicts."""
-    from filters.base import BaseFilter
-    from sources.base import Deal
-
-    scorer = BaseFilter(profile_data)
-    scored = []
-    for d in deals:
-        deal_obj = Deal(
-            id=d["id"],
-            title=d["title"],
-            price=d["price"] or 0,
-            link=d["link"] or "",
-            source=d["source"] or "",
-            description=d["description"] or "",
-            temperature=0,
-            image_url=d["image_url"] or "",
-            published_at="",
-        )
-        result = scorer.score_deal(deal_obj)
-        scored.append(
-            {
-                **d,
-                "new_score": result.score,
-                "diff": result.score - (d["score"] or 0),
-                "breakdown": result.breakdown,
-                "rejected": result.rejected,
-                "reject_reason": result.reject_reason,
-            }
-        )
-    scored.sort(key=lambda x: x["new_score"], reverse=True)
-    return scored
-
-
 @app.get("/tuner", response_class=HTMLResponse)
 def tuner_index(request: Request):
     """Scoring Tuner index — profile selector."""
@@ -746,7 +701,7 @@ def tuner_profile(request: Request, profile: str, db: SQLiteStorage = Depends(ge
     if profile_data is None:
         raise HTTPException(status_code=404, detail="Profile not found")
     deals = db.get_deals(profile=profile, limit=50)
-    scored = _score_deals_with_profile(deals, profile_data)
+    scored = DealService(db).score_deals_with_profile(deals, profile_data)
     return templates.TemplateResponse(
         request,
         "tuner.html",
@@ -781,7 +736,7 @@ async def tuner_simulate(request: Request, profile: str, db: SQLiteStorage = Dep
         if key in body:
             modified[key] = body[key]
     deals = db.get_deals(profile=profile, limit=50)
-    scored = _score_deals_with_profile(deals, modified)
+    scored = DealService(db).score_deals_with_profile(deals, modified)
     results = []
     for s in scored:
         results.append(
