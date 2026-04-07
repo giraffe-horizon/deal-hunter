@@ -154,57 +154,22 @@
 </div>
 
 {% if category_trends %}
+<script src="/static/js/charts.js"></script>
 <script>
 (function() {
-    const colors = ['#005db5', '#526074', '#006b62'];
+    const colors = [DH_CHART_COLORS.primary, DH_CHART_COLORS.secondary, DH_CHART_COLORS.tertiary];
     const trends = {{ category_trends | tojson }};
     let idx = 0;
     for (const [cat, data] of Object.entries(trends)) {
         idx++;
         const canvas = document.getElementById('sparkline-' + idx);
         if (!canvas || !data.length) continue;
-
-        const labels = data.map(d => d.day);
-        const prices = data.map(d => d.avg_price);
-        const color = colors[(idx - 1) % colors.length];
-
-        new Chart(canvas, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    data: prices,
-                    borderColor: color,
-                    backgroundColor: color + '15',
-                    fill: true,
-                    tension: 0.4,
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHitRadius: 8,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: '#060e20',
-                        titleFont: { family: 'Inter', size: 11 },
-                        bodyFont: { family: 'Inter', size: 11 },
-                        callbacks: {
-                            label: function(ctx) {
-                                return ctx.parsed.y.toLocaleString('pl-PL') + ' zl';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: { display: false },
-                    y: { display: false }
-                }
-            }
-        });
+        createTrendSparkline(
+            canvas,
+            data.map(d => d.day),
+            data.map(d => d.avg_price),
+            colors[(idx - 1) % colors.length]
+        );
     }
 })();
 </script>

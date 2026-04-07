@@ -112,6 +112,16 @@ _setup_logging()
 logger = logging.getLogger("deal_hunter")
 
 
+def validate_environment() -> None:
+    """Check required environment variables and warn about missing ones."""
+    required = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]
+    missing = [v for v in required if not os.getenv(v)]
+    if missing:
+        logger.warning(
+            "Missing env vars: %s — Telegram alerts will be disabled", ", ".join(missing)
+        )
+
+
 def _parse_topic_id() -> int | None:
     """Parse TELEGRAM_TOPIC_ID from environment, returning None if unset or invalid."""
     raw = os.environ.get("TELEGRAM_TOPIC_ID")
@@ -276,7 +286,7 @@ def check_price_changes(
                     lowest = db.get_lowest_price(deal.id)
                     if lowest is None or deal.price <= lowest:
                         is_lowest = True
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
             else:
                 # Fallback: check state JSON history
@@ -439,7 +449,7 @@ def deduplicate(deals: list, dedup_config: dict | None = None) -> list:
 
         # Find matching existing deal to merge with
         merged = False
-        for i, (existing_title, existing_price, unique_idx) in enumerate(seen_keys):
+        for _i, (existing_title, existing_price, unique_idx) in enumerate(seen_keys):
             # Exact title+price match (only when price > 0)
             if d.price > 0 and (norm_title, d.price) == (existing_title, existing_price):
                 unique[unique_idx].alt_links.append(
@@ -1270,6 +1280,8 @@ def main() -> None:
     parser.add_argument("--version", action="version", version=f"Deal Hunter {__version__}")
 
     args = parser.parse_args()
+
+    validate_environment()
 
     if args.init:
         from utils.init_profile import run_init

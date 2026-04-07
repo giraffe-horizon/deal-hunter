@@ -28,7 +28,7 @@
         <span class="material-symbols-outlined text-[18px]">play_arrow</span>
         Run Now
     </button>
-    <button onclick="if(confirm('Delete profile {{ profile.name }}?')) fetch('/api/profiles/{{ profile.name }}', {method:'DELETE'}).then(function(){location.href='/profiles'})"
+    <button onclick="if(confirm('Delete profile {{ profile.name }}?')) fetch('/api/profiles/{{ profile.name }}', {method:'DELETE', headers:{'X-Requested-With':'XMLHttpRequest'}}).then(function(){location.href='/profiles'})"
             class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container-high text-on-surface-variant rounded-card text-sm font-medium hover:bg-error-container/20 hover:text-error transition-colors">
         <span class="material-symbols-outlined text-[18px]">delete</span>
         Delete

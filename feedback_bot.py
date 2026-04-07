@@ -59,8 +59,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.answer("Nieznana akcja")
         return
 
-    storage = get_storage()
-    try:
+    with get_storage() as storage:
         status = "watching" if action == "watch" else "rejected"
         found = storage.update_deal_status(deal_id, status)
         if not found:
@@ -73,8 +72,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.answer("\u2b50 Dodano do obserwowanych")
         else:
             await query.answer("\U0001f44e Pominięto")
-    finally:
-        storage.close()
 
 
 # ── Text command handlers ────────────────────────────────────────────
@@ -87,8 +84,7 @@ async def cmd_watch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     deal_id = context.args[0]
-    storage = get_storage()
-    try:
+    with get_storage() as storage:
         found = storage.update_deal_status(deal_id, "watching")
         if not found:
             await update.message.reply_text(f"Nie znaleziono oferty: {html.escape(deal_id)}")
@@ -97,8 +93,6 @@ async def cmd_watch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             f"\u2b50 Oferta {html.escape(deal_id)} dodana do obserwowanych"
         )
-    finally:
-        storage.close()
 
 
 async def cmd_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -108,22 +102,18 @@ async def cmd_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     deal_id = context.args[0]
-    storage = get_storage()
-    try:
+    with get_storage() as storage:
         found = storage.update_deal_status(deal_id, "rejected")
         if not found:
             await update.message.reply_text(f"Nie znaleziono oferty: {html.escape(deal_id)}")
             return
         storage.record_feedback(deal_id, "skip")
         await update.message.reply_text(f"\U0001f44e Oferta {html.escape(deal_id)} pominięta")
-    finally:
-        storage.close()
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/status — show feedback summary."""
-    storage = get_storage()
-    try:
+    with get_storage() as storage:
         stats = storage.get_feedback_stats()
         watching = len(storage.get_deals_by_status("watching", limit=10000))
         rejected = len(storage.get_deals_by_status("rejected", limit=10000))
@@ -140,8 +130,6 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 msg += f"  {action}: {count}\n"
 
         await update.message.reply_text(msg, parse_mode="HTML")
-    finally:
-        storage.close()
 
 
 async def cmd_target(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -182,8 +170,7 @@ async def cmd_target(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def cmd_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/watchlist — show all deals with status='watching'."""
-    storage = get_storage()
-    try:
+    with get_storage() as storage:
         deals = storage.get_deals_by_status("watching", limit=20)
         if not deals:
             await update.message.reply_text("Brak obserwowanych ofert.")
@@ -205,8 +192,6 @@ async def cmd_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 break
 
         await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=True)
-    finally:
-        storage.close()
 
 
 # ── Main ─────────────────────────────────────────────────────────────

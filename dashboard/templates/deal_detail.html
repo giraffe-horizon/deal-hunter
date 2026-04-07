@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% set active_page = "deals" %}
 {% block title %}{{ deal.title }} — DealMonitor{% endblock %}
+{% from "macros.html" import breadcrumb, status_badge, score_display %}
 {% block page_title %}
-<div class="flex items-center gap-2 text-sm font-label text-on-surface-variant min-w-0">
-    <a href="/deals" class="hover:text-primary transition-colors flex-shrink-0">Deals Explorer</a>
-    <span class="material-symbols-outlined text-[16px] flex-shrink-0">chevron_right</span>
-    <span class="text-on-surface truncate">{{ deal.title[:60] }}{% if deal.title|length > 60 %}...{% endif %}</span>
-</div>
+{{ breadcrumb([
+    {"href": "/deals", "label": "Deals Explorer"},
+    {"label": deal.title[:60] ~ ("..." if deal.title|length > 60 else "")}
+]) }}
 {% endblock %}
 {% block content %}
 
@@ -33,13 +33,7 @@
             </div>
             <div class="flex flex-wrap items-center gap-2 mt-3">
                 <span class="text-xs font-label px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-medium">{{ deal.source }}</span>
-                {% if deal.status == 'watching' %}
-                    <span class="text-xs font-label px-2.5 py-1 rounded-full bg-primary-container text-primary font-medium">Watching</span>
-                {% elif deal.status == 'rejected' %}
-                    <span class="text-xs font-label px-2.5 py-1 rounded-full bg-error-container/30 text-error font-medium">Rejected</span>
-                {% else %}
-                    <span class="text-xs font-label px-2.5 py-1 rounded-full bg-tertiary-container/30 text-tertiary font-medium">Active</span>
-                {% endif %}
+                {{ status_badge(deal.status) }}
             </div>
         </div>
 
@@ -167,17 +161,7 @@
                 <div>
                     <dt class="text-xs font-label text-on-surface-variant uppercase tracking-wider mb-1">Score</dt>
                     <dd>
-                        {% if deal.score is not none %}
-                            {% if deal.score >= 70 %}
-                                <span class="text-lg font-headline font-bold text-tertiary">{{ deal.score }}</span>
-                            {% elif deal.score >= 40 %}
-                                <span class="text-lg font-headline font-bold text-[#b8860b]">{{ deal.score }}</span>
-                            {% else %}
-                                <span class="text-lg font-headline font-bold text-error">{{ deal.score }}</span>
-                            {% endif %}
-                        {% else %}
-                            <span class="text-sm text-on-surface-variant">&mdash;</span>
-                        {% endif %}
+                        {{ score_display(deal.score) }}
                     </dd>
                 </div>
                 {% if deal.category %}
@@ -232,6 +216,7 @@
     </div>
 </div>
 
+<script src="/static/js/charts.js"></script>
 <script>
 (function() {
     let allLabels = [];
@@ -251,7 +236,11 @@
                 return;
             }
 
-            renderChart(allLabels, allPrices, data.lowest, data.highest);
+            if (chart) chart.destroy();
+            chart = createPriceChart(
+                document.getElementById('priceChart'),
+                allLabels, allPrices, data.lowest, data.highest
+            );
         })
         .catch(() => {
             document.getElementById('chart-container').classList.add('hidden');
@@ -259,83 +248,7 @@
             document.getElementById('period-buttons').classList.add('hidden');
         });
 
-    function renderChart(labels, prices, lowest, highest) {
-        const ctx = document.getElementById('priceChart').getContext('2d');
-
-        if (chart) chart.destroy();
-
-        // Find indices of lowest and highest
-        const lowestIdx = lowest !== null ? prices.indexOf(lowest) : -1;
-        const highestIdx = highest !== null ? prices.indexOf(highest) : -1;
-
-        const pointBg = prices.map((p, i) => {
-            if (i === lowestIdx && lowest !== highest) return '#9f403d';
-            if (i === highestIdx && lowest !== highest) return '#006b62';
-            return '#005db5';
-        });
-        const pointRadius = prices.map((p, i) => {
-            if (i === lowestIdx || i === highestIdx) return 6;
-            return 3;
-        });
-
-        chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Price (PLN)',
-                    data: prices,
-                    borderColor: '#005db5',
-                    backgroundColor: 'rgba(0, 93, 181, 0.08)',
-                    fill: true,
-                    tension: 0.3,
-                    pointBackgroundColor: pointBg,
-                    pointBorderColor: pointBg,
-                    pointRadius: pointRadius,
-                    pointHoverRadius: 7,
-                    borderWidth: 2,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: '#060e20',
-                        titleFont: { family: 'Inter' },
-                        bodyFont: { family: 'Inter' },
-                        callbacks: {
-                            label: function(ctx) {
-                                return ctx.parsed.y.toLocaleString('pl-PL') + ' zl';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: { display: false },
-                        ticks: {
-                            font: { family: 'Inter', size: 11 },
-                            color: '#445d99',
-                            maxTicksLimit: 10
-                        }
-                    },
-                    y: {
-                        grid: { color: 'rgba(152, 177, 242, 0.15)' },
-                        ticks: {
-                            font: { family: 'Inter', size: 11 },
-                            color: '#445d99',
-                            callback: function(v) { return v.toLocaleString('pl-PL') + ' zl'; }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
     window.filterChart = function(period) {
-        // Update button styles
         document.querySelectorAll('.period-btn').forEach(btn => {
             if (btn.dataset.period === period) {
                 btn.className = 'period-btn px-3 py-1.5 text-xs font-label rounded-card transition-colors bg-primary text-on-primary';
@@ -364,7 +277,11 @@
 
         const lowest = filteredPrices.length ? Math.min(...filteredPrices) : null;
         const highest = filteredPrices.length ? Math.max(...filteredPrices) : null;
-        renderChart(filteredLabels, filteredPrices, lowest, highest);
+        if (chart) chart.destroy();
+        chart = createPriceChart(
+            document.getElementById('priceChart'),
+            filteredLabels, filteredPrices, lowest, highest
+        );
     };
 })();
 </script>

@@ -41,15 +41,8 @@
     {% endfor %}
 </div>
 {% else %}
-<div class="bg-surface-container-low rounded-card p-12 text-center">
-    <span class="material-symbols-outlined text-[48px] text-outline-variant mb-4 block">tune</span>
-    <h2 class="font-headline text-lg font-semibold text-on-surface mb-2">No profiles found</h2>
-    <p class="text-sm text-on-surface-variant mb-4">Create your first profile to start monitoring deals.</p>
-    <a href="/profiles/new" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
-        <span class="material-symbols-outlined text-[18px]">add</span>
-        Create Profile
-    </a>
-</div>
+{% from "macros.html" import empty_state %}
+{{ empty_state("tune", "No profiles found", "Create your first profile to start monitoring deals.", "/profiles/new", "Create Profile") }}
 {% endif %}
 
 {% endblock %}

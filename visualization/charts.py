@@ -21,11 +21,11 @@ def _import_matplotlib():
         import matplotlib.pyplot as plt
 
         return plt, mdates
-    except ImportError:
+    except ImportError as err:
         raise ImportError(
             "matplotlib is required for chart generation. "
             "Install it with: pip install 'matplotlib>=3.8'"
-        )
+        ) from err
 
 
 def generate_price_chart(deal_id: str, db, output_path: str | None = None) -> Path:
@@ -147,7 +147,7 @@ def generate_digest_chart(drops: list[dict], output_path: str | None = None) -> 
     ax.grid(True, axis="y", alpha=0.3)
 
     # Add percentage labels on bars
-    for bar, pct in zip(bars, percents):
+    for bar, pct in zip(bars, percents, strict=False):
         ax.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.5,

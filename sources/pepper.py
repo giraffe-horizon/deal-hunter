@@ -120,7 +120,7 @@ class PepperSource(Source):
                     pub_dt = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
                     if datetime.now().astimezone() - pub_dt > timedelta(days=30):
                         return None
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
 
             native_id = str(tid) if tid else link
@@ -197,7 +197,7 @@ class PepperSource(Source):
                 if datetime.now().astimezone() - pub_dt > timedelta(days=30):
                     return None
                 published_at = raw_dt
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
         native_id = link or title

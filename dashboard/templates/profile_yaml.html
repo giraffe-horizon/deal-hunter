@@ -65,7 +65,7 @@ function showErrors(containerId, errors) {
 function saveYaml() {
     fetch('/api/profiles/{{ name }}/yaml', {
         method: 'PUT',
-        headers: {'Content-Type': 'text/plain'},
+        headers: {'Content-Type': 'text/plain', 'X-Requested-With': 'XMLHttpRequest'},
         body: editor.getValue(),
     })
     .then(function(resp) { return resp.json(); })
