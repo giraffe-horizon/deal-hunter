@@ -307,7 +307,7 @@ def deal_detail_page(
 
 
 @app.get("/compare", response_class=HTMLResponse)
-async def compare_deals(request: Request, ids: str = "", db: SQLiteStorage = Depends(get_db)):
+def compare_deals(request: Request, ids: str = "", db: SQLiteStorage = Depends(get_db)):
     deal_ids = [i.strip() for i in ids.split(",") if i.strip()] if ids else []
     deal_ids = deal_ids[:5]  # max 5
     deals = db.get_deals_by_ids(deal_ids) if deal_ids else []
@@ -406,7 +406,7 @@ def api_stats(db: SQLiteStorage = Depends(get_db)):
 
 
 @app.get("/watchlist", response_class=HTMLResponse)
-async def watchlist_page(request: Request, db: SQLiteStorage = Depends(get_db)):
+def watchlist_page(request: Request, db: SQLiteStorage = Depends(get_db)):
     """Watchlist page — deals with target price alerts."""
     items = db.get_watchlist()
     return templates.TemplateResponse(
@@ -431,7 +431,7 @@ async def add_to_watchlist_api(
 
 
 @app.delete("/api/watchlist/{deal_id:path}")
-async def remove_from_watchlist_api(
+def remove_from_watchlist_api(
     deal_id: str,
     db: SQLiteStorage = Depends(get_db),
 ):
@@ -441,7 +441,7 @@ async def remove_from_watchlist_api(
 
 
 @app.get("/profiles", response_class=HTMLResponse)
-async def profiles_page(request: Request):
+def profiles_page(request: Request):
     """Profile list page."""
     profile_names = _get_profiles()
     profiles = []
@@ -467,7 +467,7 @@ async def profiles_page(request: Request):
 
 
 @app.get("/profiles/{name}/edit/yaml", response_class=HTMLResponse)
-async def profile_yaml_page(request: Request, name: str):
+def profile_yaml_page(request: Request, name: str):
     """Raw YAML editor page."""
     profile_path = safe_profile_path(name)
     if not profile_path.exists():
@@ -513,7 +513,7 @@ async def api_update_profile_yaml(request: Request, name: str):
 
 
 @app.get("/profiles/new", response_class=HTMLResponse)
-async def profile_create_page(request: Request):
+def profile_create_page(request: Request):
     """Profile create page."""
     from sources import SOURCE_REGISTRY
 
@@ -561,7 +561,7 @@ async def api_create_profile(request: Request):
 
 
 @app.get("/profiles/{name}", response_class=HTMLResponse)
-async def profile_detail_page(request: Request, name: str):
+def profile_detail_page(request: Request, name: str):
     """Profile detail page (read-only view)."""
     safe_profile_path(name)
     profile = safe_load_profile(name)
@@ -577,7 +577,7 @@ async def profile_detail_page(request: Request, name: str):
 
 
 @app.get("/profiles/{name}/edit", response_class=HTMLResponse)
-async def profile_edit_page(request: Request, name: str):
+def profile_edit_page(request: Request, name: str):
     """Profile form editor page."""
     safe_profile_path(name)
     profile = safe_load_profile(name)
@@ -627,7 +627,7 @@ async def api_update_profile(request: Request, name: str):
 
 
 @app.delete("/api/profiles/{name}")
-async def api_delete_profile(name: str):
+def api_delete_profile(name: str):
     """Delete a profile YAML file."""
     profile_path = safe_profile_path(name)
     if not profile_path.exists():
@@ -637,7 +637,7 @@ async def api_delete_profile(name: str):
 
 
 @app.patch("/api/profiles/{name}/toggle")
-async def api_toggle_profile(name: str):
+def api_toggle_profile(name: str):
     """Toggle a profile's enabled state."""
     import yaml as _yaml
 
@@ -657,7 +657,7 @@ async def api_toggle_profile(name: str):
 
 
 @app.post("/api/profiles/{name}/run")
-async def api_run_profile(name: str):
+def api_run_profile(name: str):
     """Trigger a profile run (dry-run with --verify)."""
     import html as _html
     import subprocess
@@ -724,7 +724,7 @@ def _score_deals_with_profile(deals: list[dict], profile_data: dict) -> list[dic
 
 
 @app.get("/tuner", response_class=HTMLResponse)
-async def tuner_index(request: Request):
+def tuner_index(request: Request):
     """Scoring Tuner index — profile selector."""
     profiles = _get_profiles()
     return templates.TemplateResponse(
@@ -741,7 +741,7 @@ async def tuner_index(request: Request):
 
 
 @app.get("/tuner/{profile}", response_class=HTMLResponse)
-async def tuner_profile(request: Request, profile: str, db: SQLiteStorage = Depends(get_db)):
+def tuner_profile(request: Request, profile: str, db: SQLiteStorage = Depends(get_db)):
     """Scoring Tuner for a specific profile — loads and scores 50 deals."""
     safe_profile_path(profile)
     profile_data = safe_load_profile(profile)
@@ -838,7 +838,7 @@ async def tuner_save(request: Request, profile: str):
 
 
 @app.get("/api/profiles")
-async def api_profiles_list():
+def api_profiles_list():
     """JSON list of profiles."""
     profile_names = _get_profiles()
     profiles = []
