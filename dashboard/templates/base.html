@@ -86,6 +86,13 @@
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
             vertical-align: middle;
         }
+        .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+        .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
+        .progress-bar { animation: progress-indeterminate 1.5s ease-in-out infinite; }
+        @keyframes progress-indeterminate {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
     </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen">
@@ -107,10 +114,6 @@
                     <span class="material-symbols-outlined text-[20px]">search</span>
                     Deals Explorer
                 </a>
-                <a href="/price-trends" class="flex items-center gap-3 px-4 py-3 rounded-card text-sm font-medium transition-colors {% if active_page == 'price-trends' %}bg-surface-container-high text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
-                    <span class="material-symbols-outlined text-[20px]">trending_up</span>
-                    Price Trends
-                </a>
                 <a href="/watchlist" class="flex items-center gap-3 px-4 py-3 rounded-card text-sm font-medium transition-colors {% if active_page == 'watchlist' %}bg-surface-container-high text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                     <span class="material-symbols-outlined text-[20px]">bookmark</span>
                     Watchlist
@@ -119,18 +122,16 @@
                     <span class="material-symbols-outlined text-[20px]">tune</span>
                     Profiles
                 </a>
-                <a href="/tuner" class="flex items-center gap-3 px-4 py-3 rounded-card text-sm font-medium transition-colors {% if active_page == 'tuner' %}bg-surface-container-high text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
-                    <span class="material-symbols-outlined text-[20px]">labs</span>
-                    Scoring Tuner
-                </a>
-                <a href="/health" class="flex items-center gap-3 px-4 py-3 rounded-card text-sm font-medium transition-colors {% if active_page == 'health' %}bg-surface-container-high text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
-                    <span class="material-symbols-outlined text-[20px]">monitor_heart</span>
-                    System Health
-                </a>
             </nav>
 
-            <!-- Version -->
-            <div class="px-6 py-4">
+            <!-- Footer: health indicator + version -->
+            <div class="px-6 py-4 space-y-2">
+                <div hx-get="/api/health-status" hx-trigger="load" hx-swap="innerHTML">
+                    <a href="/health" class="flex items-center gap-2 text-xs font-label text-on-surface-variant">
+                        <span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+                        Loading...
+                    </a>
+                </div>
                 <p class="text-xs text-on-surface-variant font-label">v{{ app_version }}</p>
             </div>
         </aside>
@@ -144,6 +145,9 @@
                 </button>
                 <h2 class="font-headline text-lg font-semibold min-w-0">{% block page_title %}Dashboard{% endblock %}</h2>
             </header>
+            <div class="htmx-indicator h-0.5 overflow-hidden bg-surface-container">
+                <div class="progress-bar h-full w-1/4 bg-primary rounded-full"></div>
+            </div>
 
             <!-- Page Content -->
             <div class="px-4 sm:px-8 py-6">

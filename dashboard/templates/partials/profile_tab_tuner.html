@@ -1,0 +1,230 @@
+{# Error/status container #}
+<div id="tuner-errors"></div>
+
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6" data-profile="{{ selected_profile }}">
+
+    {# -- Left column: editor -- #}
+    <div class="space-y-4">
+
+        {# Score Rules #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-headline text-sm font-semibold text-on-surface">Score Rules</h3>
+                <button type="button" onclick="addRuleRow('score-rules-body','rule-keyword','rule-points')"
+                        class="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-dim font-medium">
+                    <span class="material-symbols-outlined text-[16px]">add</span>Add
+                </button>
+            </div>
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th class="text-left text-xs text-on-surface-variant font-medium pb-2 pr-2">Keyword</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium pb-2 pr-2">Points</th>
+                        <th class="pb-2"></th>
+                    </tr>
+                </thead>
+                <tbody id="score-rules-body">
+                    {% if profile_data and profile_data.score_rules %}
+                    {% for keyword, points in profile_data.score_rules.items() %}
+                    <tr>
+                        <td class="py-1 pr-2">
+                            <input type="text" class="rule-keyword w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                   value="{{ keyword }}">
+                        </td>
+                        <td class="py-1 pr-2">
+                            <input type="number" class="rule-points w-20 bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                   value="{{ points }}">
+                        </td>
+                        <td class="py-1">
+                            <button type="button" onclick="this.closest('tr').remove()"
+                                    class="text-error hover:text-error/80 text-sm">Remove</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Penalties #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-headline text-sm font-semibold text-on-surface">Penalties</h3>
+                <button type="button" onclick="addRuleRow('penalties-body','penalty-keyword','penalty-points')"
+                        class="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-dim font-medium">
+                    <span class="material-symbols-outlined text-[16px]">add</span>Add
+                </button>
+            </div>
+            <table class="w-full">
+                <thead>
+                    <tr>
+                        <th class="text-left text-xs text-on-surface-variant font-medium pb-2 pr-2">Keyword</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium pb-2 pr-2">Points</th>
+                        <th class="pb-2"></th>
+                    </tr>
+                </thead>
+                <tbody id="penalties-body">
+                    {% if profile_data and profile_data.penalties %}
+                    {% for keyword, points in profile_data.penalties.items() %}
+                    <tr>
+                        <td class="py-1 pr-2">
+                            <input type="text" class="penalty-keyword w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                   value="{{ keyword }}">
+                        </td>
+                        <td class="py-1 pr-2">
+                            <input type="number" class="penalty-points w-20 bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                   value="{{ points }}">
+                        </td>
+                        <td class="py-1">
+                            <button type="button" onclick="this.closest('tr').remove()"
+                                    class="text-error hover:text-error/80 text-sm">Remove</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Budget #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <h3 class="font-headline text-sm font-semibold text-on-surface mb-3">Budget</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-on-surface-variant mb-1">Min (PLN)</label>
+                    <input type="number" id="budget-min"
+                           value="{{ profile_data.budget.min if profile_data and profile_data.budget else 0 }}"
+                           class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </div>
+                <div>
+                    <label class="block text-xs text-on-surface-variant mb-1">Max (PLN)</label>
+                    <input type="number" id="budget-max"
+                           value="{{ profile_data.budget.max if profile_data and profile_data.budget else 999999 }}"
+                           class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </div>
+            </div>
+        </div>
+
+        {# Thresholds #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <h3 class="font-headline text-sm font-semibold text-on-surface mb-3">Thresholds</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-on-surface-variant mb-1">Score Threshold</label>
+                    <input type="number" id="score-threshold"
+                           value="{{ profile_data.score_threshold if profile_data else 50 }}"
+                           class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </div>
+                <div>
+                    <label class="block text-xs text-on-surface-variant mb-1">Alert Threshold</label>
+                    <input type="number" id="score-threshold-alert"
+                           value="{{ profile_data.score_threshold_alert if profile_data else 100 }}"
+                           class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                </div>
+            </div>
+        </div>
+
+        {# Excluded Words #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <label class="block text-xs font-medium text-on-surface-variant mb-2 uppercase tracking-wider">Excluded Words</label>
+            <textarea id="excluded-words" rows="3"
+                      placeholder="word1, word2, ..."
+                      class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none">{% if profile_data and profile_data.excluded_words %}{{ profile_data.excluded_words | join(', ') }}{% endif %}</textarea>
+            <p class="text-xs text-on-surface-variant mt-1">Comma-separated. Deals matching any of these are hard-rejected.</p>
+        </div>
+
+        {# Required Any #}
+        <div class="bg-surface-container-low rounded-card p-4">
+            <label class="block text-xs font-medium text-on-surface-variant mb-2 uppercase tracking-wider">Required Any</label>
+            <textarea id="required-any" rows="3"
+                      placeholder="word1, word2, ..."
+                      class="w-full bg-surface-container rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none">{% if profile_data and profile_data.required_any %}{{ profile_data.required_any | join(', ') }}{% endif %}</textarea>
+            <p class="text-xs text-on-surface-variant mt-1">Comma-separated. At least one must match, or deal is rejected.</p>
+        </div>
+
+        {# Action buttons #}
+        <div class="flex gap-3">
+            <button type="button" onclick="simulate()"
+                    class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+                <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                Simulate
+            </button>
+            <button type="button" onclick="saveProfile()"
+                    class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 bg-surface-container-high text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-highest transition-colors">
+                <span class="material-symbols-outlined text-[18px]">save</span>
+                Save Profile
+            </button>
+        </div>
+
+    </div>{# end left column #}
+
+    {# -- Right column: results -- #}
+    <div class="bg-surface-container-low rounded-card overflow-hidden">
+        <div class="px-4 py-3 border-b border-outline-variant/30">
+            <h3 class="font-headline text-sm font-semibold text-on-surface">Results (top 50 deals)</h3>
+            <p class="text-xs text-on-surface-variant mt-0.5">Click Simulate to re-score with modified rules.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-surface-container">
+                        <th class="text-left text-xs text-on-surface-variant font-medium py-2 pl-4 pr-2">Title</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium py-2 pr-2">Price</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium py-2 pr-2">Cur.</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium py-2 pr-2">New</th>
+                        <th class="text-left text-xs text-on-surface-variant font-medium py-2 pr-4">Diff</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body">
+                    {% for deal in deals %}
+                    <tr class="hover:bg-surface-container transition-colors border-b border-outline-variant/10">
+                        <td class="py-2 pl-4 pr-2 max-w-[180px]">
+                            <a href="/deals/{{ deal.id | urlencode }}" class="text-sm text-primary hover:underline line-clamp-1 block truncate"
+                               title="{{ deal.title }}">{{ deal.title }}</a>
+                        </td>
+                        <td class="py-2 pr-2 whitespace-nowrap">
+                            <span class="text-sm font-headline font-semibold text-on-surface">{{ deal.price | format_pln }}</span>
+                        </td>
+                        <td class="py-2 pr-2">
+                            <span class="text-sm text-on-surface-variant">{{ deal.score if deal.score is not none else '—' }}</span>
+                        </td>
+                        <td class="py-2 pr-2">
+                            {% if deal.rejected %}
+                            <span class="text-sm font-headline font-bold text-error">REJ</span>
+                            {% elif deal.new_score >= 70 %}
+                            <span class="text-sm font-headline font-bold text-tertiary">{{ deal.new_score }}</span>
+                            {% elif deal.new_score >= 40 %}
+                            <span class="text-sm font-headline font-bold text-[#b8860b]">{{ deal.new_score }}</span>
+                            {% else %}
+                            <span class="text-sm font-headline font-bold text-error">{{ deal.new_score }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2 pr-4">
+                            {% if not deal.rejected %}
+                            {% if deal.diff > 0 %}
+                            <span class="text-sm font-headline font-bold text-tertiary">+{{ deal.diff }}</span>
+                            {% elif deal.diff < 0 %}
+                            <span class="text-sm font-headline font-bold text-error">{{ deal.diff }}</span>
+                            {% else %}
+                            <span class="text-sm font-headline font-bold text-on-surface-variant">0</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-sm text-on-surface-variant">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="py-8 text-center text-sm text-on-surface-variant">
+                            No deals found for this profile. Run the hunter first.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>{# end right column #}
+
+</div>{# end grid #}
+
+<script src="/static/js/tuner.js"></script>

@@ -3,15 +3,17 @@
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from dashboard import templates
 from dashboard.dependencies import (
     _PROFILE_NAME_RE,
+    DB_PATH,
     get_profiles,
     safe_load_profile,
     safe_profile_path,
 )
+from storage.sqlite import SQLiteStorage
 
 BASE_DIR = Path(__file__).parent.parent.parent
 
@@ -58,49 +60,64 @@ def profile_create_page(request: Request):
 
 
 @router.get("/profiles/{name}", response_class=HTMLResponse)
-def profile_detail_page(request: Request, name: str):
-    """Profile detail page (read-only view)."""
+def profile_detail_page(request: Request, name: str, tab: str = "overview"):
+    """Unified profile page with tabs."""
     safe_profile_path(name)
     profile = safe_load_profile(name)
     if not profile:
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
     profile.setdefault("emoji", "\U0001f50d")
     profile.setdefault("currency", "PLN")
-    return templates.TemplateResponse(
-        request,
-        "profile_detail.html",
-        {"profile": profile},
-    )
+
+    tab_map = {
+        "overview": "partials/profile_tab_overview.html",
+        "edit": "partials/profile_tab_edit.html",
+        "yaml": "partials/profile_tab_yaml.html",
+        "tuner": "partials/profile_tab_tuner.html",
+    }
+    tab = tab if tab in tab_map else "overview"
+
+    context: dict = {"profile": profile, "active_tab": tab}
+
+    # YAML tab needs raw content
+    if tab == "yaml":
+        profile_path = safe_profile_path(name)
+        context["name"] = name
+        context["yaml_content"] = profile_path.read_text(encoding="utf-8")
+
+    # Tuner tab needs scored deals
+    if tab == "tuner":
+        from dashboard.services import DealService
+
+        db = SQLiteStorage(DB_PATH)
+        try:
+            deals = db.get_deals(profile=name, limit=50)
+            scored = DealService(db).score_deals_with_profile(deals, profile)
+            context["deals"] = scored
+            context["profile_data"] = profile
+            context["selected_profile"] = name
+        finally:
+            db.close()
+
+    # HTMX request: return only the tab partial
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request, tab_map[tab], context)
+
+    # Full page load: render the unified shell with the tab included
+    context["active_tab_template"] = tab_map[tab]
+    return templates.TemplateResponse(request, "profile_unified.html", context)
 
 
 @router.get("/profiles/{name}/edit", response_class=HTMLResponse)
-def profile_edit_page(request: Request, name: str):
-    """Profile form editor page."""
-    safe_profile_path(name)
-    profile = safe_load_profile(name)
-    if not profile:
-        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
-    profile.setdefault("emoji", "\U0001f50d")
-    profile.setdefault("currency", "PLN")
-    return templates.TemplateResponse(
-        request,
-        "profile_edit.html",
-        {"profile": profile},
-    )
+def profile_edit_redirect(name: str):
+    """Redirect old edit URL to unified profile page edit tab."""
+    return RedirectResponse(f"/profiles/{name}?tab=edit", status_code=302)
 
 
 @router.get("/profiles/{name}/edit/yaml", response_class=HTMLResponse)
-def profile_yaml_page(request: Request, name: str):
-    """Raw YAML editor page."""
-    profile_path = safe_profile_path(name)
-    if not profile_path.exists():
-        raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
-    yaml_content = profile_path.read_text(encoding="utf-8")
-    return templates.TemplateResponse(
-        request,
-        "profile_yaml.html",
-        {"name": name, "yaml_content": yaml_content},
-    )
+def profile_yaml_redirect(name: str):
+    """Redirect old YAML editor URL to unified profile page yaml tab."""
+    return RedirectResponse(f"/profiles/{name}?tab=yaml", status_code=302)
 
 
 @router.put("/api/profiles/{name}/yaml")

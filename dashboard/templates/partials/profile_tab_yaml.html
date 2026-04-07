@@ -1,0 +1,71 @@
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5/lib/codemirror.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5/theme/material-darker.min.css">
+
+<div id="yaml-errors" class="mb-4"></div>
+
+<div class="bg-surface-container-low rounded-card p-6">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="font-headline text-lg font-semibold text-on-surface">Raw YAML</h2>
+        <div class="flex gap-2">
+            <button onclick="saveYaml()"
+                    class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
+                <span class="material-symbols-outlined text-[18px]">save</span>
+                Save
+            </button>
+            <a hx-get="/profiles/{{ profile.name }}?tab=overview"
+               hx-target="#profile-content"
+               hx-push-url="true"
+               class="inline-flex items-center gap-2 px-4 py-2 bg-surface-container-high text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-highest transition-colors cursor-pointer">
+                Cancel
+            </a>
+        </div>
+    </div>
+    <textarea id="yaml-editor">{{ yaml_content }}</textarea>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5/lib/codemirror.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5/mode/yaml/yaml.min.js"></script>
+<script>
+var editor = CodeMirror.fromTextArea(document.getElementById('yaml-editor'), {
+    mode: 'yaml',
+    theme: 'material-darker',
+    lineNumbers: true,
+    tabSize: 2,
+    indentWithTabs: false,
+    lineWrapping: true,
+});
+editor.setSize(null, 500);
+
+function showYamlErrors(containerId, errors) {
+    var container = document.getElementById(containerId);
+    while (container.firstChild) container.removeChild(container.firstChild);
+    if (!errors || !errors.length) return;
+    var wrapper = document.createElement('div');
+    wrapper.className = 'bg-error-container/20 text-error rounded-card p-4 text-sm';
+    errors.forEach(function(e) {
+        var item = document.createElement('div');
+        item.textContent = '\u2022 ' + e;
+        wrapper.appendChild(item);
+    });
+    container.appendChild(wrapper);
+}
+
+function saveYaml() {
+    fetch('/api/profiles/{{ profile.name }}/yaml', {
+        method: 'PUT',
+        headers: {'Content-Type': 'text/plain', 'X-Requested-With': 'XMLHttpRequest'},
+        body: editor.getValue(),
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(result) {
+        if (result.errors) {
+            showYamlErrors('yaml-errors', result.errors);
+        } else {
+            htmx.ajax('GET', '/profiles/{{ profile.name }}?tab=overview', {target: '#profile-content', pushUrl: true});
+        }
+    })
+    .catch(function(err) {
+        showYamlErrors('yaml-errors', ['Save failed: ' + err.message]);
+    });
+}
+</script>

@@ -1,10 +1,9 @@
 """Health and price trends routes."""
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
+from fastapi.responses import RedirectResponse
 
 from dashboard import templates
-from dashboard.dependencies import get_db
-from storage.sqlite import SQLiteStorage
 
 router = APIRouter()
 
@@ -38,46 +37,37 @@ def health_page(request: Request):
     )
 
 
-@router.get("/price-trends")
-def price_trends_page(
-    request: Request,
-    days: int = 7,
-    db: SQLiteStorage = Depends(get_db),
-):
-    drops = db.get_price_drops(days=days)
-    all_deals = db.get_deals()
+@router.get("/api/health-status")
+def api_health_status(request: Request):
+    """Compact health status for sidebar indicator."""
+    from datetime import datetime
 
-    # Compute summary metrics
-    total_drops = len(drops)
-    avg_drop_pct = (
-        round(sum(d["diff_percent"] for d in drops) / total_drops, 1) if total_drops else 0
-    )
-    biggest_drop = max((d["diff_pln"] for d in drops), default=0)
+    from health import load_health
 
-    # Category distribution from all deals
-    categories: dict[str, int] = {}
-    for deal in all_deals:
-        cat = deal.get("category") or "Uncategorized"
-        categories[cat] = categories.get(cat, 0) + 1
-    categories = dict(sorted(categories.items(), key=lambda x: x[1], reverse=True))
-
-    # Sparkline data for top 3 categories
-    category_trends: dict[str, list[dict]] = {}
-    for cat_name in list(categories.keys())[:3]:
-        trend = db.get_category_price_trend(cat_name, days=30)
-        if trend:
-            category_trends[cat_name] = trend
+    health = load_health()
+    status = health.get("status") if health else None
+    age = None
+    if health and health.get("last_run"):
+        try:
+            last_run = datetime.fromisoformat(health["last_run"])
+            delta = datetime.now() - last_run
+            if delta.days > 0:
+                age = f"{delta.days}d ago"
+            elif delta.seconds >= 3600:
+                age = f"{delta.seconds // 3600}h ago"
+            else:
+                age = f"{delta.seconds // 60}m ago"
+        except (ValueError, TypeError):
+            pass
 
     return templates.TemplateResponse(
         request,
-        "price_trends.html",
-        {
-            "drops": drops,
-            "days": days,
-            "total_drops": total_drops,
-            "avg_drop_pct": avg_drop_pct,
-            "biggest_drop": biggest_drop,
-            "categories": categories,
-            "category_trends": category_trends,
-        },
+        "partials/health_indicator.html",
+        {"health_status": status, "health_age": age or "unknown"},
     )
+
+
+@router.get("/price-trends")
+def price_trends_redirect(days: int = 7):
+    """Redirect old Price Trends page to Deals Explorer drops view."""
+    return RedirectResponse(f"/deals?view=drops&days={days}", status_code=302)

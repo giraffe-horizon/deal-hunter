@@ -1,0 +1,14 @@
+{# Compact health status indicator for sidebar footer #}
+{% if health_status %}
+<a href="/health" class="flex items-center gap-2 text-xs font-label text-on-surface-variant hover:text-on-surface transition-colors">
+    <span class="w-2 h-2 rounded-full flex-shrink-0
+        {% if health_status == 'ok' %}bg-tertiary{% elif health_status == 'partial' %}bg-[#b8860b]{% else %}bg-error{% endif %}">
+    </span>
+    {{ health_status | upper }} &middot; {{ health_age }}
+</a>
+{% else %}
+<a href="/health" class="flex items-center gap-2 text-xs font-label text-on-surface-variant hover:text-on-surface transition-colors">
+    <span class="w-2 h-2 rounded-full flex-shrink-0 bg-outline-variant"></span>
+    No data
+</a>
+{% endif %}

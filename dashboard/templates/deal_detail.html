@@ -194,6 +194,37 @@
         </div>
         {% endif %}
 
+        {% if score_data and score_data.breakdown %}
+        <div class="bg-surface-container-low rounded-card p-6 mt-6">
+            <h2 class="font-headline text-lg font-semibold text-on-surface mb-4">Score Breakdown</h2>
+            {% if score_data.rejected %}
+            <div class="mb-3 px-3 py-2 rounded-lg bg-error-container/20 text-error text-sm">
+                Rejected: {{ score_data.reject_reason }}
+            </div>
+            {% endif %}
+            <div class="space-y-2">
+                {% for item in score_data.breakdown %}
+                <div class="flex items-center justify-between text-sm">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-xs px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-label">{{ item.type }}</span>
+                        <span class="text-on-surface truncate">{{ item.rule }}</span>
+                        {% if item.match %}
+                        <span class="text-xs text-on-surface-variant truncate">"{{ item.match }}"</span>
+                        {% endif %}
+                    </div>
+                    <span class="font-headline font-semibold flex-shrink-0 ml-2 {% if item.points > 0 %}text-tertiary{% elif item.points < 0 %}text-error{% else %}text-on-surface-variant{% endif %}">
+                        {{ '+' if item.points > 0 }}{{ item.points }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="mt-3 pt-3 border-t border-surface-variant/30 flex justify-between text-sm font-medium">
+                <span class="text-on-surface">Total</span>
+                <span class="font-headline font-bold text-on-surface">{{ score_data.score }}</span>
+            </div>
+        </div>
+        {% endif %}
+
         {% if deal.alt_links %}
         <div class="bg-surface-container-low rounded-card p-6">
             <h2 class="font-headline text-lg font-semibold text-on-surface mb-4">Also Available At</h2>

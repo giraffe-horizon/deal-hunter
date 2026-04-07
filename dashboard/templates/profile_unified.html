@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set active_page = "profiles" %}
+{% block title %}{{ profile.name }} — DealMonitor{% endblock %}
+{% block page_title %}
+<div class="flex items-center gap-2 text-sm font-label text-on-surface-variant min-w-0">
+    <a href="/profiles" class="hover:text-primary transition-colors flex-shrink-0">Profiles</a>
+    <span class="material-symbols-outlined text-[16px] flex-shrink-0">chevron_right</span>
+    <span class="text-on-surface">{{ profile.emoji }} {{ profile.name }}</span>
+</div>
+{% endblock %}
+{% block content %}
+<!-- Tab bar -->
+<div class="flex gap-1 mb-6 bg-surface-container-low rounded-card p-1 overflow-x-auto">
+    {% for tab_id, tab_label, tab_icon in [
+        ('overview', 'Overview', 'info'),
+        ('edit', 'Edit', 'edit'),
+        ('yaml', 'YAML', 'code'),
+        ('tuner', 'Tuner', 'labs'),
+    ] %}
+    <a hx-get="/profiles/{{ profile.name }}?tab={{ tab_id }}"
+       hx-target="#profile-content"
+       hx-push-url="true"
+       class="flex items-center gap-2 px-4 py-2.5 rounded-card text-sm font-medium transition-colors whitespace-nowrap
+              {% if active_tab == tab_id %}bg-primary text-on-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+        <span class="material-symbols-outlined text-[18px]">{{ tab_icon }}</span>
+        {{ tab_label }}
+    </a>
+    {% endfor %}
+</div>
+
+<!-- Tab content -->
+<div id="profile-content">
+    {% include active_tab_template %}
+</div>
+{% endblock %}

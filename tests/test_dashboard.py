@@ -438,52 +438,52 @@ class TestHealthPage:
 
 
 class TestPriceTrendsPage:
-    def test_price_trends_renders(self, client):
-        response = client.get("/price-trends")
-        assert response.status_code == 200
-        assert "Price Trends" in response.text
+    def test_price_trends_redirects(self, client):
+        response = client.get("/price-trends", follow_redirects=False)
+        assert response.status_code == 302
+        assert "view=drops" in response.headers["location"]
+
+    def test_price_drops_view_renders(self, client):
+        text = client.get("/deals?view=drops").text
+        assert "Price Drops" in text
 
     def test_7_days_tab_active(self, client):
-        text = client.get("/price-trends?days=7").text
-        # The 7 Days link should have primary styling
+        text = client.get("/deals?view=drops&days=7").text
         assert "7 Days" in text
 
     def test_24_hours_tab(self, client):
-        text = client.get("/price-trends?days=1").text
+        text = client.get("/deals?view=drops&days=1").text
         assert "24 Hours" in text
 
     def test_contains_category_distribution(self, client):
-        text = client.get("/price-trends").text
+        text = client.get("/deals?view=drops").text
         assert "Category Distribution" in text
 
     def test_contains_summary_cards(self, client):
-        text = client.get("/price-trends").text
+        text = client.get("/deals?view=drops").text
         assert "Total Price Drops" in text
         assert "Average Drop" in text
         assert "Biggest Drop" in text
 
     def test_shows_category_names(self, client):
-        text = client.get("/price-trends").text
+        text = client.get("/deals?view=drops").text
         assert "road" in text  # category from seeded deals
 
     def test_no_drops_shows_empty_state(self, client):
-        # 1 day window likely has no drops from seeded data
-        text = client.get("/price-trends?days=1").text
-        # Either shows drops or "No price drops"
+        text = client.get("/deals?view=drops&days=1").text
         assert "Price Drops" in text
 
     def test_default_days_is_7(self, client):
-        text = client.get("/price-trends").text
-        # 7 Days tab should have active styling (bg-primary)
+        text = client.get("/deals?view=drops").text
         assert "bg-primary" in text
 
     def test_time_filter_tabs_present(self, client):
-        text = client.get("/price-trends").text
+        text = client.get("/deals?view=drops").text
         assert "24 Hours" in text
         assert "7 Days" in text
 
     def test_price_drops_table_headers(self, client):
-        text = client.get("/price-trends").text
+        text = client.get("/deals?view=drops").text
         assert "Previous Price" in text or "No price drops" in text
 
 
@@ -794,11 +794,11 @@ class TestE2EWorkflows:
             assert response.status_code == 200
             assert "System Health" in response.text
 
-    def test_price_trends_accessible_from_nav(self, client):
-        """Price trends page loads independently."""
-        response = client.get("/price-trends")
-        assert response.status_code == 200
-        assert "Price Trends" in response.text
+    def test_price_trends_redirects_to_drops_view(self, client):
+        """Price trends URL redirects to deals explorer drops view."""
+        response = client.get("/price-trends", follow_redirects=False)
+        assert response.status_code == 302
+        assert "view=drops" in response.headers["location"]
 
     def test_full_deal_lifecycle(self, client, dashboard_db):
         """Deal goes through active -> watching -> rejected -> active."""
@@ -942,15 +942,17 @@ class TestProfilePages:
         response = client.get("/profiles/nonexistent_profile_xyz")
         assert response.status_code == 404
 
-    def test_profile_edit_page_not_found(self, client):
-        """GET /profiles/{name}/edit returns 404 for missing profile."""
+    def test_profile_edit_page_redirects(self, client):
+        """GET /profiles/{name}/edit redirects to unified page with tab=edit."""
         response = client.get("/profiles/nonexistent_xyz/edit")
-        assert response.status_code == 404
+        assert response.status_code == 302
+        assert "tab=edit" in response.headers["location"]
 
-    def test_profile_yaml_page_not_found(self, client):
-        """GET /profiles/{name}/edit/yaml returns 404 for missing profile."""
+    def test_profile_yaml_page_redirects(self, client):
+        """GET /profiles/{name}/edit/yaml redirects to unified page with tab=yaml."""
         response = client.get("/profiles/nonexistent_xyz/edit/yaml")
-        assert response.status_code == 404
+        assert response.status_code == 302
+        assert "tab=yaml" in response.headers["location"]
 
     def test_profile_create_page_loads(self, client):
         """GET /profiles/new returns 200."""
@@ -1240,16 +1242,11 @@ class TestTunerPage:
     def test_tuner_index_loads(self, client):
         response = client.get("/tuner")
         assert response.status_code == 200
-        assert "Scoring Tuner" in response.text
 
-    def test_tuner_in_sidebar(self, client):
-        response = client.get("/tuner")
-        assert response.status_code == 200
-        assert 'href="/tuner"' in response.text
-
-    def test_tuner_profile_not_found(self, client):
+    def test_tuner_profile_redirects(self, client):
         response = client.get("/tuner/nonexistent_profile_xyz")
-        assert response.status_code == 404
+        assert response.status_code == 302
+        assert "tab=tuner" in response.headers["location"]
 
     def test_tuner_simulate_not_found(self, client):
         response = client.post(
@@ -1281,10 +1278,13 @@ class TestTunerPage:
                 "telegram": {"topic_id": None, "max_alerts": 5},
             },
         )
+        # /tuner/{profile} now redirects to /profiles/{profile}?tab=tuner
         response = client.get("/tuner/test_tuner_profile")
+        assert response.status_code == 302
+        # Follow redirect to unified profile page
+        response = client.get("/profiles/test_tuner_profile?tab=tuner")
         assert response.status_code == 200
         text = response.text
-        assert "Scoring Tuner" in text
         assert "Simulate" in text
         assert "Save" in text
         # Clean up
@@ -1474,9 +1474,8 @@ class TestCompareAndTunerWorkflows:
         # Clean up
         client.delete("/api/profiles/test_workflow")
 
-    def test_sidebar_has_tuner_on_all_pages(self, client):
-        """Scoring Tuner link appears in sidebar on every page."""
-        for url in ["/deals", "/tuner", "/watchlist", "/profiles", "/health"]:
-            response = client.get(url)
-            if response.status_code == 200:
-                assert 'href="/tuner"' in response.text, f"Tuner missing from sidebar on {url}"
+    def test_sidebar_has_no_tuner_link(self, client):
+        """Scoring Tuner link was removed from sidebar (now a profile tab)."""
+        response = client.get("/deals")
+        assert response.status_code == 200
+        assert 'href="/tuner"' not in response.text

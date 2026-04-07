@@ -13,48 +13,28 @@
                 <th class="pb-3 pl-6 pt-4">Deal</th>
                 <th class="pb-3 pt-4">Current Price</th>
                 <th class="pb-3 pt-4">Target Price</th>
+                <th class="pb-3 pt-4 hidden md:table-cell">Trend</th>
                 <th class="pb-3 pt-4">Status</th>
                 <th class="pb-3 pr-6 pt-4">Actions</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-surface-variant/30">
             {% for item in items %}
-            <tr id="watchlist-row-{{ loop.index }}">
-                <td class="py-3 pl-6">
-                    <a href="/deals/{{ item.deal_id | urlencode }}" class="text-sm font-medium text-primary hover:underline">
-                        {{ item.title or item.deal_id }}
-                    </a>
-                    <div class="text-xs text-on-surface-variant mt-0.5">{{ item.source or '' }}</div>
-                </td>
-                <td class="py-3">
-                    <span class="text-sm font-headline font-semibold text-on-surface">
-                        {% if item.current_price %}{{ item.current_price | format_pln }}{% else %}&mdash;{% endif %}
-                    </span>
-                </td>
-                <td class="py-3">
-                    <span class="text-sm font-headline font-semibold text-tertiary">{{ item.target_price | format_pln }}</span>
-                </td>
-                <td class="py-3">
-                    {% if item.triggered_at %}
-                        <span class="text-xs font-label px-2.5 py-1 rounded-full bg-tertiary-container/30 text-tertiary font-medium">Triggered</span>
-                    {% else %}
-                        <span class="text-xs font-label px-2.5 py-1 rounded-full bg-primary-container text-primary font-medium">Active</span>
-                    {% endif %}
-                </td>
-                <td class="py-3 pr-6">
-                    <button hx-delete="/api/watchlist/{{ item.deal_id | urlencode }}"
-                            hx-target="#watchlist-row-{{ loop.index }}"
-                            hx-swap="outerHTML"
-                            class="text-xs font-label px-3 py-1.5 rounded-card bg-surface-container-high text-on-surface-variant hover:bg-error-container/20 hover:text-error transition-colors">
-                        Remove
-                    </button>
-                </td>
-            </tr>
+            {% include "partials/watchlist_row.html" %}
             {% endfor %}
         </tbody>
     </table>
     </div>
 </div>
+
+<script>
+document.querySelectorAll('.sparkline-canvas').forEach(function(el) {
+    var prices = JSON.parse(el.dataset.prices);
+    if (prices.length >= 2 && typeof createSparkline === 'function') {
+        createSparkline(el, prices);
+    }
+});
+</script>
 {% else %}
 {% from "macros.html" import empty_state %}
 {{ empty_state("bookmark_border", "No watchlist items", "Set target prices on deal pages to start tracking.") }}

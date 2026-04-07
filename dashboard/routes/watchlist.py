@@ -1,10 +1,11 @@
-"""Watchlist routes: view, add, remove."""
+"""Watchlist routes: view, add, remove, update target price."""
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from dashboard import templates
 from dashboard.dependencies import get_db
+from dashboard.services import DealService
 from storage.sqlite import SQLiteStorage
 
 router = APIRouter()
@@ -14,10 +15,11 @@ router = APIRouter()
 def watchlist_page(request: Request, db: SQLiteStorage = Depends(get_db)):
     """Watchlist page — deals with target price alerts."""
     items = db.get_watchlist()
+    sparklines = DealService(db).get_sparklines(items)
     return templates.TemplateResponse(
         request,
         "watchlist.html",
-        {"items": items},
+        {"items": items, "sparklines": sparklines},
     )
 
 
@@ -43,3 +45,25 @@ def remove_from_watchlist_api(
     """Remove a deal from the watchlist."""
     db.remove_from_watchlist(deal_id)
     return HTMLResponse("")
+
+
+@router.patch("/api/watchlist/{deal_id:path}")
+async def update_watchlist_api(
+    request: Request,
+    deal_id: str,
+    target_price: int = Form(...),
+    db: SQLiteStorage = Depends(get_db),
+):
+    """Update target price for a watchlist item."""
+    if target_price <= 0:
+        return JSONResponse({"error": "Target price must be positive"}, status_code=400)
+    ok = db.update_watchlist_target_price(deal_id, target_price)
+    if not ok:
+        return JSONResponse({"error": "Item not found"}, status_code=404)
+    item = db.get_watchlist_item(deal_id)
+    sparklines = DealService(db).get_sparklines([item]) if item else {}
+    return templates.TemplateResponse(
+        request,
+        "partials/watchlist_row.html",
+        {"item": item, "sparklines": sparklines},
+    )

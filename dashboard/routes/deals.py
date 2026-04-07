@@ -16,14 +16,20 @@ router = APIRouter()
 @router.get("/deals")
 def deals_page(
     request: Request,
+    view: str = "",
     profile: str | None = None,
     source: str | None = None,
     min_score: int | None = None,
     category: str | None = None,
     status: str | None = None,
     page: int = 1,
+    days: int = 7,
     db: SQLiteStorage = Depends(get_db),
 ):
+    # Price Drops view
+    if view == "drops":
+        return _price_drops_view(request, days, db)
+
     # Normalize empty string params to None
     profile = profile or None
     source = source or None
@@ -63,6 +69,8 @@ def deals_page(
     if status:
         filter_params += f"&status={status}"
 
+    sparklines = DealService(db).get_sparklines(deals)
+
     # HTMX partial refresh — return only the table fragment
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse(
@@ -70,6 +78,7 @@ def deals_page(
             "partials/deals_table.html",
             {
                 "deals": deals,
+                "sparklines": sparklines,
                 "page": page,
                 "total_pages": total_pages,
                 "total_filtered": total_filtered,
@@ -93,6 +102,8 @@ def deals_page(
         "deals.html",
         {
             "deals": deals,
+            "sparklines": sparklines,
+            "view": "",
             "total_deals": total_deals,
             "high_score_pct": high_score_pct,
             "score_threshold": SCORE_THRESHOLD,
@@ -114,6 +125,46 @@ def deals_page(
     )
 
 
+def _price_drops_view(request: Request, days: int, db: SQLiteStorage):
+    """Build the price drops view (shared by /deals?view=drops and redirect)."""
+    drops = db.get_price_drops(days=days)
+    all_deals = db.get_deals()
+
+    total_drops = len(drops)
+    avg_drop_pct = (
+        round(sum(d["diff_percent"] for d in drops) / total_drops, 1) if total_drops else 0
+    )
+    biggest_drop = max((d["diff_pln"] for d in drops), default=0)
+
+    categories: dict[str, int] = {}
+    for deal in all_deals:
+        cat = deal.get("category") or "Uncategorized"
+        categories[cat] = categories.get(cat, 0) + 1
+    categories = dict(sorted(categories.items(), key=lambda x: x[1], reverse=True))
+
+    category_trends: dict[str, list[dict]] = {}
+    for cat_name in list(categories.keys())[:3]:
+        trend = db.get_category_price_trend(cat_name, days=30)
+        if trend:
+            category_trends[cat_name] = trend
+
+    context = {
+        "drops": drops,
+        "days": days,
+        "view": "drops",
+        "total_drops": total_drops,
+        "avg_drop_pct": avg_drop_pct,
+        "biggest_drop": biggest_drop,
+        "categories": categories,
+        "category_trends": category_trends,
+    }
+
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request, "partials/price_drops_view.html", context)
+
+    return templates.TemplateResponse(request, "deals.html", context)
+
+
 @router.get("/deals/{deal_id}")
 def deal_detail_page(
     request: Request,
@@ -127,6 +178,7 @@ def deal_detail_page(
     price_history = db.get_price_history(deal_id)
     lowest_price = db.get_lowest_price(deal_id)
     previous_price = db.get_previous_price(deal_id)
+    score_data = DealService(db).score_single_deal(deal)
 
     return templates.TemplateResponse(
         request,
@@ -136,6 +188,7 @@ def deal_detail_page(
             "price_history": price_history,
             "lowest_price": lowest_price,
             "previous_price": previous_price,
+            "score_data": score_data,
         },
     )
 
@@ -173,6 +226,7 @@ def api_update_deal_status(
     request: Request,
     deal_id: str,
     status: str = Form(...),
+    inline: str = Form(""),
     db: SQLiteStorage = Depends(get_db),
 ):
     if status not in ("watching", "rejected", "active"):
@@ -180,6 +234,12 @@ def api_update_deal_status(
     ok = db.update_deal_status(deal_id, status)
     if not ok:
         return JSONResponse({"error": "Deal not found"}, status_code=404)
+    if inline:
+        return templates.TemplateResponse(
+            request,
+            "partials/deal_row_status.html",
+            {"current_status": status},
+        )
     # Return HTML fragment for HTMX swap — must include full action buttons
     # so the user can change status again
     deal = db.get_deal(deal_id)

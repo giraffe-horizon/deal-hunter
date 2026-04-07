@@ -404,6 +404,23 @@ class SQLiteStorage:
             logger.error(f"Failed to batch get price histories: {e}")
         return result
 
+    def get_sparkline_data_batch(
+        self, deal_ids: list[str], limit: int = 10
+    ) -> dict[str, list[int]]:
+        """Fetch last N price points per deal for sparkline rendering."""
+        if not deal_ids:
+            return {}
+        placeholders = ",".join("?" * len(deal_ids))
+        try:
+            query = f"SELECT deal_id, price FROM (SELECT deal_id, price, recorded_at, ROW_NUMBER() OVER (PARTITION BY deal_id ORDER BY recorded_at DESC) as rn FROM price_history WHERE deal_id IN ({placeholders})) WHERE rn <= ? ORDER BY deal_id, recorded_at"  # noqa: S608
+            rows = self._conn.execute(query, (*deal_ids, limit)).fetchall()
+            result: dict[str, list[int]] = {}
+            for row in rows:
+                result.setdefault(row["deal_id"], []).append(row["price"])
+            return result
+        except Exception:
+            return {}
+
     def get_lowest_prices_batch(self, deal_ids: list[str]) -> dict[str, int | None]:
         """Fetch lowest price for multiple deals in one query."""
         if not deal_ids:
@@ -622,6 +639,28 @@ class SQLiteStorage:
                ORDER BY w.created_at DESC"""
         )
         return [dict(row) for row in cursor.fetchall()]
+
+    def update_watchlist_target_price(self, deal_id: str, target_price: int) -> bool:
+        """Update the target price for a watchlist item."""
+        cursor = self._conn.execute(
+            "UPDATE watchlist SET target_price = ? WHERE deal_id = ?",
+            (target_price, deal_id),
+        )
+        self._conn.commit()
+        return cursor.rowcount > 0
+
+    def get_watchlist_item(self, deal_id: str) -> dict | None:
+        """Get a single watchlist item with deal info."""
+        cursor = self._conn.execute(
+            """SELECT w.deal_id, w.target_price, w.created_at, w.triggered_at,
+                      d.title, d.price as current_price, d.link, d.source
+               FROM watchlist w
+               LEFT JOIN deals d ON w.deal_id = d.id
+               WHERE w.deal_id = ?""",
+            (deal_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
 
     def check_watchlist_triggers(self, deal_id: str, current_price: int) -> dict | None:
         """Check if a deal's current price meets the watchlist target.

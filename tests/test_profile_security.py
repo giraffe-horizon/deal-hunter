@@ -42,8 +42,8 @@ def test_profile_delete_traversal(client: TestClient):
 
 
 def test_profile_yaml_edit_traversal(client: TestClient):
-    """YAML edit with invalid name must return 400."""
-    resp = client.get("/profiles/..passwd/edit/yaml")
+    """YAML edit with invalid name must return 400 (follows redirect)."""
+    resp = client.get("/profiles/..passwd/edit/yaml", follow_redirects=True)
     assert resp.status_code == 400
 
 
