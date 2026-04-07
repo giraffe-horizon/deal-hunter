@@ -23,6 +23,40 @@ class DealService:
             "lowest_prices": self.db.get_lowest_prices_batch(id_list),
         }
 
+    def get_sparklines(self, deals: list[dict]) -> dict[str, list[int]]:
+        """Get sparkline price data for a list of deals."""
+        ids = [d["id"] for d in deals]
+        return self.db.get_sparkline_data_batch(ids)
+
+    def score_single_deal(self, deal_dict: dict) -> dict | None:
+        """Re-score a deal using its profile config. Returns breakdown or None."""
+        from dashboard.dependencies import safe_load_profile
+
+        profile_data = safe_load_profile(deal_dict.get("profile", ""))
+        if not profile_data:
+            return None
+        from filters.base import BaseFilter
+        from sources.base import Deal
+
+        deal_obj = Deal(
+            id=deal_dict["id"],
+            title=deal_dict["title"],
+            price=deal_dict["price"] or 0,
+            link=deal_dict["link"] or "",
+            source=deal_dict["source"] or "",
+            description=deal_dict["description"] or "",
+            temperature=0,
+            image_url=deal_dict.get("image_url") or "",
+            published_at="",
+        )
+        result = BaseFilter(profile_data).score_deal(deal_obj)
+        return {
+            "score": result.score,
+            "breakdown": result.breakdown,
+            "rejected": result.rejected,
+            "reject_reason": result.reject_reason,
+        }
+
     def score_deals_with_profile(self, deals: list[dict], profile_data: dict) -> list[dict]:
         """Score a list of deal dicts using the given profile config."""
         from filters.base import BaseFilter

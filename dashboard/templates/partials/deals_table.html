@@ -4,6 +4,7 @@
             <th class="pb-3 pl-4 w-8"></th>
             <th class="pb-3 pl-4">Title</th>
             <th class="pb-3">Price</th>
+            <th class="pb-3 hidden md:table-cell">Trend</th>
             <th class="pb-3 hidden sm:table-cell">Source</th>
             <th class="pb-3 hidden sm:table-cell">Profile</th>
             <th class="pb-3">Score</th>
@@ -25,6 +26,14 @@
                 </td>
                 <td class="py-3 pr-2">
                     <span class="text-sm font-headline font-semibold text-on-surface">{{ deal.price | format_pln }}</span>
+                </td>
+                <td class="py-3 pr-2 hidden md:table-cell">
+                    {% set prices = sparklines.get(deal.id, []) if sparklines is defined else [] %}
+                    {% if prices | length >= 2 %}
+                    <canvas class="sparkline-canvas" data-prices="{{ prices | tojson }}" width="60" height="24"></canvas>
+                    {% else %}
+                    <span class="text-xs text-on-surface-variant">&mdash;</span>
+                    {% endif %}
                 </td>
                 <td class="py-3 pr-2 hidden sm:table-cell">
                     <span class="text-xs font-label px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant">{{ deal.source }}</span>
@@ -82,7 +91,7 @@
             {% endfor %}
         {% else %}
             <tr>
-                <td colspan="8" class="py-16 text-center">
+                <td colspan="9" class="py-16 text-center">
                     <span class="material-symbols-outlined text-[40px] text-outline-variant mb-3 block">search_off</span>
                     <p class="text-on-surface-variant text-sm">No deals found</p>
                 </td>
@@ -120,3 +129,12 @@
     </div>
 </div>
 {% endif %}
+
+<script>
+document.querySelectorAll('.sparkline-canvas').forEach(function(el) {
+    var prices = JSON.parse(el.dataset.prices);
+    if (prices.length >= 2 && typeof createSparkline === 'function') {
+        createSparkline(el, prices);
+    }
+});
+</script>

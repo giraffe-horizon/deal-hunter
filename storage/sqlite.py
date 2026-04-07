@@ -404,6 +404,23 @@ class SQLiteStorage:
             logger.error(f"Failed to batch get price histories: {e}")
         return result
 
+    def get_sparkline_data_batch(
+        self, deal_ids: list[str], limit: int = 10
+    ) -> dict[str, list[int]]:
+        """Fetch last N price points per deal for sparkline rendering."""
+        if not deal_ids:
+            return {}
+        placeholders = ",".join("?" * len(deal_ids))
+        try:
+            query = f"SELECT deal_id, price FROM (SELECT deal_id, price, recorded_at, ROW_NUMBER() OVER (PARTITION BY deal_id ORDER BY recorded_at DESC) as rn FROM price_history WHERE deal_id IN ({placeholders})) WHERE rn <= ? ORDER BY deal_id, recorded_at"  # noqa: S608
+            rows = self._conn.execute(query, (*deal_ids, limit)).fetchall()
+            result: dict[str, list[int]] = {}
+            for row in rows:
+                result.setdefault(row["deal_id"], []).append(row["price"])
+            return result
+        except Exception:
+            return {}
+
     def get_lowest_prices_batch(self, deal_ids: list[str]) -> dict[str, int | None]:
         """Fetch lowest price for multiple deals in one query."""
         if not deal_ids:

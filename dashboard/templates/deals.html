@@ -20,6 +20,7 @@
                 hx-get="/deals"
                 hx-target="#deals-table"
                 hx-include="#deal-filters"
+                hx-push-url="true"
                 class="w-full sm:w-auto bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">All Profiles</option>
             {% for p in profiles %}
@@ -31,6 +32,7 @@
                 hx-get="/deals"
                 hx-target="#deals-table"
                 hx-include="#deal-filters"
+                hx-push-url="true"
                 class="w-full sm:w-auto bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">All Sources</option>
             {% for s in sources %}
@@ -42,6 +44,7 @@
                 hx-get="/deals"
                 hx-target="#deals-table"
                 hx-include="#deal-filters"
+                hx-push-url="true"
                 class="w-full sm:w-auto bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">All Scores</option>
             <option value="70" {% if selected_min_score == 70 %}selected{% endif %}>70+</option>
@@ -53,6 +56,7 @@
                 hx-get="/deals"
                 hx-target="#deals-table"
                 hx-include="#deal-filters"
+                hx-push-url="true"
                 class="w-full sm:w-auto bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">All Categories</option>
             {% for c in categories %}
@@ -64,6 +68,7 @@
                 hx-get="/deals"
                 hx-target="#deals-table"
                 hx-include="#deal-filters"
+                hx-push-url="true"
                 class="w-full sm:w-auto bg-surface-container rounded-card px-3 py-2 text-sm font-label text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">All Statuses</option>
             <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active</option>
@@ -71,7 +76,10 @@
             <option value="rejected" {% if selected_status == 'rejected' %}selected{% endif %}>Rejected</option>
         </select>
 
-        <a href="/deals"
+        <a hx-get="/deals"
+           hx-target="#deals-table"
+           hx-push-url="/deals"
+           onclick="document.querySelectorAll('#deal-filters select').forEach(function(s){s.value=''})"
            class="w-full sm:w-auto sm:ml-auto text-xs font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1 justify-center sm:justify-start">
             <span class="material-symbols-outlined text-[16px]">filter_list_off</span>
             Clear Filters

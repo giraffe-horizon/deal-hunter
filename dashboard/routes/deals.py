@@ -63,6 +63,8 @@ def deals_page(
     if status:
         filter_params += f"&status={status}"
 
+    sparklines = DealService(db).get_sparklines(deals)
+
     # HTMX partial refresh — return only the table fragment
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse(
@@ -70,6 +72,7 @@ def deals_page(
             "partials/deals_table.html",
             {
                 "deals": deals,
+                "sparklines": sparklines,
                 "page": page,
                 "total_pages": total_pages,
                 "total_filtered": total_filtered,
@@ -93,6 +96,7 @@ def deals_page(
         "deals.html",
         {
             "deals": deals,
+            "sparklines": sparklines,
             "total_deals": total_deals,
             "high_score_pct": high_score_pct,
             "score_threshold": SCORE_THRESHOLD,
@@ -127,6 +131,7 @@ def deal_detail_page(
     price_history = db.get_price_history(deal_id)
     lowest_price = db.get_lowest_price(deal_id)
     previous_price = db.get_previous_price(deal_id)
+    score_data = DealService(db).score_single_deal(deal)
 
     return templates.TemplateResponse(
         request,
@@ -136,6 +141,7 @@ def deal_detail_page(
             "price_history": price_history,
             "lowest_price": lowest_price,
             "previous_price": previous_price,
+            "score_data": score_data,
         },
     )
 
