@@ -1,6 +1,61 @@
 # CHANGELOG
 
 
+## v0.12.0 (2026-04-07)
+
+### Features
+
+- **dashboard**: Phase 1 — HTMX loading indicator, pagination, inline actions
+  ([`8b1d30a`](https://github.com/giraffe-horizon/deal-hunter/commit/8b1d30aec908010c3ad22f9a8a08a0d94e70f739))
+
+- Add global progress bar that appears during any HTMX request - Convert pagination links to HTMX
+  (no full page reload, URL stays in sync) - Add inline Watch/Skip icon buttons in deals table rows
+  - New partial: deal_row_status.html for compact inline status feedback
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Phase 2 — score breakdown, sparklines, filter URL sync
+  ([`2535d5f`](https://github.com/giraffe-horizon/deal-hunter/commit/2535d5f6a360ef5617ccdf60770075caa4b32bf1))
+
+- Show score breakdown card on deal detail page (why this score?) - Add price sparklines in deals
+  table via batch SQLite query - Sync filter state to browser URL (bookmarkable/shareable filtered
+  views) - Convert Clear Filters to HTMX (no full page reload)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Phase 3 — unified profile page with HTMX tabs
+  ([`c8c28cb`](https://github.com/giraffe-horizon/deal-hunter/commit/c8c28cb2add09b9aae84da3d219fbfcd285008f8))
+
+Consolidate 4 separate profile pages (detail, edit, YAML, tuner) into a single tabbed interface.
+  Remove Scoring Tuner from sidebar nav. Old URLs redirect with 302 for backwards compatibility.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Phase 4 — watchlist inline price edit + sparklines
+  ([`8a1106b`](https://github.com/giraffe-horizon/deal-hunter/commit/8a1106b9edaa7f38c3cdc789fd0ee0ae8fab7068))
+
+Add editable target price input (auto-saves on change via HTMX PATCH), sparkline trend column, and
+  row partial for seamless updates.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Phase 5 — merge Price Trends into Deals Explorer
+  ([`cbbba39`](https://github.com/giraffe-horizon/deal-hunter/commit/cbbba397d9daa07ed46dd5f66fdd3f71bf97da93))
+
+Add view toggle (All Deals / Price Drops) to deals page. Old /price-trends URL redirects to
+  /deals?view=drops. Remove Price Trends from sidebar nav (now 3 primary links + health).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Phase 5b — health status indicator in sidebar footer
+  ([`d0a2017`](https://github.com/giraffe-horizon/deal-hunter/commit/d0a2017954d7f238070d9ff7566dbbfee97bf27b))
+
+Replace System Health nav link with a compact status indicator in the sidebar footer. The /health
+  page remains accessible via the indicator. Status is loaded via HTMX on page load.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.11.2 (2026-04-07)
 
 ### Bug Fixes
