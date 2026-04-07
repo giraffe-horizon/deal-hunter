@@ -52,8 +52,10 @@ async def csrf_check(request: Request, call_next):
 
 
 # Re-export dependencies for backward compatibility (tests import from dashboard)
-from dashboard.dependencies import get_db, get_profiles as _get_profiles, safe_load_profile, safe_profile_path  # noqa: E402
-
+from dashboard.dependencies import get_db as get_db  # noqa: E402,F401
+from dashboard.dependencies import get_profiles as _get_profiles  # noqa: E402,F401
+from dashboard.dependencies import safe_load_profile as safe_load_profile  # noqa: E402
+from dashboard.dependencies import safe_profile_path as safe_profile_path  # noqa: E402
 
 # Import and include routers AFTER app and templates are defined
 from dashboard.routes import deals, health, profiles, tuner, watchlist  # noqa: E402

@@ -1,7 +1,6 @@
 """Health and price trends routes."""
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
 
 from dashboard import templates
 from dashboard.dependencies import get_db
