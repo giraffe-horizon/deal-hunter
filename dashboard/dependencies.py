@@ -1,15 +1,17 @@
 """Shared dependencies for dashboard routes."""
 
+import os
 import re
 from pathlib import Path
 
+import yaml
 from fastapi import HTTPException
 
 from storage.sqlite import SQLiteStorage
 
 BASE_DIR = Path(__file__).parent.parent
-DB_PATH = BASE_DIR / "state" / "deals.db"
-PROFILES_DIR = BASE_DIR / "profiles"
+DB_PATH = Path(os.environ.get("DEAL_HUNTER_DB_PATH", str(BASE_DIR / "state" / "deals.db")))
+PROFILES_DIR = Path(os.environ.get("DEAL_HUNTER_PROFILES_DIR", str(BASE_DIR / "profiles")))
 
 _PROFILE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
 
@@ -34,20 +36,20 @@ def safe_profile_path(name: str) -> Path:
 
 
 def safe_load_profile(name: str) -> dict | None:
-    """Load profile without sys.exit on missing files."""
+    """Load profile YAML directly from PROFILES_DIR (respects env var override)."""
+    path = safe_profile_path(name)
+    if not path.exists():
+        return None
     try:
-        from deal_hunter import load_profile
-
-        return load_profile(name)
-    except SystemExit:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        return dict(data) if data else None
+    except (yaml.YAMLError, OSError):
         return None
 
 
 def get_profiles() -> list[str]:
-    """Get available profile names, gracefully handling missing profiles dir."""
-    try:
-        from deal_hunter import list_profiles
-
-        return sorted(list_profiles())
-    except Exception:
+    """Get available profile names from PROFILES_DIR (respects env var override)."""
+    if not PROFILES_DIR.exists():
         return []
+    return sorted(p.stem for p in PROFILES_DIR.glob("*.yaml"))

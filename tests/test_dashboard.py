@@ -44,18 +44,22 @@ class TestHelpers:
         result = safe_load_profile("nonexistent_profile_xyz")
         assert result is None
 
-    def test_get_profiles_missing_dir(self):
-        with patch("deal_hunter.list_profiles", side_effect=FileNotFoundError):
+    def test_get_profiles_missing_dir(self, tmp_path):
+        missing = tmp_path / "no_such_dir"
+        with patch("dashboard.dependencies.PROFILES_DIR", missing):
             result = _get_profiles()
             assert result == []
 
-    def test_get_profiles_import_error(self):
-        with patch("deal_hunter.list_profiles", side_effect=ImportError):
+    def test_get_profiles_empty_dir(self, tmp_path):
+        with patch("dashboard.dependencies.PROFILES_DIR", tmp_path):
             result = _get_profiles()
             assert result == []
 
-    def test_get_profiles_returns_sorted(self):
-        with patch("deal_hunter.list_profiles", return_value=["nas_hdd", "bikes", "audio"]):
+    def test_get_profiles_returns_sorted(self, tmp_path):
+        (tmp_path / "nas_hdd.yaml").write_text("name: nas_hdd")
+        (tmp_path / "bikes.yaml").write_text("name: bikes")
+        (tmp_path / "audio.yaml").write_text("name: audio")
+        with patch("dashboard.dependencies.PROFILES_DIR", tmp_path):
             result = _get_profiles()
             assert result == ["audio", "bikes", "nas_hdd"]
 

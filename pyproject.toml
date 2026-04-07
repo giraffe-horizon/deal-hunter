@@ -56,14 +56,20 @@ dev = [
     "python-telegram-bot>=21.0",
     "httpx",
 ]
+e2e = [
+    "pytest-playwright>=0.4",
+]
 
 [tool.setuptools.packages.find]
-include = ["sources*", "filters*", "notifiers*", "utils*"]
+include = ["sources*", "filters*", "notifiers*", "utils*", "dashboard*", "storage*", "visualization*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
 asyncio_mode = "auto"
+markers = [
+    "e2e: End-to-end browser tests (require live server + Playwright)",
+]
 
 [tool.ruff]
 target-version = "py312"
