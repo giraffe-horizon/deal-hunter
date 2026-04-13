@@ -39,6 +39,7 @@ stores/README.md        Guide: "How to add a new store in 5 minutes"
 filters/base.py         Base scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
 dashboard.py            Web dashboard: FastAPI app, routes, API endpoints (deals, profiles CRUD, watchlist, scoring tuner, comparator)
+dashboard/services/     Dashboard service layer (DealService, ProfileService, TunerService)
 dashboard/templates/    Jinja2 templates (base, deals, deal_detail, health, price_trends, profiles, watchlist, tuner, compare)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting + photo upload
 visualization/charts.py Price history charts (matplotlib, lazy-imported)
