@@ -87,10 +87,15 @@ python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = false
+disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = ["telegram.*", "matplotlib.*", "rich.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["dashboard.routes.*", "tests.*"]
+disallow_untyped_defs = false
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
