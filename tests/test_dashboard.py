@@ -1476,3 +1476,31 @@ class TestCompareAndTunerWorkflows:
         response = client.get("/deals")
         assert response.status_code == 200
         assert 'href="/tuner"' not in response.text
+
+
+def test_deals_per_page_env_override(monkeypatch):
+    """DEALS_PER_PAGE reads from env var with fallback to 50."""
+    monkeypatch.setenv("DEALS_PER_PAGE", "25")
+    import importlib
+
+    import dashboard.services
+
+    importlib.reload(dashboard.services)
+    assert dashboard.services.DEALS_PER_PAGE == 25
+    monkeypatch.delenv("DEALS_PER_PAGE")
+    importlib.reload(dashboard.services)
+    assert dashboard.services.DEALS_PER_PAGE == 50
+
+
+def test_score_threshold_env_override(monkeypatch):
+    """SCORE_THRESHOLD reads from env var with fallback to 70."""
+    monkeypatch.setenv("SCORE_THRESHOLD", "60")
+    import importlib
+
+    import dashboard.services
+
+    importlib.reload(dashboard.services)
+    assert dashboard.services.SCORE_THRESHOLD == 60
+    monkeypatch.delenv("SCORE_THRESHOLD")
+    importlib.reload(dashboard.services)
+    assert dashboard.services.SCORE_THRESHOLD == 70
