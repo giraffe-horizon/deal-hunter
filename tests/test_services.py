@@ -3,6 +3,7 @@
 import pytest
 
 from services.types import PriceChange, PriceTrackingConfig
+from sources.base import Deal
 
 
 def test_price_tracking_config_defaults():
@@ -68,3 +69,50 @@ class TestProfileManager:
         assert mgr.safe_path("../etc/passwd") is None
         assert mgr.safe_path("") is None
         assert mgr.safe_path("a" * 100) is None
+
+
+def _make_deal(**overrides):
+    defaults = dict(
+        id="test:1",
+        title="Test Deal",
+        price=1000,
+        link="http://example.com",
+        source="test",
+        description="desc",
+        temperature=0,
+        image_url="",
+        published_at="",
+    )
+    defaults.update(overrides)
+    return Deal(**defaults)
+
+
+class TestDealFetcher:
+    def test_deduplicate_by_id(self):
+        from services.fetcher import DealFetcher
+
+        fetcher = DealFetcher({})
+        deals = [
+            _make_deal(id="a", title="First Deal"),
+            _make_deal(id="a", title="First Deal"),
+            _make_deal(id="b", title="Completely Different Item"),
+        ]
+        result = fetcher.deduplicate(deals)
+        assert len(result) == 2
+
+    def test_deduplicate_fuzzy_merge(self):
+        from services.fetcher import DealFetcher
+
+        fetcher = DealFetcher({})
+        deals = [
+            _make_deal(id="a:1", title="Giant Defy Advanced 2 2024", price=5000, source="pepper"),
+            _make_deal(id="b:1", title="Giant Defy Advanced 2 2024", price=5100, source="ceneo"),
+        ]
+        result = fetcher.deduplicate(deals)
+        assert len(result) == 1
+        assert len(result[0].alt_links) == 1
+
+    def test_normalize_title(self):
+        from services.fetcher import DealFetcher
+
+        assert DealFetcher._normalize_title("  Hello, World!  ") == "hello world"
