@@ -1,6 +1,222 @@
 # CHANGELOG
 
 
+## v0.14.0 (2026-04-13)
+
+### Bug Fixes
+
+- **ci**: Add pydantic to lint job for mypy plugin
+  ([`8275efb`](https://github.com/giraffe-horizon/deal-hunter/commit/8275efb13a8933832307a8a31fd186d9c3212bc2))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **ci**: Resolve mypy cross-environment type ignore conflict
+  ([`42a615b`](https://github.com/giraffe-horizon/deal-hunter/commit/42a615b504a0084641888f80fc50c4d87882b33a))
+
+Remove warn_unused_ignores (causes CI/local mismatch due to different SQLAlchemy stubs
+  availability). Restore type: ignore on rowcount.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- Delete dead profile templates replaced by unified page
+  ([`8cae9c3`](https://github.com/giraffe-horizon/deal-hunter/commit/8cae9c329a1bf379b9e8eaf652ff913eea91cc95))
+
+- Delete health.py — absorbed into services/health_tracker.py
+  ([`e710c9b`](https://github.com/giraffe-horizon/deal-hunter/commit/e710c9b65fcb2bff2e48e42514fddcf5571cc42b))
+
+### Documentation
+
+- Add Phase 3 service layer implementation plan
+  ([`6c57066`](https://github.com/giraffe-horizon/deal-hunter/commit/6c570665a70ef364af410ce0be841e7a619ce75e))
+
+- Add Phase 4 dashboard cleanup implementation plan
+  ([`643293b`](https://github.com/giraffe-horizon/deal-hunter/commit/643293b0f28572d591c34e78d911dc95efdaf006))
+
+- Add Phase 5 template DRY implementation plan
+  ([`fa26086`](https://github.com/giraffe-horizon/deal-hunter/commit/fa2608627f82201acf2a8902be9ce8940e9611a7))
+
+- Update CLAUDE.md for Phase 3 service layer architecture
+  ([`4aedc4c`](https://github.com/giraffe-horizon/deal-hunter/commit/4aedc4cc641c747168d66a8c1fbd5e5ed1cb88b1))
+
+- Update CLAUDE.md for Phase 4 dashboard services
+  ([`7a30784`](https://github.com/giraffe-horizon/deal-hunter/commit/7a30784472fb216b993b0d910bd68b6091790c00))
+
+- Update CLAUDE.md for Phase 5 template cleanup
+  ([`3ce0e0d`](https://github.com/giraffe-horizon/deal-hunter/commit/3ce0e0dca4e02a561e240fd6e6b23aff490ea8fe))
+
+- Update CLAUDE.md for Phase 6 type safety and Pydantic schemas
+  ([`a68f79f`](https://github.com/giraffe-horizon/deal-hunter/commit/a68f79f02d1f930604cdf0d0dd1b9bb1092ed093))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- **cli**: Extract verify mode output to cli/verify.py
+  ([`4e6c518`](https://github.com/giraffe-horizon/deal-hunter/commit/4e6c5188d0afa241a30247854471abec1140b72d))
+
+Move ~230 lines of --verify formatting/display logic out of deal_hunter.py into a dedicated
+  cli/verify.py module. Public API: format_breakdown_line(), print_verbose(), run_verify().
+  Backward-compat aliases preserved in deal_hunter.py for existing test imports.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Add Pydantic schemas for API validation
+  ([`13b2698`](https://github.com/giraffe-horizon/deal-hunter/commit/13b26987b8aa663722ad234a41e2b0cbc94acd17))
+
+StatusUpdate, WatchlistAdd, WatchlistUpdate, ProfileCreate models used to validate input in
+  dashboard API endpoints.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **services**: Add AlertService — notification dispatch with quiet hours
+  ([`bcde46a`](https://github.com/giraffe-horizon/deal-hunter/commit/bcde46ab40e44ee538f5402096ad6f2b16c73dbd))
+
+Extract alert sending, quiet-hours checking, and alert queuing into AlertService. Provides
+  flush_queued(), send_deal_alerts(), send_price_drop_alerts(), and send_source_failure_alert()
+  methods.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **services**: Add DealFetcher — deal fetching and deduplication
+  ([`310c7ff`](https://github.com/giraffe-horizon/deal-hunter/commit/310c7ffbbf157500c7ca276c45a808189eab6a15))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **services**: Add HealthTracker — absorbs health.py into service class
+  ([`221f061`](https://github.com/giraffe-horizon/deal-hunter/commit/221f061d3a6c50ea644a921369e262ee6f2ea811))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **services**: Add PriceTracker — price change detection with typed results
+  ([`d4fed39`](https://github.com/giraffe-horizon/deal-hunter/commit/d4fed39048d56724cb3203c8f45900eea06834d9))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **services**: Add ProfileManager — unified profile loading for CLI + dashboard
+  ([`1c0ca55`](https://github.com/giraffe-horizon/deal-hunter/commit/1c0ca551d171df33e67a84168a542c873f218940))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **services**: Add ScoringService — scoring orchestration + category detection
+  ([`63a35fd`](https://github.com/giraffe-horizon/deal-hunter/commit/63a35fd46033020e537924b7084a3d3ede3c4651))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **services**: Add shared typed dataclasses for service layer
+  ([`03aa30d`](https://github.com/giraffe-horizon/deal-hunter/commit/03aa30d867ae960832e2e0e3e947dc7e964a6bb5))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- Remove backward-compat wrappers from deal_hunter.py
+  ([`2a44e3a`](https://github.com/giraffe-horizon/deal-hunter/commit/2a44e3a014f5a2092b9fde45cafbe05183260539))
+
+Tests now import directly from service classes (PriceTracker, DealFetcher) instead of thin wrappers
+  in deal_hunter.py.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Slim deal_hunter.py to CLI entrypoint using service layer
+  ([`e396e6e`](https://github.com/giraffe-horizon/deal-hunter/commit/e396e6e4a61788ad0f01df7a4e0f2a0aa7d1d155))
+
+Replace inline business logic with service delegation: - ProfileManager for load/list/validate -
+  DealFetcher for fetch_all/deduplicate - ScoringService for get_filter/score_deals/detect_category
+  - PriceTracker for check_price_change - AlertService for
+  flush_queued/send_deal_alerts/send_price_drop_alerts - HealthTracker for health tracking and
+  watchdog
+
+Keep backward-compat wrappers (check_price_changes, get_price_tracking_config, deduplicate,
+  _normalize_title) so existing consumers continue to work. Update test imports to point to
+  canonical service locations where patch targets changed (quiet_hours -> services.alerter, verbose
+  -> cli.verify).
+
+deal_hunter.py: 1005 -> 689 lines (-31%). All 674 tests pass.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Tighten mypy config with pydantic plugin and stricter checks
+  ([`d27ab40`](https://github.com/giraffe-horizon/deal-hunter/commit/d27ab4079446de956eb2ddfe4ef0f20bea7ee889))
+
+Enable warn_redundant_casts, warn_unused_ignores, check_untyped_defs. Add pydantic.mypy plugin. Fix
+  type errors in service layer. Make AlertService.alert_repo optional for source-failure-only usage.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Add return type annotations to all route handlers
+  ([`02bb2e6`](https://github.com/giraffe-horizon/deal-hunter/commit/02bb2e62e335e6d52cf2737b8f5fb705431befba))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Convert services.py to services package
+  ([`de9be64`](https://github.com/giraffe-horizon/deal-hunter/commit/de9be647a745d457e2fff5f4ee222f40807bbb75))
+
+Split dashboard/services.py into a dashboard/services/ package with deal_service.py containing the
+  DealService class. The __init__.py re-exports all public symbols so existing imports remain
+  unchanged.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Extract ProfileService from profile routes
+  ([`92d9a94`](https://github.com/giraffe-horizon/deal-hunter/commit/92d9a94e3596a685c8c7d4274d5fcee89a3f2e9a))
+
+Move YAML loading/validation/saving, profile summary building, toggle, and subprocess verify-run
+  into a reusable ProfileService class, reducing duplication across 7 route handlers.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Extract TunerService from tuner routes
+  ([`dcc0b6a`](https://github.com/giraffe-horizon/deal-hunter/commit/dcc0b6a03aa3c49b70e627a153df56324f0366ce))
+
+Move scoring simulation (merge overrides, fetch deals, re-score, format results) and rule
+  persistence logic into TunerService. Route handlers now parse request data and delegate to the
+  service, keeping them under 15 lines each.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Move deals page logic to DealService
+  ([`3c6b35e`](https://github.com/giraffe-horizon/deal-hunter/commit/3c6b35e6285f935fee0f487afc452c153c6d5587))
+
+Extract filtering, pagination, stats computation, and price drops view logic from route handlers
+  into DealService methods. Handlers now delegate to get_deals_page(), get_price_drops(), and
+  get_stats(), keeping them under ~20 lines focused on request parsing and template rendering.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Switch dependencies to ProfileManager
+  ([`b0c8b70`](https://github.com/giraffe-horizon/deal-hunter/commit/b0c8b7047178feca9d88b9ec9263a7a07b88d298))
+
+- **frontend**: Extract price chart JS to static file
+  ([`08e8261`](https://github.com/giraffe-horizon/deal-hunter/commit/08e8261899281d70d9ee34d58f1ae425f826be2d))
+
+Move the inline Chart.js price-history init script from deal_detail.html into
+  dashboard/static/js/price-chart.js. The deal ID is passed via a data-deal-id attribute on the
+  canvas element instead of Jinja interpolation.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **frontend**: Extract sparkline init to static JS file
+  ([`92fdcdf`](https://github.com/giraffe-horizon/deal-hunter/commit/92fdcdf2585d69c072060bcb7e3a07679cc22261))
+
+Deduplicate the identical .sparkline-canvas init loop that appeared in both deals_table.html and
+  watchlist.html. Move it to sparklines.js, which also listens for htmx:afterSwap so HTMX-paginated
+  deal rows get sparklines without needing an inline script in the partial. Load charts.js +
+  sparklines.js from the parent full-page templates (deals.html, watchlist.html) instead.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **templates**: Add macros to reduce template duplication
+  ([`15d193f`](https://github.com/giraffe-horizon/deal-hunter/commit/15d193f1bccd0bde92bd67f334bb4e8f11e38b71))
+
+Add score_rules_list macro to macros.html and use it in profile_tab_overview.html to replace the
+  identical score_rules and penalties display blocks (each was 8 lines of the same pattern). Macro
+  is also available for future templates that display keyword→points rules in read-only view.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+
 ## v0.13.0 (2026-04-13)
 
 ### Bug Fixes
