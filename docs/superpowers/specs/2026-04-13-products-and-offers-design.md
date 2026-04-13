@@ -1,6 +1,7 @@
 # Products & Offers — migrating from "deal feed" to "products with pinned offers"
 
 **Date:** 2026-04-13
+**Updated:** 2026-04-13 — re-aligned to current repo (post Phase 3-6 refactor: SQLAlchemy ORM, Alembic migrations, service layer, Pydantic dashboard schemas).
 **Status:** design (approved by user through Q&A dialog)
 **Goal:** evolutionary transformation of deal-hunter from a per-Deal feed dashboard into a per-Product dashboard with cross-source price history and pinned offers.
 
@@ -28,22 +29,38 @@ Target model:
 
 ## 1. Domain architecture
 
+### Refactor note (naming)
+
+The existing `Deal` SQLAlchemy model (in `storage/models.py`) is, in practice, an **Offer**: one row per active offer from one source, upserted on each fetch, carrying `first_seen`, `last_seen`, `price`, `link`, `status`. It is not an event log.
+
+We therefore rename at the code level:
+- Python class `Deal` → `Offer`
+- Table `deals` → `offers` (Alembic migration, no data loss — PK values preserved)
+- Field `Deal.id` becomes `Offer.id`, format `"{source}:{native_id}"` **preserved verbatim** (feedback_bot callback_data, CLI `--price-chart`, systemd units keep working — they reference the id value, not the class name).
+- `DealRepository` → `OfferRepository`.
+- A separate new table `deal_events` (Python class `DealEvent`) holds the append-only event log (`new_listing`, `price_drop`, `price_increase`, `back_in_stock`, `expiring`).
+
 ### Entities
 
 - **Product** — canonical representation of a specific variant/SKU (one bike size, one HDD capacity). Carries normalized title, brand, model, structural attributes, review status, last match confidence, audit metadata. Primary key: UUID. No slugs — dashboard URL is `/products/{uuid}`.
 - **ProductAlias** — any known external identifier mapping to a Product (EAN, ASIN, MPN, store SKU, canonical URL, `ceneo_group_id`, `manual_merge_key`). Primary carrier of certainty — matcher prefers attaching an alias over dragging title similarity.
-- **Offer** — active offer from a single source, identity-stable over time. One URL/`source_native_id` lives for its whole lifecycle; `current_price` and `availability` change. Holds `raw_title`, extracted `attributes_hint`, time metadata.
+- **Offer** (renamed from `Deal`) — active offer from a single source, identity-stable over time. One URL/`source_native_id` lives for its whole lifecycle; `current_price` and `availability` change. Holds `raw_title`, extracted `attributes_hint`, time metadata.
 - **OfferPayloadHistory** — separate table with the last N=10 raw_payload snapshots per Offer (FIFO). Used for debugging and forensics on false merges.
-- **Deal** (existing entity, semantic evolution) — point-in-time event/alert: `new_listing`, `price_drop`, `price_increase`, `back_in_stock`, `expiring`. Has FK to Offer and denormalized FK to Product (for fast queries). Format `id = "{source}:{native_id}"` **preserved** (required by feedback_bot callback_data and systemd units).
-- **PricePoint** — price point per Offer with cross-source aggregation via `product_id`. Stores `price_pln`, `price_original`, `currency_original`, `fx_rate_used`, `recorded_at`, `availability`.
+- **DealEvent** — append-only event log. One row per notable transition: `new_listing`, `price_drop`, `price_increase`, `back_in_stock`, `expiring`. Carries `offer_id`, denormalized `product_id`, `price_at_event`, `payload` (diff/context for the alert). This is what the dashboard product-detail timeline renders.
+- **PricePoint** (existing `PriceHistory` model, extended) — price point per Offer with cross-source aggregation via `product_id`. Stores `price_pln`, `price_original`, `currency_original`, `fx_rate_used`, `recorded_at`, `availability`.
 - **MatchReview** — manual review queue entry: offer without confident match + top-N candidates with confidence + reason + priority.
 - **MatchDecision** — audit log of every matcher decision (auto L1/L2/L3, manual approve/reject/split/merge) with the signals that drove it.
+- **FxRate** — NBP rate cache.
 
 ### Relationships
 
-- Product 1:N ProductAlias, 1:N Offer, 1:N PricePoint, 1:N Deal
-- Offer 1:N Deal (events over time), 1:N PricePoint, 1:N OfferPayloadHistory
+- Product 1:N ProductAlias, 1:N Offer, 1:N PricePoint, 1:N DealEvent
+- Offer 1:N DealEvent, 1:N PricePoint, 1:N OfferPayloadHistory
 - MatchReview N:1 Offer, M:N (suggested) Product
+
+### Relationship to existing in-memory dedup
+
+`services/fetcher.py::DealFetcher.deduplicate()` (0.85 fuzzy title + ±5% price) is a **per-fetch in-memory** collapse step: if Pepper and Ceneo return the same offer in a single run, only one survives. That stays. Product matching is a **persistent, cross-session** layer: each surviving offer gets linked to (or creates) a Product. The two are complementary. The existing `dedup:` profile config keeps working.
 
 ### Price history
 
@@ -55,7 +72,9 @@ Target model:
 
 ---
 
-## 2. Data model (SQLite)
+## 2. Data model (SQLAlchemy ORM on SQLite)
+
+All new models live in `storage/models.py` alongside existing ones. All schema changes land via Alembic migrations in `storage/migrations/versions/` (existing: `001_baseline`, `002_seen_deals`). All data access goes through repositories in `storage/repositories.py`.
 
 ### products
 
@@ -92,54 +111,71 @@ Indexes: `(brand, model)`, `(category)`, FTS5 on `canonical_title`, `(archived, 
 
 Uniqueness: `UNIQUE (identifier_type, identifier_value, COALESCE(source, ''))`. Index on `product_id`.
 
-### offers
+### offers (renamed from `deals`)
 
-| column | type | notes |
-|---|---|---|
-| id | INTEGER PK | |
-| product_id | TEXT FK | NULL allowed (before match) |
-| source | TEXT NOT NULL | |
-| source_native_id | TEXT NOT NULL | source id; variants use suffix `#size=54` |
-| url | TEXT NOT NULL | |
-| raw_title | TEXT NOT NULL | never overwritten |
-| current_price_pln | INTEGER | smallest unit (grosz), converted via NBP |
-| current_price_original | INTEGER | smallest unit in original currency |
-| currency_original | TEXT NOT NULL DEFAULT 'PLN' | |
-| fx_rate_used | REAL | NULL for PLN |
-| availability | TEXT | `in_stock` \| `out_of_stock` \| `unknown` |
-| attributes_hint | JSON | extracted pre-match |
-| first_seen_at | TEXT NOT NULL | |
-| last_seen_at | TEXT NOT NULL | |
-| is_active | INTEGER NOT NULL | 0/1 |
+The existing `deals` table is renamed to `offers` via Alembic migration. Existing columns are renamed in place; new columns are added. The PK `id TEXT` keeps the format `"{source}:{native_id}"` — no value migration, only table rename + column renames + additions.
 
-Uniqueness: `UNIQUE (source, source_native_id)`, `UNIQUE (source, url)`. Indexes: `product_id`, `last_seen_at`, `(source, is_active)`.
+**Existing columns renamed** (to align with product-model vocabulary):
+- `title` → `raw_title` (never overwritten after first write)
+- `price` → `current_price_pln`
+- `link` → `url`
+- `first_seen` → `first_seen_at`
+- `last_seen` → `last_seen_at`
+
+**Existing columns kept as-is:** `id, source, description, image_url, profile, score, category, status`.
+
+**New columns added:**
+- `product_id` TEXT FK → `products.id`, NULL allowed (pre-match)
+- `source_native_id` TEXT — extracted from existing `id` (split on first `:`), backfilled during migration; used by matcher for cross-source lookups
+- `current_price_original` INTEGER — smallest unit in original currency
+- `currency_original` TEXT NOT NULL DEFAULT `'PLN'`
+- `fx_rate_used` REAL — NULL for PLN
+- `availability` TEXT — `in_stock` \| `out_of_stock` \| `unknown`
+- `attributes_hint` JSON — extracted pre-match
+- `is_active` INTEGER NOT NULL DEFAULT 1
+
+Variant suffix (e.g. `"proshop:12345#size=54"`): the full value lives in PK `id`; `source_native_id` holds the portion after the first colon (`12345#size=54`).
+
+Uniqueness: PK on `id`; `UNIQUE (source, source_native_id)`; `UNIQUE (source, url)`. Indexes: `product_id`, `last_seen_at`, `(source, is_active)`, existing `idx_deals_profile_score` renamed to `idx_offers_profile_score`.
+
+Python: `class Deal` → `class Offer` (renamed in `storage/models.py`); `DealRepository` → `OfferRepository` (renamed in `storage/repositories.py`, all callers updated). Existing `Deal` dataclass in `sources/base.py` (the in-flight ingest DTO) stays named `Deal` to avoid rippling into every `Source` subclass — it represents the *raw fetch result*, distinct from the persisted `Offer` ORM model.
 
 ### offer_payload_history
 
 | column | type | notes |
 |---|---|---|
 | id | INTEGER PK | |
-| offer_id | INTEGER FK NOT NULL | ON DELETE CASCADE |
+| offer_id | TEXT FK NOT NULL | → `offers.id`, ON DELETE CASCADE |
 | raw_payload | JSON NOT NULL | scrape snapshot |
 | captured_at | TEXT NOT NULL | ISO |
 
 Retention: max 10 rows per `offer_id`, FIFO. Cleanup inline on every `touch_offer` or via cron.
 
-### deals (extension of existing)
+### deal_events (new)
 
-Added columns (all `NULL`-allowed for backward compat):
-- `offer_id` INTEGER FK
-- `product_id` TEXT FK
-- `event_type` TEXT DEFAULT `'new_listing'` — enum: `new_listing` \| `price_drop` \| `price_increase` \| `back_in_stock` \| `expiring`
+Append-only event log. One row per notable transition on an offer. Renders as the per-product timeline in the dashboard.
 
-**Format `id = "{source}:{native_id}"` preserved** (feedback_bot callback_data, systemd, CLI).
+| column | type | notes |
+|---|---|---|
+| id | INTEGER PK | |
+| offer_id | TEXT FK NOT NULL | → `offers.id` |
+| product_id | TEXT FK | denormalized for fast per-product queries, NULL if unmatched |
+| event_type | TEXT NOT NULL | enum: `new_listing` \| `price_drop` \| `price_increase` \| `back_in_stock` \| `expiring` |
+| price_at_event | INTEGER | in PLN, smallest unit |
+| payload | JSON | event-specific context (e.g. `{old_price, new_price, diff_pct}` for drops) |
+| created_at | TEXT NOT NULL | ISO |
+| notified | INTEGER NOT NULL DEFAULT 0 | 0/1 — has the notifier sent this? |
 
-### price_history (extension of existing)
+Indexes: `(offer_id, created_at DESC)`, `(product_id, created_at DESC)`, `(event_type, created_at DESC)`, `(notified)`.
 
-Added columns:
-- `offer_id` INTEGER FK
-- `product_id` TEXT FK
-- `price_pln` INTEGER
+### price_history (renamed to price_points, extension of existing)
+
+Rename the table `price_history` → `price_points` (matches the domain noun "PricePoint" used throughout spec). Python model `PriceHistory` → `PricePoint`.
+
+Existing columns kept: `deal_id` (renamed to `offer_id` and retyped as FK to `offers.id`), `price` (renamed to `price_pln`), `recorded_at`.
+
+New columns added:
+- `product_id` TEXT FK — denormalized
 - `price_original` INTEGER
 - `currency_original` TEXT DEFAULT `'PLN'`
 - `fx_rate_used` REAL
@@ -152,7 +188,7 @@ Indexes: `(offer_id, recorded_at DESC)`, `(product_id, recorded_at DESC)`.
 | column | type | notes |
 |---|---|---|
 | id | INTEGER PK | |
-| offer_id | INTEGER FK NOT NULL | |
+| offer_id | TEXT FK NOT NULL | → `offers.id` |
 | candidate_product_id | TEXT FK | NULL when no candidate |
 | suggested_products | JSON | top-N candidates with confidence |
 | best_confidence | REAL | |
@@ -170,7 +206,7 @@ Indexes: `(status, priority DESC)`, `offer_id`.
 | column | type | notes |
 |---|---|---|
 | id | INTEGER PK | |
-| offer_id | INTEGER FK | |
+| offer_id | TEXT FK | → `offers.id` |
 | product_id | TEXT FK | |
 | decision_type | TEXT NOT NULL | `auto_hard_id` \| `auto_strong` \| `auto_fuzzy` \| `manual_approve` \| `manual_reject` \| `manual_split` \| `manual_merge` |
 | confidence | REAL | |
@@ -195,8 +231,9 @@ Refresh: cron `scripts/fetch_fx_rates.py` once daily. Fallback on downtime: reus
 ### Required fields (input validation)
 
 - Product: `id, canonical_title, category, attributes, review_status, created_at, updated_at`.
-- Offer: `source, source_native_id, url, raw_title, currency_original, first_seen_at, last_seen_at, is_active`.
+- Offer: `id, source, source_native_id, url, raw_title, currency_original, first_seen_at, last_seen_at, is_active`.
 - ProductAlias: `product_id, identifier_type, identifier_value, confidence, created_by, created_at`.
+- DealEvent: `offer_id, event_type, created_at`.
 - MatchDecision: `decision_type, actor, created_at` (plus one of `offer_id`/`product_id`).
 
 ---
@@ -281,41 +318,47 @@ For other profiles (not decided at this time) — defined per profile during imp
 
 ## 4. Migration plan
 
-Strangler pattern, feature flag `PRODUCT_MODEL_ENABLED`, dual-write, single-read-old → dual-read → cutover.
+Strangler pattern, feature flag `PRODUCT_MODEL_ENABLED`, dual-write, single-read-old → dual-read → cutover. All schema changes are Alembic revisions in `storage/migrations/versions/`.
 
-**Phase 0 — schema only**
-- `scripts/migrate_add_products_schema.py` — idempotent: `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN` one at a time with try/except.
-- No write-path code changes.
+**Phase 0 — schema only (two Alembic revisions)**
+- `003_rename_deals_to_offers.py` — rename table `deals` → `offers`, rename columns (`title`→`raw_title`, `price`→`current_price_pln`, `link`→`url`, `first_seen`→`first_seen_at`, `last_seen`→`last_seen_at`), rename index, rename `price_history.deal_id` → `offer_id`, rename table `price_history` → `price_points`, rename class `Deal`→`Offer` and `PriceHistory`→`PricePoint` in `storage/models.py`, update `DealRepository`→`OfferRepository` in `storage/repositories.py`, update all importers. Downgrade script reverses rename.
+- `004_products_schema.py` — add new columns on `offers` (`product_id`, `source_native_id`, `current_price_original`, `currency_original`, `fx_rate_used`, `availability`, `attributes_hint`, `is_active`); add new columns on `price_points` (`product_id`, `price_original`, `currency_original`, `fx_rate_used`, `availability`); create new tables `products`, `product_aliases`, `offer_payload_history`, `deal_events`, `match_reviews`, `match_decisions`, `fx_rates`; backfill `source_native_id` from existing `offers.id` (split on first `:`).
+- No write-path code changes beyond the rename. Test suite must pass after 003 alone.
 
-**Phase 1 — dual-write Offer**
-- Ingest creates/updates Offer and OfferPayloadHistory alongside Deal. Product = NULL.
-- User sees nothing.
+**Phase 1 — dual-write events + FX-aware prices**
+- Ingest writes to `offers` (as today, via renamed `OfferRepository`), appends to `offer_payload_history` (new), emits `deal_events` rows for detected transitions (new_listing, price_drop derived from the existing `services/price_tracker.py`).
+- PricePoint writes include `price_original`, `currency_original`, `price_pln`, `fx_rate_used` (initially currency_original always 'PLN' until Phase B lands NBP).
+- `product_id` on offers stays NULL.
 
 **Phase 2 — backfill Products**
-- `scripts/backfill_products.py` iterates Offers without `product_id`, runs L1+L2 pipeline, creates Product where no match exists.
-- Logs to `match_decisions`. Script is resumable (checkpointed per batch).
+- `cli/backfill_products.py` (new CLI entrypoint) iterates Offers with `product_id IS NULL`, runs L1+L2 pipeline, creates Product where no match exists.
+- Logs to `match_decisions`. Resumable (checkpointed per batch in a `backfill_state` JSON or a dedicated column).
 - After backfill: `offers.product_id` populated ≥ 95%.
 
 **Phase 3 — dual-read dashboard**
-- `/products` behind a flag (env / query `?view=products`). `/deals` still default. User compares.
+- `/products` endpoints live under a feature flag: environment variable `PRODUCT_MODEL_ENABLED=true` enables the "Products" tab in sidebar nav and exposes routes. Default off.
+- `/deals` (listing) keeps serving the classic view from the renamed `offers` table (same data, same UI).
+- Users compare.
 
 **Phase 4 — cutover**
-- `PRODUCT_MODEL_ENABLED=true` becomes default. `/deals` becomes legacy / redirects to `/events`.
-- Telegram alerts still per Deal (event), with an extra "Product" button.
+- `PRODUCT_MODEL_ENABLED=true` becomes the default.
+- `/deals` view stays as the per-source event feed (reads from `deal_events` joined with `offers`); `/products` becomes the primary discovery view.
+- Telegram alerts add a "Produkt" deep-link button.
 
 **Phase 5 — cleanup (optional, ~1 month later)**
-- Remove dead code, legacy templates.
+- Remove the feature flag, remove any legacy compat shims.
 
 ### Backward compatibility (hard guarantees)
 
-- `Deal.id = "{source}:{native_id}"` format preserved — feedback_bot callback_data, CLI `--price-chart "pepper:12345"`, systemd timers — all work unchanged.
-- Watchlist: migration adds `product_id` where known, `deal_id` stays. New subscriptions use product level; existing deal-id subscriptions continue to work.
-- Old deals without `offer_id`/`product_id`: remain visible as "legacy, unmatched", not hidden.
+- `Offer.id = "{source}:{native_id}"` format preserved **verbatim** (value is not migrated, only the table it lives in is renamed) — feedback_bot callback_data, CLI `--price-chart "pepper:12345"`, systemd timers all keep working.
+- `watchlist.deal_id` FK: during migration `003_rename_deals_to_offers`, the FK target retargets from `deals(id)` to `offers(id)` — the id values are identical. Column name stays `deal_id` for stability; future migration may rename to `offer_id` in a cleanup pass.
+- Old offers without `product_id` after backfill: visible as "legacy, unmatched" on the `/review` queue with low priority; not hidden from `/deals` listing.
 
 ### Historical data migration
 
-- For each offer: Offer reconstructed from deals aggregation (`first_seen_at = min(deal.created_at)`, `last_seen_at = max(deal.created_at)`, `raw_title = most recent`).
-- Price history: preserved where it existed in `price_history`. No reconstruction of prices from deals (accepted).
+- Offers: no reconstruction needed — the existing `deals` table rows become `offers` rows 1:1.
+- Price points: existing `price_history` rows become `price_points` rows 1:1 (`deal_id` → `offer_id` column rename).
+- `deal_events`: we do NOT backfill historical events. The table starts empty; only events produced after the cutover are recorded. Historical price drops remain available via `price_points`, just not as event rows.
 
 ### Dual-write vs adapter
 
@@ -325,26 +368,46 @@ Dual-write, because writes are infrequent (crons every 30min) and read consisten
 
 ## 5. Implementation phases
 
-### Phase A — Schema + dual-write Offer
+### Phase A — Rename + new schema + event writes
 
-- **Goal:** new tables exist; every new ingest creates/refreshes Offer + OfferPayloadHistory.
-- **Scope:** schema migration; `storage/sqlite.py` (new methods `upsert_offer`, `touch_offer`, `append_payload_history`, N=10 cleanup); hook in ingest pipeline in `deal_hunter.py`.
+- **Goal:** Alembic revisions `003_rename_deals_to_offers` and `004_products_schema` land; `DealRepository` renamed to `OfferRepository`; every ingest appends to `offer_payload_history` and `deal_events`.
+- **Scope:**
+  - `storage/migrations/versions/003_rename_deals_to_offers.py`
+  - `storage/migrations/versions/004_products_schema.py`
+  - `storage/models.py` — `Deal` → `Offer`, `PriceHistory` → `PricePoint`; new models `Product`, `ProductAlias`, `OfferPayloadHistory`, `DealEvent`, `MatchReview`, `MatchDecision`, `FxRate`.
+  - `storage/repositories.py` — `DealRepository` → `OfferRepository`; new `ProductRepository`, `OfferPayloadRepository`, `DealEventRepository`, `MatchRepository`, `FxRateRepository`.
+  - `services/fetcher.py` and `services/alerter.py` — use renamed classes; on upsert, also append payload history (N=10 FIFO) and emit event rows.
+  - All test files referencing `DealRepository`/`Deal` ORM class updated (tests/test_repositories.py, tests/test_services.py, tests/test_dashboard.py, etc.).
 - **Dependencies:** none.
-- **Risks:** SQLite migrations (ALTER), concurrent-cron write integrity.
-- **DoD:** integration tests: new deal → Offer row; `UNIQUE` constraints hold; old flow unchanged; migration rollback tested; OfferPayloadHistory capped at N=10.
+- **Risks:** rename touches many files (high surface). Alembic downgrade must reverse table/column renames cleanly. Concurrent-cron write integrity on event writes.
+- **DoD:** `alembic upgrade head` + `alembic downgrade -1` round-trip works on a clean DB copy; full test suite green after rename; new Offer/event writes visible in DB; OfferPayloadHistory capped at N=10.
 
-### Phase B — Attribute + identifier extractor + FX
+### Phase B — Attribute + identifier extractor + NBP FX
 
-- **Goal:** for every offer we extract `brand, model, attributes_hint` and where available `ean, sku, canonical_url, mpn, ceneo_group_id`. NBP fetcher works.
-- **Scope:** new module `matching/extractor.py` + `matching/normalizer.py`. Extend `stores/*.yaml` with `identifiers:` and `attributes:` sections. Validation in `utils/validation.py`. Module `fx/nbp.py` + cron `scripts/fetch_fx_rates.py`.
+- **Goal:** for every Offer we extract `brand, model, attributes_hint` and where available `ean, sku, canonical_url, mpn, ceneo_group_id`. NBP fetcher works.
+- **Scope:**
+  - New subpackage `services/matching/` with `extractor.py`, `normalizer.py`.
+  - New module `services/fx/nbp.py` (NBP client with SQLite-cached `fx_rates`, fallback on downtime).
+  - New CLI: `cli/fetch_fx_rates.py` (daily cron entrypoint).
+  - `stores/*.yaml` — new sections `identifiers:` (ean, sku, mpn, canonical_url_pattern, ceneo_group_id selectors) and `attributes:` (per-category selectors).
+  - `utils/validation.py` — validation for new YAML sections.
+  - `profiles/*.yaml` — new `required_match_attrs:` list; validator requires it (empty allowed, but must be explicit).
+  - Ingest writes `current_price_original`, `currency_original`, `fx_rate_used`, `price_pln` to PricePoint.
 - **Dependencies:** A.
 - **Risks:** low EAN/SKU coverage → L2 must carry the weight; NBP API downtime → fallback to last rate.
-- **DoD:** per-source tests on HTML/JSON fixtures; identifier coverage report per source in logs; `brand+model` coverage ≥ 80% on the tagged test set; NBP rate cached in DB, fallback tested.
+- **DoD:** per-source tests on HTML/JSON fixtures; identifier coverage report per source in logs; `brand+model` coverage ≥ 80% on tagged test set; NBP rate cached in DB, fallback tested.
 
-### Phase C — Matching pipeline + Product creation
+### Phase C — Matching pipeline + Product creation + backfill
 
-- **Goal:** L1 and L2 auto with rigor; L3/L4 → new Product (no review UI yet).
-- **Scope:** `matching/pipeline.py`, `matching/scorer.py`, `matching/review_queue.py` (write-only, no UI). Golden set of 200 pairs (bikes + nas_hdd). `scripts/eval_matching.py`. Backfill.
+- **Goal:** L1 and L2 auto with rigor; L3/L4 → new Product (no review UI yet); historical offers matched.
+- **Scope:**
+  - `services/matching/pipeline.py`, `scorer.py`, `review_queue.py` (write-only, no UI).
+  - `services/matching/__init__.py` exposing `MatchingService`.
+  - `cli/backfill_products.py` — resumable batch runner.
+  - Golden set of ≥200 pairs: `tests/fixtures/matching/golden/*.yaml` (bikes + nas_hdd).
+  - New test files: `tests/test_matching_extractor.py`, `tests/test_matching_normalizer.py`, `tests/test_matching_l1.py`, `tests/test_matching_l2.py`, `tests/test_matching_negative_evidence.py`.
+  - Evaluation script: `cli/eval_matching.py` (reads golden set, prints precision/recall/F1 per layer).
+  - Wire `MatchingService` into `services/fetcher.py` so fresh ingest links offers to products.
 - **Dependencies:** B.
 - **Risks:** **highest in the project** — false merge. DoD gates guard against it.
 - **DoD:** on golden set: L1 precision = 1.0; L2 precision ≥ 0.98, recall ≥ 0.70; backfill idempotent (second run = 0 changes); zero orphans; `manual_review_rate` < 30% on golden set.
@@ -352,31 +415,51 @@ Dual-write, because writes are infrequent (crons every 30min) and read consisten
 ### Phase D — Product dashboard (MVP)
 
 - **Goal:** `/products` (list) and `/products/{uuid}` (detail with cross-source timeline + active offers).
-- **Scope:** routes in `dashboard.py`, templates `products_list.html`, `product_detail.html`. Reuse + extend `visualization/charts.py` with a cross-source price chart. Old `/deals` runs in parallel.
+- **Scope:**
+  - `dashboard/routes/products.py` — new APIRouter.
+  - `dashboard/services/product_service.py` — query/render logic.
+  - `dashboard/schemas.py` — Pydantic models for Product API (`ProductListResponse`, `ProductDetailResponse`, `OfferSummary`, `PricePointSeries`).
+  - `dashboard/templates/products_list.html`, `product_detail.html` + a `product_timeline` macro for event rendering.
+  - `visualization/charts.py` — new `generate_product_price_chart(product_id, db)` cross-source chart.
+  - Sidebar nav gains "Products" tab (shown when `PRODUCT_MODEL_ENABLED=true`).
+  - Old `/deals` runs unchanged.
+  - New test file: `tests/test_products_routes.py`.
 - **Dependencies:** C.
-- **Risks:** performance with many offers → indexes on `(product_id, recorded_at)`.
-- **DoD:** Playwright E2E: `/products` → click → product detail with ≥ 2 sources; active offers clickable to external URLs; no regressions in `/deals`.
+- **Risks:** performance with many offers → indexes on `(product_id, recorded_at)` validated with EXPLAIN.
+- **DoD:** Playwright E2E in `tests/e2e/test_products.py`: `/products` → click → product detail with ≥ 2 sources; active offers clickable to external URLs; no regressions in `/deals`.
 
 ### Phase E — Manual review queue UI
 
 - **Goal:** handle L3 (and borderline L2) interactively; 7-day undo.
-- **Scope:** `/review` endpoint + template + POST actions; `match_decisions.undo_snapshot`; auto-append `manual_merge_key` to `product_aliases` on approve.
+- **Scope:**
+  - `dashboard/routes/review.py` — GET list, POST actions (approve, reject, merge, split, skip, undo).
+  - `dashboard/services/review_service.py`.
+  - `dashboard/schemas.py` — `ReviewAction`, `ReviewActionResponse`.
+  - `dashboard/templates/review_queue.html`, `review_item.html` partial.
+  - `storage/repositories.py` — `MatchRepository.undo(decision_id)` using `match_decisions.undo_snapshot`.
+  - Auto-append `manual_merge_key` alias on approve.
+  - New test file: `tests/test_review_flow.py`.
 - **Dependencies:** D.
-- **Risks:** destructive user actions → undo is mandatory.
+- **Risks:** destructive user actions → undo is mandatory; CSRF middleware already guards POSTs.
 - **DoD:** integration flow: proposal → approve → alias → next fetch hits L1; undo restores state; negative evidence prevents re-proposal.
 
 ### Phase F — Cutover
 
-- **Goal:** `/products` default; Telegram + bot + product-level watchlist.
-- **Scope:** routing, `notifiers/telegram.py` ("Product" deep-link button), `feedback_bot.py` (`/product <id>`, `/watch` uses product_id when available, falls back to deal_id), docs.
+- **Goal:** `PRODUCT_MODEL_ENABLED` default on; Telegram + bot + product-level watchlist.
+- **Scope:**
+  - Default env flag flip.
+  - `notifiers/telegram.py` — `build_deal_keyboard` adds "Produkt" deep-link button when `product_id` known.
+  - `feedback_bot.py` — new command `/product <uuid>`; `/watch` resolves to `product_id` when available, falls back to `deal_id` (existing subscriptions preserved).
+  - `services/alerter.py` — price-drop digest and per-event alerts pull `product_id` into message body.
+  - README + CLAUDE.md updates.
 - **Dependencies:** D+E stable ≥ 7 days, canary audit green.
-- **Risks:** alert regressions.
-- **DoD:** flag on in prod; feedback bot E2E; 48h of monitoring with no new errors; canary audit precision ≥ 0.98.
+- **Risks:** alert regressions — guarded by `tests/test_fx_alert_semantics.py` and `tests/test_feedback_bot.py`.
+- **DoD:** flag default-on in prod; feedback bot E2E; 48h of monitoring with no new errors; canary audit precision ≥ 0.98.
 
 ### Phase G — Background merge sweep (post-MVP)
 
 - **Goal:** improve recall — re-match products when new aliases have appeared.
-- **Scope:** nightly cron `scripts/reindex_match_candidates.py`, merge/day safety cap, Telegram report.
+- **Scope:** new CLI `cli/reindex_match_candidates.py` as nightly cron; merge/day safety cap; Telegram report.
 - **Dependencies:** F stable.
 - **DoD:** recall improves, precision holds, zero false-merge incidents.
 
@@ -417,69 +500,104 @@ Dual-write, because writes are infrequent (crons every 30min) and read consisten
 
 ## 7. System changes
 
-### Backend
+### ORM & persistence
 
-- `storage/sqlite.py` — new CRUD for products/offers/aliases/payload_history/match_reviews/match_decisions; extended `price_history` methods (price_pln, price_original, fx).
-- `deal_hunter.py` — after `fetch_deals` a new pipeline: upsert Offer → append payload history → extractor → match → create/link Product → write PricePoint (with FX) → decide event_type → write Deal.
-- `matching/` (new module) — `extractor.py`, `normalizer.py`, `scorer.py`, `pipeline.py`, `review_queue.py`.
-- `fx/nbp.py` (new module) — NBP client with cache and fallback.
-- `stores/*.yaml` — new sections `identifiers:` (ean, sku, mpn, canonical_url_pattern, ceneo_group_id) and `attributes:` (per-category selectors).
-- `profiles/*.yaml` — new `required_match_attrs:` field (list of strings).
-- `utils/validation.py` — validate new sections.
-- `sources/base.py` — `Deal` gains optional `ean, sku, mpn, brand_hint, attributes_hint` (backward compatible).
+- `storage/models.py` — rename `Deal` → `Offer` (table `deals` → `offers`); rename `PriceHistory` → `PricePoint` (table `price_history` → `price_points`); new models `Product`, `ProductAlias`, `OfferPayloadHistory`, `DealEvent`, `MatchReview`, `MatchDecision`, `FxRate`. Keep `WatchlistItem`, `Feedback`, `AlertQueue`, `SeenDeal` — their FKs retarget to `offers` via Alembic.
+- `storage/repositories.py` — rename `DealRepository` → `OfferRepository` (keep an alias for callers); add `ProductRepository`, `ProductAliasRepository`, `OfferPayloadHistoryRepository`, `DealEventRepository`, `MatchReviewRepository`, `MatchDecisionRepository`, `FxRateRepository`. Extend `PricePointRepository` with `price_pln`, `price_original`, `currency_original`, `fx_rate_used`.
+- `storage/migrations/versions/003_rename_deals_to_offers.py` — Alembic revision: table + column renames, FK retargets, index renames.
+- `storage/migrations/versions/004_products_schema.py` — Alembic revision: all new tables + indices + FTS5 triggers.
+- No legacy `storage/sqlite.py` module remains in the repo — all persistence already flows through `storage/repositories.py` and `storage/models.py`. Any future external caller still passing the old name should be redirected to the repository classes.
+
+### Service layer
+
+- `services/fetcher.py` — no behavioral change; `DealFetcher.deduplicate()` remains as the in-memory dedup for a single run. Result feeds the matching pipeline, which handles persistent cross-run matching.
+- `services/matching/` (new package) — `extractor.py`, `normalizer.py`, `scorer.py`, `pipeline.py`, `review_queue.py`, `candidate_index.py` (FTS5 + rapidfuzz wrapper).
+- `services/fx/nbp.py` (new module) — NBP client with `FxRateRepository` cache and fallback-to-last-known.
+- `services/types.py` — add `MatchResult`, `OfferPayload`, `ExtractedAttributes` dataclasses; extend `ScoredDeal` with optional `product_id`.
+- `services/alerter.py` — insert product deep-link into alert payloads when `product_id` is present.
+- `services/price_tracker.py` — compare `price_original` when `currency_original` unchanged across consecutive PricePoints; FX-only moves do not trigger alerts.
+- `deal_hunter.py` — orchestration extended: after `DealFetcher.fetch_all()` → for each Deal: upsert Offer → append `OfferPayloadHistory` (FIFO N=10) → extract attributes → match → create/link Product → write PricePoint with FX → emit `DealEvent`.
 
 ### Dashboard
 
-- `dashboard.py` — new routes: `GET /products`, `GET /products/{uuid}`, `GET /api/products`, `GET /api/products/{uuid}`, `GET /api/products/{uuid}/offers`, `GET /api/products/{uuid}/price-history`, `GET /review`, `POST /review/{id}/action`, `POST /products/{uuid}/merge`, `POST /products/{uuid}/split`, `POST /match_decisions/{id}/undo`.
-- New templates: `products_list.html`, `product_detail.html` (timeline + chart + active offers table + price history), `review_queue.html`.
-- Existing deals templates: "View product" link wherever `product_id` is known.
-- Navigation: new "Products" tab.
+- `dashboard/routes/products.py` (new) — `GET /products`, `GET /products/{uuid}`, API endpoints under `/api/products/…` (list, detail, offers, price-history); all reads go through `ProductService`.
+- `dashboard/routes/review.py` (new) — `GET /review`, `POST /review/{id}/action`, `POST /products/{uuid}/merge`, `POST /products/{uuid}/split`, `POST /match_decisions/{id}/undo`. Mutating routes remain gated by the existing CSRF middleware in [dashboard/__init__.py](dashboard/__init__.py).
+- `dashboard/services/product_service.py` (new) — query/aggregation logic for product list and detail pages.
+- `dashboard/services/review_service.py` (new) — review queue operations, merge/split/undo flows.
+- `dashboard/schemas.py` — extend with Pydantic v2 schemas: `ProductOut`, `ProductDetailOut`, `ProductOfferOut`, `ReviewItemOut`, `MergeRequestIn`, `SplitRequestIn`.
+- `dashboard/routes/deals.py` — surface "View product" link when `Offer.product_id` is set; no semantic change to existing endpoints.
+- `dashboard/__init__.py` — register `products` and `review` routers alongside existing ones.
+- Templates: new `products_list.html`, `product_detail.html` (timeline + chart + active offers + price points), `review_queue.html`. Add "Products" + "Review" tabs to `base.html` nav.
 
-### Jobs
+### CLI
 
-- `scripts/migrate_add_products_schema.py` — one-shot migration.
-- `scripts/backfill_products.py` — one-shot backfill, resumable.
-- `scripts/eval_matching.py` — compute metrics on golden set.
-- `scripts/fetch_fx_rates.py` — daily cron (NBP).
-- `scripts/reindex_match_candidates.py` — nightly cron (phase G).
+- `cli/backfill_products.py` (new) — one-shot, resumable backfill over existing Offers.
+- `cli/eval_matching.py` (new) — compute precision/recall/F1 against golden set under `tests/fixtures/matching/golden/`.
+- `cli/verify.py` — no change beyond propagating `product_id` when verbose output shows matches.
+- `scripts/fetch_fx_rates.py` (new, one-file script) — daily cron invoking `services/fx/nbp.py`.
+- `scripts/reindex_match_candidates.py` (new, phase G) — nightly merge-sweep runner.
+- Systemd: add `deal-hunter-fx.timer` (daily 06:00) and `deal-hunter-reindex.timer` (nightly, phase G) under `scripts/systemd/`.
+
+### Stores, profiles, validation
+
+- `stores/*.yaml` — new optional sections `identifiers:` (ean, sku, mpn, canonical_url_pattern, ceneo_group_id) and `attributes:` (per-category selectors).
+- `profiles/*.yaml` — new `required_match_attrs:` list; optional `matching:` overrides (thresholds, weights).
+- `utils/validation.py` — validate both new sections; fail fast on unknown attribute keys per category registry.
+- `sources/base.py` — extend `Deal` dataclass with optional `ean`, `sku`, `mpn`, `brand_hint`, `attributes_hint`. Backward compatible (defaults `None`/`{}`).
 
 ### Telegram
 
-- `notifiers/telegram.py` — add a "Product" deep-link button in `send_alert` and `send_price_drop_alert`.
-- Digest `--digest` — after cutover groups price drops per product.
+- `notifiers/telegram.py` — add a "Product" deep-link button in `send_alert` and `send_price_drop_alert` when `product_id` is available in the alert payload.
+- `--digest` path in `deal_hunter.py` — after cutover, groups drops per product rather than per offer.
 
 ### Feedback bot
 
-- New command `/product <uuid>`.
-- `/watch <deal_id>` works internally on `product_id` where available; fallback to deal_id.
-- Callback_data unchanged (key: deal_id).
+- `feedback_bot.py` — new command `/product <uuid>` (shows product summary + active offers).
+- `/watch <deal_id>` continues to accept the legacy `{source}:{native_id}` id; resolves to `product_id` internally when available, falls back to offer-level tracking otherwise.
+- Callback_data remains keyed on the stable offer id (`{source}:{native_id}`), preserved verbatim by migration `003`.
 
 ---
 
 ## 8. Tests and validation
 
-### Unit
+Follow existing naming conventions under `tests/` (flat layout, `test_*.py`) and `tests/e2e/` for Playwright browser tests. Extend existing `test_models.py`, `test_repositories.py`, and `test_services.py` where the new code lives alongside the refactored pieces.
 
-- `test_normalizer.py` — lowercase, diacritics, stopwords, separators, size normalization ("58cm" ≡ "58" ≡ "r.58").
-- `test_extractor.py` — per source on HTML/JSON fixtures: brand/model/EAN/SKU/attributes, edge cases.
-- `test_matcher_l1.py` — hard identifiers, idempotency.
-- `test_matcher_l2.py` — required_match_attrs (different size → no merge), token_set_ratio thresholds, null-vs-known (blocks).
-- `test_matcher_negative_evidence.py` — "sticky no".
-- `test_ceneo_group.py` — ceneo_group_id as L2 + required_match_attrs is required.
-- `test_fx_nbp.py` — NBP client, cache, fallback, conversion.
+### Unit (`tests/`)
 
-### Integration
+- `test_models.py` (extend) — schema for new ORM models; renamed `Offer`/`PricePoint` tables; FK integrity to `Product`.
+- `test_repositories.py` (extend) — `ProductRepository`, `ProductAliasRepository`, `OfferPayloadHistoryRepository` (FIFO N=10 eviction), `DealEventRepository`, `MatchReviewRepository`, `MatchDecisionRepository`, `FxRateRepository`.
+- `test_matching_normalizer.py` — lowercase, diacritics, stopwords, separators, size normalization ("58cm" ≡ "58" ≡ "r.58").
+- `test_matching_extractor.py` — per source on HTML/JSON fixtures: brand/model/EAN/SKU/attributes, edge cases.
+- `test_matching_l1.py` — hard identifiers, idempotency.
+- `test_matching_l2.py` — `required_match_attrs` (different size → no merge), token_set_ratio thresholds, null-vs-known (blocks).
+- `test_matching_negative_evidence.py` — "sticky no" (MatchDecision.type=negative blocks re-match).
+- `test_matching_ceneo_group.py` — `ceneo_group_id` as L2 signal, still gated by `required_match_attrs`.
+- `test_fx_nbp.py` — NBP client, cache, fallback-to-last-known, PLN conversion.
 
-- `test_ingest_pipeline_products.py` — full flow: mock source → offer → match → product → deal event; idempotency.
-- `test_review_flow.py` — L3 → review → manual approve → alias created → next fetch hits L1.
-- `test_merge_split_undo.py` — merge → split → undo within 7 days.
-- `test_dashboard_products.py` — list/detail/API endpoints; pagination; filters; Playwright E2E.
-- `test_fx_alert_semantics.py` — price-drop alert does NOT fire from FX movement alone when original currency has unchanged price.
+### Integration (`tests/`)
 
-### Migration tests
+- `test_services.py` (extend) — `DealFetcher.deduplicate()` unchanged; matching pipeline consumes deduped result; orchestration in `deal_hunter.py` produces expected `DealEvent` sequence.
+- `test_ingest_pipeline_products.py` — full flow: mock source → Offer upsert → payload history → match → Product link → PricePoint (with FX) → DealEvent; idempotent under replay.
+- `test_review_flow.py` — L3 → review queue → manual approve → alias created → next fetch hits L1 automatically.
+- `test_merge_split_undo.py` — merge two products → split → undo within 7-day window.
+- `test_fx_alert_semantics.py` — price-drop alert does NOT fire from FX movement alone when `price_original` and `currency_original` are unchanged.
 
-- `test_migration_schema.py` — on a copy of real DB: migration idempotency, counts, no data loss.
-- `test_backfill_products.py` — backfill idempotency, checkpoint recovery.
+### Dashboard routes (`tests/`)
+
+- `test_dashboard.py` (extend) — existing dashboard endpoints still pass after adding "View product" link; no regression in deals/health/tuner.
+- `test_products_routes.py` — `/products`, `/products/{uuid}`, API endpoints; pagination; filters; Pydantic response schemas.
+- `test_review_routes.py` — `/review`, `POST /review/{id}/action`, merge/split/undo; CSRF middleware rejects without `HX-Request` header.
+
+### E2E (`tests/e2e/`)
+
+- `test_products.py` — products list page, product detail page (timeline + active offers table), price chart render.
+- `test_review.py` — review queue interaction, approve/reject buttons, product merge/split dialogs.
+
+### Migration tests (`tests/`)
+
+- `test_migration_rename.py` — Alembic `003_rename_deals_to_offers`: run against a fixture DB seeded with legacy `deals`/`price_history`; verify renamed tables, preserved row counts, FK retargeting (watchlist → offers), and that offer ids (`{source}:{native_id}`) are preserved verbatim.
+- `test_migration_products_schema.py` — Alembic `004_products_schema`: idempotency under `upgrade`/`downgrade`/`upgrade`, no data loss.
+- `test_cli_backfill_products.py` — `cli/backfill_products.py` idempotency, checkpoint recovery, resumable after interruption.
 
 ### Match quality
 
@@ -507,9 +625,10 @@ Dual-write, because writes are infrequent (crons every 30min) and read consisten
 
 - **Low EAN/SKU coverage** in Polish stores (Pepper near zero, Ceneo has `ceneo_group_id` — gold, x-kom inconsistent). L2 carries most of the weight → higher `manual_review_rate`.
 - **Cloudflare on x-kom** — store YAML exists, live scraping is sometimes blocked. Product gets created but without fresh offers.
-- **SQLite ALTER migrations** — prefer `ADD COLUMN` one at a time; heavier changes: CREATE new → INSERT SELECT → DROP old → RENAME.
+- **Table rename in Alembic (`003`)** — must retarget all existing FKs (watchlist, feedback, price_history, seen_deals) atomically; run the rename on a copy of a real production DB first and verify `PRAGMA foreign_key_check` clean. SQLite ALTER limits: heavier column restructures in `004` use CREATE new → INSERT SELECT → DROP old → RENAME pattern.
 - **NBP API downtime** — cache + fallback to last known rate, warning logged.
 - **Regex in profile YAML** (score_rules) and extractor — they do not collide (extractor runs on raw_title before scoring).
+- **In-memory vs persistent dedup overlap** — `DealFetcher.deduplicate()` (fuzzy 0.85 + ±5% price) removes duplicates inside a single fetch; the matching pipeline handles identity across runs. Ensure the pipeline does not re-run fuzzy dedup on an already-deduped batch; treat its input as already-representative.
 
 ### Product risks
 
@@ -532,6 +651,7 @@ Dual-write, because writes are infrequent (crons every 30min) and read consisten
 | 8 | MVP without Family entity, only `attributes.family_key` (string). |
 | 9 | Soft-delete Product after 180 days without an active offer, flag `archived=1`. |
 | 10 | `offer_payload_history` as a separate table, N=10 FIFO snapshots per offer. |
+| 11 | **Naming refactor (Option B):** rename existing `Deal`/`deals` → `Offer`/`offers` and `PriceHistory`/`price_history` → `PricePoint`/`price_points`; introduce a new `DealEvent` table for the event log. Offer ids (`{source}:{native_id}`) are preserved verbatim so callback_data, watchlist FK, and feedback bot commands keep working. Chosen over a compatibility-shim approach to avoid long-term naming drift. |
 
 ### Decisions deferred to implementation (non-blockers)
 
