@@ -1,9 +1,11 @@
 """Business logic for the Deal Hunter dashboard, decoupled from HTTP routing."""
 
+import os
+
 from storage.sqlite import SQLiteStorage
 
-DEALS_PER_PAGE = 50
-SCORE_THRESHOLD = 70
+DEALS_PER_PAGE = int(os.getenv("DEALS_PER_PAGE", "50"))
+SCORE_THRESHOLD = int(os.getenv("SCORE_THRESHOLD", "70"))
 
 
 class DealService:
