@@ -208,9 +208,11 @@ class TestBotHandlers:
         update.callback_query = query
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):  # prevent closing our test db
-                await handle_callback(update, context)
+        with (
+            patch("feedback_bot.get_storage", return_value=db),
+            patch.object(db, "close"),  # prevent closing our test db
+        ):
+            await handle_callback(update, context)
 
         query.answer.assert_called_once_with("\u2b50 Dodano do obserwowanych")
         assert db.get_deal("pepper:77777")["status"] == "watching"
@@ -227,9 +229,8 @@ class TestBotHandlers:
         update.callback_query = query
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):
-                await handle_callback(update, context)
+        with patch("feedback_bot.get_storage", return_value=db), patch.object(db, "close"):
+            await handle_callback(update, context)
 
         query.answer.assert_called_once_with("\U0001f44e Pominięto")
         assert db.get_deal("pepper:77777")["status"] == "rejected"
@@ -244,9 +245,8 @@ class TestBotHandlers:
         update.callback_query = query
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):
-                await handle_callback(update, context)
+        with patch("feedback_bot.get_storage", return_value=db), patch.object(db, "close"):
+            await handle_callback(update, context)
 
         query.answer.assert_called_once_with("Nie znaleziono oferty w bazie")
 
@@ -262,9 +262,8 @@ class TestBotHandlers:
         update.message = message
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):
-                await cmd_status(update, context)
+        with patch("feedback_bot.get_storage", return_value=db), patch.object(db, "close"):
+            await cmd_status(update, context)
 
         message.reply_text.assert_called_once()
         text = message.reply_text.call_args[0][0]
@@ -279,9 +278,8 @@ class TestBotHandlers:
         update.message = message
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):
-                await cmd_watchlist(update, context)
+        with patch("feedback_bot.get_storage", return_value=db), patch.object(db, "close"):
+            await cmd_watchlist(update, context)
 
         message.reply_text.assert_called_once_with("Brak obserwowanych ofert.")
 
@@ -297,9 +295,8 @@ class TestBotHandlers:
         update.message = message
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):
-                await cmd_watchlist(update, context)
+        with patch("feedback_bot.get_storage", return_value=db), patch.object(db, "close"):
+            await cmd_watchlist(update, context)
 
         message.reply_text.assert_called_once()
         text = message.reply_text.call_args[0][0]

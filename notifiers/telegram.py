@@ -4,6 +4,7 @@ import html
 import json
 import logging
 import time
+from pathlib import Path
 
 import requests
 
@@ -60,7 +61,9 @@ class TelegramNotifier:
         if deal.regular_price > 0 and deal.price > 0:
             regular_str = f"{deal.regular_price:,} {currency}".replace(",", " ")
             discount = round((deal.regular_price - deal.price) / deal.regular_price * 100)
-            msg += f"\U0001f4b0 Cena: <b>{html.escape(price_str)}</b> <s>{html.escape(regular_str)}</s> (-{discount}%)\n\n"
+            safe_price = html.escape(price_str)
+            safe_regular = html.escape(regular_str)
+            msg += f"\U0001f4b0 Cena: <b>{safe_price}</b> <s>{safe_regular}</s> (-{discount}%)\n\n"
         else:
             msg += f"\U0001f4b0 Cena: <b>{html.escape(price_str)}</b>\n\n"
 
@@ -94,7 +97,10 @@ class TelegramNotifier:
 
         safe_link = html.escape(deal.link)
         safe_source = html.escape(deal.source)
-        msg += f'\n\U0001f517 <a href="{safe_link}">LINK DO OKAZJI</a> | \u0179r\u00f3d\u0142o: {safe_source}'
+        msg += (
+            f'\n\U0001f517 <a href="{safe_link}">LINK DO OKAZJI</a>'
+            f" | \u0179r\u00f3d\u0142o: {safe_source}"
+        )
 
         keyboard = build_deal_keyboard(deal.link, deal.id)
         self._send_message(msg, topic_id=topic_id, reply_markup=keyboard)
@@ -153,7 +159,11 @@ class TelegramNotifier:
 
         msg = f"{emoji} \U0001f4c9 <b>SPADEK CENY!</b>\n"
         msg += f"<b>{safe_title}</b>\n"
-        msg += f"{html.escape(old_str)} \u2192 <b>{html.escape(new_str)}</b> (-{diff_pct:.0f}%, -{html.escape(diff_pln_str)} {html.escape(currency)})\n"
+        safe_old = html.escape(old_str)
+        safe_new = html.escape(new_str)
+        safe_diff = html.escape(diff_pln_str)
+        safe_cur = html.escape(currency)
+        msg += f"{safe_old} \u2192 <b>{safe_new}</b> (-{diff_pct:.0f}%, -{safe_diff} {safe_cur})\n"
 
         if price_change.get("is_lowest_ever"):
             msg += "\U0001f525 <b>Najni\u017csza cena w historii!</b>\n"
@@ -167,7 +177,10 @@ class TelegramNotifier:
                 alt_parts.append(f'<a href="{alt_link}">{alt_source}</a>')
             msg += f"\n\U0001f517 Też w: {' | '.join(alt_parts)}\n"
 
-        msg += f'\n\U0001f517 <a href="{safe_link}">Link do oferty</a> | \u0179r\u00f3d\u0142o: {safe_source}'
+        msg += (
+            f'\n\U0001f517 <a href="{safe_link}">Link do oferty</a>'
+            f" | \u0179r\u00f3d\u0142o: {safe_source}"
+        )
 
         keyboard = build_deal_keyboard(deal.link, deal.id)
         self._send_message(msg, topic_id=topic_id, reply_markup=keyboard)
@@ -215,7 +228,13 @@ class TelegramNotifier:
             new_str = f"{drop['new_price']:,}".replace(",", " ")
             diff_pct = drop["diff_percent"]
 
-            msg += f"\U0001f4c9 {safe_title}: {html.escape(old_str)} \u2192 {html.escape(new_str)} {html.escape(currency)} (-{diff_pct:.0f}%)"
+            safe_old = html.escape(old_str)
+            safe_new = html.escape(new_str)
+            safe_cur = html.escape(currency)
+            msg += (
+                f"\U0001f4c9 {safe_title}: {safe_old}"
+                f" \u2192 {safe_new} {safe_cur} (-{diff_pct:.0f}%)"
+            )
             if drop.get("is_lowest_ever"):
                 msg += " \U0001f525"
             msg += "\n"
@@ -244,18 +263,19 @@ class TelegramNotifier:
         for attempt in range(1, 4):
             try:
                 time.sleep(1.5)  # Rate limiting
-                with open(photo_path, "rb") as f:
+                with Path(photo_path).open("rb") as f:
                     resp = requests.post(url, data=data, files={"photo": f}, timeout=30)
                 if resp.status_code == 200:
                     logger.info(f"Telegram: sent photo {photo_path}")
                     return
-                elif resp.status_code == 429:
+                if resp.status_code == 429:
                     try:
                         retry_after = resp.json().get("parameters", {}).get("retry_after", 30)
                     except (ValueError, KeyError):
                         retry_after = 30
                     logger.warning(
-                        f"Telegram: rate limited on photo, waiting {retry_after}s (attempt {attempt}/3)"
+                        f"Telegram: rate limited on photo, waiting {retry_after}s"
+                        f" (attempt {attempt}/3)"
                     )
                     if attempt < 3:
                         time.sleep(retry_after)
@@ -301,7 +321,7 @@ class TelegramNotifier:
                 if resp.status_code == 200:
                     logger.info(f"Telegram: sent message ({len(text)} chars)")
                     return
-                elif resp.status_code == 429:
+                if resp.status_code == 429:
                     try:
                         retry_after = resp.json().get("parameters", {}).get("retry_after", 30)
                     except (ValueError, KeyError):

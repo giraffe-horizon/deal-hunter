@@ -37,7 +37,7 @@ def migrate_state_file(db: SQLiteStorage, state_path: Path) -> dict:
     stats = {"profile": profile_name, "seen": 0, "prices": 0}
 
     try:
-        with open(state_path) as f:
+        with state_path.open() as f:
             state = json.load(f)
     except (json.JSONDecodeError, ValueError) as e:
         logger.warning(f"Skipping corrupted state file {state_path.name}: {e}")

@@ -1,5 +1,6 @@
 """Tests for the Deal Hunter web dashboard."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 from dashboard import _get_profiles, format_pln, safe_load_profile
@@ -976,13 +977,9 @@ class TestProfilePages:
         assert response.status_code == 200
         data = response.json()
         # Clean up: delete the created file if it exists
-        import os
-
-        profile_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "profiles", "test_create_profile.yaml"
-        )
-        if os.path.exists(profile_path):
-            os.unlink(profile_path)
+        profile_path = Path(__file__).parent.parent / "profiles" / "test_create_profile.yaml"
+        if profile_path.exists():
+            profile_path.unlink()
         assert data.get("ok") is True
 
     def test_api_delete_profile(self, client):

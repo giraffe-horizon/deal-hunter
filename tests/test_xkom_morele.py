@@ -33,9 +33,11 @@ class TestXkomStore:
 
         html = (FIXTURES_DIR / "xkom_search.html").read_text(encoding="utf-8")
 
-        with patch.object(source, "_fetch_page", return_value=html):
-            with patch.object(source, "_rate_limit"):
-                deals = source.fetch_deals({"queries": ["monitor"]})
+        with (
+            patch.object(source, "_fetch_page", return_value=html),
+            patch.object(source, "_rate_limit"),
+        ):
+            deals = source.fetch_deals({"queries": ["monitor"]})
 
         assert len(deals) >= 1, "Expected at least one deal parsed from fixture"
         for deal in deals:
@@ -176,7 +178,8 @@ class TestMoreleStore:
         from sources import SOURCE_REGISTRY
 
         assert "morele" in SOURCE_REGISTRY, (
-            "morele store not registered — ensure stores/morele.yaml exists and has a valid 'name' key"
+            "morele store not registered — ensure stores/morele.yaml"
+            " exists and has a valid 'name' key"
         )
 
     def test_morele_store_parses_fixture(self):
@@ -189,9 +192,11 @@ class TestMoreleStore:
 
         html = (FIXTURES_DIR / "morele_search.html").read_text(encoding="utf-8")
 
-        with patch.object(source, "_fetch_page", return_value=html):
-            with patch.object(source, "_rate_limit"):
-                deals = source.fetch_deals({"queries": ["monitor"]})
+        with (
+            patch.object(source, "_fetch_page", return_value=html),
+            patch.object(source, "_rate_limit"),
+        ):
+            deals = source.fetch_deals({"queries": ["monitor"]})
 
         assert len(deals) >= 1, "Expected at least one deal parsed from fixture"
         for deal in deals:

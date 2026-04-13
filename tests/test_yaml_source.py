@@ -846,12 +846,14 @@ class TestYAMLShadowWarning:
         # Re-import to test the warning in __init__.py
         import sources
 
-        with patch.dict(sources.SOURCE_REGISTRY, {"pepper": sources.PepperSource}):
-            with patch("sources.logger") as mock_logger:
-                for name, store_def in store_defs.items():
-                    if name in sources.SOURCE_REGISTRY:
-                        mock_logger.warning(f"YAML store '{name}' overrides Python source")
-                    sources.SOURCE_REGISTRY[name] = make_yaml_source_class(store_def)
-                mock_logger.warning.assert_called_once_with(
-                    "YAML store 'pepper' overrides Python source"
-                )
+        with (
+            patch.dict(sources.SOURCE_REGISTRY, {"pepper": sources.PepperSource}),
+            patch("sources.logger") as mock_logger,
+        ):
+            for name, store_def in store_defs.items():
+                if name in sources.SOURCE_REGISTRY:
+                    mock_logger.warning(f"YAML store '{name}' overrides Python source")
+                sources.SOURCE_REGISTRY[name] = make_yaml_source_class(store_def)
+            mock_logger.warning.assert_called_once_with(
+                "YAML store 'pepper' overrides Python source"
+            )

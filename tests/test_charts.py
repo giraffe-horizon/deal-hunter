@@ -96,7 +96,7 @@ def sample_drops():
 
 def _is_png(path: Path) -> bool:
     """Check if a file starts with a PNG signature."""
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         header = f.read(8)
     return header == b"\x89PNG\r\n\x1a\n"
 
@@ -208,7 +208,6 @@ class TestGenerateTrendChart:
 
 class TestLazyImport:
     def test_import_error_message(self):
-
         # Temporarily hide matplotlib
         real_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
 

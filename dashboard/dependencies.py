@@ -41,7 +41,7 @@ def safe_load_profile(name: str) -> dict | None:
     if not path.exists():
         return None
     try:
-        with open(path, encoding="utf-8") as f:
+        with path.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
         return dict(data) if data else None
     except (yaml.YAMLError, OSError):

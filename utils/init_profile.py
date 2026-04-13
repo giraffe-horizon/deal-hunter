@@ -309,7 +309,7 @@ def run_init() -> None:
         # Write
         PROFILES_DIR.mkdir(exist_ok=True)
         profile_path = PROFILES_DIR / f"{name}.yaml"
-        with open(profile_path, "w", encoding="utf-8") as f:
+        with profile_path.open("w", encoding="utf-8") as f:
             f.write(yaml_content)
 
         print(f"\n\u2705 Profile saved to: {profile_path}")
