@@ -255,3 +255,59 @@ class TestAlertService:
         svc = AlertService(telegram=telegram, alert_repo=repo)
         result = svc.flush_queued("test", {}, None, 10)
         assert result == 0
+
+
+class TestHealthTracker:
+    @pytest.fixture
+    def health_file(self, tmp_path):
+        return tmp_path / "health.json"
+
+    @pytest.fixture
+    def tracker(self, health_file):
+        from services.health_tracker import HealthTracker
+
+        return HealthTracker(health_file)
+
+    def test_load_missing(self, tracker):
+        assert tracker.load() is None
+
+    def test_save_and_load(self, tracker, health_file):
+        data = {"status": "ok", "last_run": "2024-01-01T12:00:00"}
+        tracker.save(data)
+        assert health_file.exists()
+        loaded = tracker.load()
+        assert loaded["status"] == "ok"
+
+    def test_compute_status_all_ok(self, tracker):
+        results = {"bikes": {"status": "ok"}, "nas": {"status": "ok"}}
+        assert tracker._compute_status(results) == "ok"
+
+    def test_compute_status_mixed(self, tracker):
+        results = {"bikes": {"status": "ok"}, "nas": {"status": "error"}}
+        assert tracker._compute_status(results) == "partial"
+
+    def test_compute_status_all_error(self, tracker):
+        results = {"bikes": {"status": "error"}}
+        assert tracker._compute_status(results) == "error"
+
+    def test_compute_status_empty(self, tracker):
+        assert tracker._compute_status({}) == "error"
+
+    def test_format_timedelta_seconds(self, tracker):
+        from datetime import timedelta
+
+        assert tracker._format_timedelta(timedelta(seconds=30)) == "30s"
+
+    def test_format_timedelta_hours(self, tracker):
+        from datetime import timedelta
+
+        assert tracker._format_timedelta(timedelta(hours=2, minutes=15)) == "2h 15m"
+
+    def test_get_failing_sources(self, tracker):
+        sources = {
+            "pepper": {"consecutive_failures": 5},
+            "ceneo": {"consecutive_failures": 1},
+        }
+        failing = tracker.get_failing_sources(sources)
+        assert "pepper" in failing
+        assert "ceneo" not in failing
