@@ -1,13 +1,8 @@
-"""Business logic for the Deal Hunter dashboard, decoupled from HTTP routing."""
-
-import os
+"""Deal-related business logic for the Deal Hunter dashboard."""
 
 from sqlalchemy.orm import Session
 
 from storage.repositories import DealRepository, PriceRepository
-
-DEALS_PER_PAGE = int(os.getenv("DEALS_PER_PAGE", "50"))
-SCORE_THRESHOLD = int(os.getenv("SCORE_THRESHOLD", "70"))
 
 
 class DealService:
