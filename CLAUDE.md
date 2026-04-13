@@ -13,14 +13,23 @@
 - **python-dotenv** — environment variables from `.env`
 - **python-telegram-bot** v21+ — async Telegram bot for feedback (polling)
 - **matplotlib** >= 3.8 — optional, price history charts (lazy-imported)
+- **pydantic** v2 — API request validation (dashboard schemas)
 - **fastapi** + **uvicorn** + **jinja2** — web dashboard (read-only UI for deals, health, price trends)
 - **HTMX** + **Chart.js** + **Tailwind CSS** — frontend via CDN (no build step)
 
 ## Architecture
 
 ```
-deal_hunter.py          Orchestrator: loads profile -> sources -> scoring -> notifications
+deal_hunter.py          CLI entrypoint: arg parsing, service wiring, orchestration (~690 lines)
 feedback_bot.py         Standalone Telegram feedback bot (polling, inline keyboards)
+services/types.py       Shared typed dataclasses (PriceTrackingConfig, PriceChange, ScoredDeal, FetchResult)
+services/profile_manager.py  Profile loading, listing, validation, path safety
+services/fetcher.py     Deal fetching from sources + cross-source deduplication
+services/scorer.py      Scoring orchestration + category detection
+services/price_tracker.py  Price change detection (drops/increases with thresholds)
+services/alerter.py     Notification dispatch, quiet hours, alert queuing
+services/health_tracker.py  Health state tracking, --health, --watchdog, source failure alerts
+cli/verify.py           --verify mode verbose output (plain + rich formatting)
 sources/base.py         Base Source class + Deal dataclass (common format)
 sources/yaml_source.py  Universal YAML-driven source engine (CSS, JSON-LD, GTM strategies)
 sources/pepper.py       Pepper.pl scraper (Vue3 JSON + HTML fallback — too complex for YAML)
@@ -30,15 +39,17 @@ stores/*.yaml           Declarative store definitions (auto-discovered, no Pytho
 stores/README.md        Guide: "How to add a new store in 5 minutes"
 filters/base.py         Base scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
-dashboard.py            Web dashboard: FastAPI app, routes, API endpoints (deals, profiles CRUD, watchlist, scoring tuner, comparator)
-dashboard/templates/    Jinja2 templates (base, deals, deal_detail, health, price_trends, profiles, watchlist, tuner, compare)
+dashboard/__init__.py   Web dashboard: FastAPI app, routes, API endpoints (deals, profiles CRUD, watchlist, scoring tuner, comparator)
+dashboard/schemas.py    Pydantic models for API validation (StatusUpdate, WatchlistAdd, ProfileCreate)
+dashboard/services/     Dashboard service layer (DealService, ProfileService, TunerService)
+dashboard/templates/    Jinja2 templates with macros (base, deals, health, profiles, watchlist, tuner, compare, partials)
+dashboard/static/js/    Frontend JS modules (charts, compare, price-chart, sparklines, profile-form, sidebar, tuner)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting + photo upload
 visualization/charts.py Price history charts (matplotlib, lazy-imported)
 storage/models.py       SQLAlchemy ORM models (Deal, PriceHistory, Feedback, AlertQueue, WatchlistItem, SeenDeal)
 storage/database.py     Engine, session management (WAL, foreign_keys), get_session() context manager
 storage/repositories.py Domain repositories (DealRepository, PriceRepository, WatchlistRepository, etc.)
 storage/migrations/     Alembic migrations (001_baseline, 002_seen_deals)
-health.py               Health monitoring (state tracking, --health, --watchdog)
 utils/validation.py     YAML profile validation (types, required fields, sanity checks)
 profiles/*.yaml         Product profiles (gitignored, see docs/creating-profiles.md)
 docs/creating-profiles.md  Profile creation guide
@@ -284,7 +295,7 @@ Auto-detects RSS 2.0 vs Atom format. Price extracted via currency-aware regex (z
 
 ## Health Monitoring
 
-After every non-verify run, Deal Hunter writes `state/health.json` with:
+`services/health_tracker.py` → `HealthTracker` class. After every non-verify run, writes `state/health.json` with:
 - Overall status (`ok`/`partial`/`error`), duration, version
 - Per-profile results (deals found, new alerts, errors)
 - Per-source health (consecutive failures tracked across runs)
@@ -345,7 +356,9 @@ Test modules:
 - `test_extract_price.py` — price parser
 - `test_deal.py`, `test_dedup.py`, `test_validation.py` — core logic
 - `test_repositories.py` — SQLAlchemy repository layer (CRUD, upsert, price history, filtering, batch queries)
-- `test_health.py` — health monitoring (health.json, --health, --watchdog, source tracking)
+- `test_health.py` — health monitoring via HealthTracker (health.json, --health, --watchdog, source tracking)
+- `test_services.py` — service layer: types, ProfileManager, DealFetcher, ScoringService, PriceTracker, AlertService, HealthTracker
+- `test_cli_verify.py` — CLI verify output: format_breakdown_line for all entry types
 - `test_price_drops.py` — price drop detection, thresholds, digest, Telegram formatting, validation
 - `test_verbose_scoring.py` — verbose scoring breakdown, ScoreResult.breakdown, BikeFilter entries, output format, rich fallback
 - `test_feedback_bot.py` — feedback bot: SQLite additions, callback parsing, inline keyboard, bot command handlers

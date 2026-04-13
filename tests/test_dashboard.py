@@ -348,13 +348,13 @@ class TestDealDetailPage:
 
 class TestHealthPage:
     def test_health_no_data(self, client):
-        with patch("health.load_health", return_value=None):
+        with patch("dashboard.routes.health._tracker.load", return_value=None):
             response = client.get("/health")
             assert response.status_code == 200
             assert "No health data" in response.text
 
     def test_health_with_data(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             response = client.get("/health")
             assert response.status_code == 200
             text = response.text
@@ -364,55 +364,55 @@ class TestHealthPage:
             assert "bikes" in text  # profile name
 
     def test_health_shows_errors(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Connection timeout" in text
 
     def test_health_shows_source_status(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "ceneo" in text
             assert "degraded" in text.lower() or "2" in text  # consecutive failures
 
     def test_health_shows_duration(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "12.5" in text
 
     def test_health_shows_operational_heartbeat(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Operational Heartbeat" in text
             assert "Last Run" in text
             assert "Duration" in text
 
     def test_health_shows_version_card(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Version" in text
             assert "0.4.3" in text
 
     def test_health_shows_deals_found_count(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Total Deals" in text
             assert "15" in text  # bikes found 15
 
     def test_health_shows_alerts_count(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Total Alerts" in text
             assert "3" in text  # bikes had 3 alerts
 
     def test_health_shows_profile_results_table(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Profile Results" in text
             assert "nas_hdd" in text
             assert "error" in text.lower()  # nas_hdd status
 
     def test_health_shows_multiple_errors(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Connection timeout" in text
             assert "Parser failed" in text
@@ -426,12 +426,12 @@ class TestHealthPage:
             "profile_results": {},
             "sources_health": {},
         }
-        with patch("health.load_health", return_value=data):
+        with patch("dashboard.routes.health._tracker.load", return_value=data):
             text = client.get("/health").text
             assert "OK" in text
 
     def test_health_source_consecutive_failures(self, client, sample_health_data):
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Consecutive Failures" in text
 
@@ -791,7 +791,7 @@ class TestE2EWorkflows:
 
     def test_health_page_accessible_from_nav(self, client, sample_health_data):
         """Health page loads independently with its own data source."""
-        with patch("health.load_health", return_value=sample_health_data):
+        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
             response = client.get("/health")
             assert response.status_code == 200
             assert "System Health" in response.text

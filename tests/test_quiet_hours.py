@@ -101,43 +101,43 @@ class TestIsQuietHours:
     """Tests for is_quiet_hours() time checking logic."""
 
     def test_inside_quiet_hours_evening(self):
-        from deal_hunter import is_quiet_hours
+        from services.alerter import is_quiet_hours
 
         profile = {"quiet_hours": {"start": "22:00", "end": "07:00"}}
-        with patch("deal_hunter.datetime") as mock_dt:
+        with patch("services.alerter.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 4, 6, 23, 30)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             assert is_quiet_hours(profile) is True
 
     def test_inside_quiet_hours_early_morning(self):
-        from deal_hunter import is_quiet_hours
+        from services.alerter import is_quiet_hours
 
         profile = {"quiet_hours": {"start": "22:00", "end": "07:00"}}
-        with patch("deal_hunter.datetime") as mock_dt:
+        with patch("services.alerter.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 4, 6, 5, 0)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             assert is_quiet_hours(profile) is True
 
     def test_outside_quiet_hours_afternoon(self):
-        from deal_hunter import is_quiet_hours
+        from services.alerter import is_quiet_hours
 
         profile = {"quiet_hours": {"start": "22:00", "end": "07:00"}}
-        with patch("deal_hunter.datetime") as mock_dt:
+        with patch("services.alerter.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 4, 6, 14, 0)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             assert is_quiet_hours(profile) is False
 
     def test_no_quiet_hours_config(self):
-        from deal_hunter import is_quiet_hours
+        from services.alerter import is_quiet_hours
 
         profile = {}
         assert is_quiet_hours(profile) is False
 
     def test_quiet_hours_from_env(self):
-        from deal_hunter import is_quiet_hours
+        from services.alerter import is_quiet_hours
 
         profile = {}
-        with patch("deal_hunter.datetime") as mock_dt:
+        with patch("services.alerter.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 4, 6, 23, 30)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             with patch.dict(
@@ -146,10 +146,10 @@ class TestIsQuietHours:
                 assert is_quiet_hours(profile) is True
 
     def test_profile_overrides_env(self):
-        from deal_hunter import is_quiet_hours
+        from services.alerter import is_quiet_hours
 
         profile = {"quiet_hours": {"start": "23:00", "end": "06:00"}}
-        with patch("deal_hunter.datetime") as mock_dt:
+        with patch("services.alerter.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 4, 6, 22, 30)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             with patch.dict(
@@ -158,28 +158,28 @@ class TestIsQuietHours:
                 assert is_quiet_hours(profile) is False
 
     def test_same_day_quiet_hours(self):
-        from deal_hunter import is_quiet_hours
+        from services.alerter import is_quiet_hours
 
         profile = {"quiet_hours": {"start": "13:00", "end": "15:00"}}
-        with patch("deal_hunter.datetime") as mock_dt:
+        with patch("services.alerter.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 4, 6, 14, 0)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             assert is_quiet_hours(profile) is True
 
     def test_at_exact_start_time_is_quiet(self):
-        from deal_hunter import is_quiet_hours
+        from services.alerter import is_quiet_hours
 
         profile = {"quiet_hours": {"start": "22:00", "end": "07:00"}}
-        with patch("deal_hunter.datetime") as mock_dt:
+        with patch("services.alerter.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 4, 6, 22, 0)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             assert is_quiet_hours(profile) is True
 
     def test_at_exact_end_time_is_not_quiet(self):
-        from deal_hunter import is_quiet_hours
+        from services.alerter import is_quiet_hours
 
         profile = {"quiet_hours": {"start": "22:00", "end": "07:00"}}
-        with patch("deal_hunter.datetime") as mock_dt:
+        with patch("services.alerter.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 4, 6, 7, 0)
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             assert is_quiet_hours(profile) is False

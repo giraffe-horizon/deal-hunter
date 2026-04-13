@@ -1,13 +1,14 @@
 """Deal-related routes: listing, detail, compare, API endpoints."""
 
-import math
+from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from dashboard import templates
 from dashboard.dependencies import get_db, get_profiles
+from dashboard.schemas import StatusUpdate
 from dashboard.services import DEALS_PER_PAGE, SCORE_THRESHOLD, DealService
 from storage.repositories import DealRepository, PriceRepository
 
@@ -26,139 +27,73 @@ def deals_page(
     page: int = 1,
     days: int = 7,
     session: Session = Depends(get_db),
-):
+) -> HTMLResponse:
+    svc = DealService(session)
+
     # Price Drops view
     if view == "drops":
-        return _price_drops_view(request, days, session)
+        return _price_drops_view(request, svc, days)
 
-    # Normalize empty string params to None
-    profile = profile or None
-    source = source or None
-    category = category or None
-    status = status or None
-    page = max(1, page)
-
-    offset = (page - 1) * DEALS_PER_PAGE
-    deals = DealRepository(session).get_filtered(
+    is_htmx = bool(request.headers.get("HX-Request"))
+    data = svc.get_deals_page(
         profile=profile,
         source=source,
         min_score=min_score,
         category=category,
         status=status,
-        limit=DEALS_PER_PAGE,
-        offset=offset,
+        page=page,
+        per_page=DEALS_PER_PAGE,
+        score_threshold=SCORE_THRESHOLD,
+        include_stats=not is_htmx,
     )
-    total_filtered = DealRepository(session).count(
-        profile=profile,
-        source=source,
-        min_score=min_score,
-        category=category,
-        status=status,
-    )
-    total_pages = max(1, math.ceil(total_filtered / DEALS_PER_PAGE))
-
-    # Build filter query string for pagination links
-    filter_params = ""
-    if profile:
-        filter_params += f"&profile={profile}"
-    if source:
-        filter_params += f"&source={source}"
-    if min_score is not None:
-        filter_params += f"&min_score={min_score}"
-    if category:
-        filter_params += f"&category={category}"
-    if status:
-        filter_params += f"&status={status}"
-
-    sparklines = DealService(session).get_sparklines(deals)
 
     # HTMX partial refresh — return only the table fragment
-    if request.headers.get("HX-Request"):
+    if is_htmx:
         return templates.TemplateResponse(
             request,
             "partials/deals_table.html",
             {
-                "deals": deals,
-                "sparklines": sparklines,
-                "page": page,
-                "total_pages": total_pages,
-                "total_filtered": total_filtered,
-                "filter_params": filter_params,
+                "deals": data.deals,
+                "sparklines": data.sparklines,
+                "page": data.page,
+                "total_pages": data.total_pages,
+                "total_filtered": data.total_filtered,
+                "filter_params": data.filter_params,
             },
         )
-
-    # Compute metrics via SQL aggregates (no full table scan)
-    stats = DealRepository(session).get_stats(score_threshold=SCORE_THRESHOLD)
-    total_deals = stats["total"]
-    high_score_pct = round(stats["high_score"] / total_deals * 100) if total_deals else 0
-    new_today = stats["new_today"]
-    drops_count = PriceRepository(session).count_drops(days=7)
-
-    # Filter dropdown options via SQL
-    filter_opts = DealRepository(session).get_filter_options()
-    profiles = get_profiles()
 
     return templates.TemplateResponse(
         request,
         "deals.html",
         {
-            "deals": deals,
-            "sparklines": sparklines,
+            "deals": data.deals,
+            "sparklines": data.sparklines,
             "view": "",
-            "total_deals": total_deals,
-            "high_score_pct": high_score_pct,
+            "total_deals": data.total_deals,
+            "high_score_pct": data.high_score_pct,
             "score_threshold": SCORE_THRESHOLD,
-            "new_today": new_today,
-            "drops_count": drops_count,
-            "profiles": profiles,
-            "sources": filter_opts["sources"],
-            "categories": filter_opts["categories"],
-            "selected_profile": profile,
-            "selected_source": source,
+            "new_today": data.new_today,
+            "drops_count": data.drops_count,
+            "profiles": get_profiles(),
+            "sources": data.sources,
+            "categories": data.categories,
+            "selected_profile": profile or None,
+            "selected_source": source or None,
             "selected_min_score": min_score,
-            "selected_category": category,
-            "selected_status": status,
-            "page": page,
-            "total_pages": total_pages,
-            "total_filtered": total_filtered,
-            "filter_params": filter_params,
+            "selected_category": category or None,
+            "selected_status": status or None,
+            "page": data.page,
+            "total_pages": data.total_pages,
+            "total_filtered": data.total_filtered,
+            "filter_params": data.filter_params,
         },
     )
 
 
-def _price_drops_view(request: Request, days: int, session: Session):
+def _price_drops_view(request: Request, svc: DealService, days: int) -> HTMLResponse:
     """Build the price drops view (shared by /deals?view=drops and redirect)."""
-    drops = PriceRepository(session).get_drops(days=days)
-    all_deals = DealRepository(session).get_filtered()
-
-    total_drops = len(drops)
-    avg_drop_pct = (
-        round(sum(d["diff_percent"] for d in drops) / total_drops, 1) if total_drops else 0
-    )
-    biggest_drop = max((d["diff_pln"] for d in drops), default=0)
-
-    categories: dict[str, int] = {}
-    for deal in all_deals:
-        cat = deal.get("category") or "Uncategorized"
-        categories[cat] = categories.get(cat, 0) + 1
-    categories = dict(sorted(categories.items(), key=lambda x: x[1], reverse=True))
-
-    category_trends: dict[str, list[dict]] = {}
-    for cat_name in list(categories.keys())[:3]:
-        trend = DealRepository(session).get_category_price_trend(cat_name, days=30)
-        if trend:
-            category_trends[cat_name] = trend
-
-    context = {
-        "drops": drops,
-        "days": days,
-        "view": "drops",
-        "total_drops": total_drops,
-        "avg_drop_pct": avg_drop_pct,
-        "biggest_drop": biggest_drop,
-        "categories": categories,
-        "category_trends": category_trends,
-    }
+    data = svc.get_price_drops(days=days)
+    context = {**asdict(data), "view": "drops"}
 
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse(request, "partials/price_drops_view.html", context)
@@ -171,7 +106,7 @@ def deal_detail_page(
     request: Request,
     deal_id: str,
     session: Session = Depends(get_db),
-):
+) -> HTMLResponse:
     deal = DealRepository(session).get_by_id(deal_id)
     if not deal:
         return HTMLResponse(content="Deal not found", status_code=404)
@@ -195,7 +130,9 @@ def deal_detail_page(
 
 
 @router.get("/compare", response_class=HTMLResponse)
-def compare_deals(request: Request, ids: str = "", session: Session = Depends(get_db)):
+def compare_deals(
+    request: Request, ids: str = "", session: Session = Depends(get_db)
+) -> HTMLResponse:
     deal_ids = [i.strip() for i in ids.split(",") if i.strip()] if ids else []
     data = DealService(session).get_comparison_data(deal_ids)
     return templates.TemplateResponse(
@@ -206,7 +143,7 @@ def compare_deals(request: Request, ids: str = "", session: Session = Depends(ge
 
 
 @router.get("/api/price-history/{deal_id}")
-def api_price_history(deal_id: str, session: Session = Depends(get_db)):
+def api_price_history(deal_id: str, session: Session = Depends(get_db)) -> dict:
     history = PriceRepository(session).get_history(deal_id)
     if not history:
         return {"labels": [], "prices": [], "lowest": None, "highest": None}
@@ -229,10 +166,12 @@ def api_update_deal_status(
     status: str = Form(...),
     inline: str = Form(""),
     session: Session = Depends(get_db),
-):
-    if status not in ("watching", "rejected", "active"):
+) -> Response:
+    try:
+        validated = StatusUpdate(status=status)
+    except Exception:
         return JSONResponse({"error": "Invalid status"}, status_code=400)
-    ok = DealRepository(session).update_status(deal_id, status)
+    ok = DealRepository(session).update_status(deal_id, validated.status)
     if not ok:
         return JSONResponse({"error": "Deal not found"}, status_code=404)
     if inline:
@@ -266,7 +205,7 @@ def api_deals(
     category: str | None = None,
     status: str | None = None,
     session: Session = Depends(get_db),
-):
+) -> list:
     return DealRepository(session).get_filtered(
         profile=profile or None,
         source=source or None,
@@ -277,13 +216,5 @@ def api_deals(
 
 
 @router.get("/api/stats")
-def api_stats(session: Session = Depends(get_db)):
-    stats = DealRepository(session).get_stats(score_threshold=SCORE_THRESHOLD)
-    total = stats["total"]
-    drops = PriceRepository(session).get_drops(days=7)
-    return {
-        "total_deals": total,
-        "high_score_pct": round(stats["high_score"] / total * 100) if total else 0,
-        "new_today": stats["new_today"],
-        "drops_count": len(drops),
-    }
+def api_stats(session: Session = Depends(get_db)) -> dict:
+    return DealService(session).get_stats(score_threshold=SCORE_THRESHOLD)

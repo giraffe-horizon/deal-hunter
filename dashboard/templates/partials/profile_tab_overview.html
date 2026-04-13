@@ -1,3 +1,4 @@
+{% from "macros.html" import score_rules_list %}
 <div class="flex flex-wrap gap-2 mb-6">
     <a hx-get="/profiles/{{ profile.name }}?tab=edit"
        hx-target="#profile-content"
@@ -47,28 +48,8 @@
             <div class="flex justify-between"><dt class="text-sm text-on-surface-variant">Threshold</dt><dd class="text-sm font-medium text-on-surface">{{ profile.score_threshold }}</dd></div>
             <div class="flex justify-between"><dt class="text-sm text-on-surface-variant">Alert Threshold</dt><dd class="text-sm font-medium text-on-surface">{{ profile.score_threshold_alert | default("—") }}</dd></div>
         </dl>
-        {% if profile.score_rules %}
-        <h3 class="text-xs font-label text-on-surface-variant uppercase tracking-wider mt-4 mb-2">Score Rules</h3>
-        <div class="space-y-1">
-            {% for keyword, points in profile.score_rules.items() %}
-            <div class="flex justify-between text-sm">
-                <span class="text-on-surface">{{ keyword }}</span>
-                <span class="font-medium {% if points > 0 %}text-tertiary{% else %}text-error{% endif %}">{{ "+%d"|format(points) if points > 0 else points }}</span>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        {% if profile.penalties %}
-        <h3 class="text-xs font-label text-on-surface-variant uppercase tracking-wider mt-4 mb-2">Penalties</h3>
-        <div class="space-y-1">
-            {% for keyword, points in profile.penalties.items() %}
-            <div class="flex justify-between text-sm">
-                <span class="text-on-surface">{{ keyword }}</span>
-                <span class="font-medium text-error">{{ points }}</span>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
+        {{ score_rules_list(profile.score_rules, "Score Rules") }}
+        {{ score_rules_list(profile.penalties, "Penalties") }}
     </div>
 
     <div class="bg-surface-container-low rounded-card p-6">

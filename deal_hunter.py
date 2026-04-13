@@ -2,35 +2,21 @@
 """Deal Hunter — universal multi-source deal monitor.
 
 Profiles define products, sources, scoring rules, and notification targets.
+This module is the CLI entrypoint; business logic lives in services/.
 """
 
 import argparse
 import contextlib
-import html
 import importlib.metadata
-import json
 import logging
 import os
-import re
 import sys
 import time
-from datetime import datetime
-from difflib import SequenceMatcher
 from pathlib import Path
 
-import yaml
 from dotenv import load_dotenv
 
 from filters import FILTER_REGISTRY
-from health import (
-    build_health_data,
-    check_watchdog,
-    get_failing_sources,
-    load_health,
-    print_health_status,
-    save_health,
-    update_sources_health,
-)
 from storage.database import get_session
 from storage.repositories import (
     AlertQueueRepository,
@@ -43,52 +29,23 @@ from storage.repositories import (
 __version__ = "0.13.0"  # maintained by semantic-release
 with contextlib.suppress(importlib.metadata.PackageNotFoundError):
     __version__ = importlib.metadata.version("deal-hunter")
-from filters.base import BaseFilter
+
+from cli.verify import (
+    run_verify,
+)
 from notifiers.telegram import TelegramNotifier
+from services.alerter import AlertService
+from services.fetcher import DealFetcher
+from services.health_tracker import HealthTracker
+from services.price_tracker import PriceTracker
+from services.profile_manager import ProfileManager
+from services.scorer import ScoringService
 from sources import SOURCE_REGISTRY
-from sources.base import Deal
-from utils.validation import validate_profile
 
 # ──────────────── SETUP ────────────────
 
 BASE_DIR = Path(__file__).parent
 PROFILES_DIR = BASE_DIR / "profiles"
-
-
-def is_quiet_hours(profile: dict) -> bool:
-    """Check if current time is within quiet hours.
-
-    Priority: profile quiet_hours > env QUIET_HOURS_START/END > disabled.
-    """
-    qh = profile.get("quiet_hours")
-    if qh:
-        start_str = qh.get("start")
-        end_str = qh.get("end")
-    else:
-        start_str = os.environ.get("QUIET_HOURS_START")
-        end_str = os.environ.get("QUIET_HOURS_END")
-
-    if not start_str or not end_str:
-        return False
-
-    try:
-        start_h, start_m = map(int, start_str.split(":"))
-        end_h, end_m = map(int, end_str.split(":"))
-    except (ValueError, AttributeError):
-        logger.warning(f"Invalid quiet hours format: {start_str}-{end_str}")
-        return False
-
-    now = datetime.now()
-    current_minutes = now.hour * 60 + now.minute
-    start_minutes = start_h * 60 + start_m
-    end_minutes = end_h * 60 + end_m
-
-    if start_minutes <= end_minutes:
-        # Same day range (e.g., 13:00-15:00)
-        return start_minutes <= current_minutes < end_minutes
-    # Overnight range (e.g., 22:00-07:00)
-    return current_minutes >= start_minutes or current_minutes < end_minutes
-
 
 load_dotenv(BASE_DIR / ".env")
 
@@ -137,237 +94,25 @@ def _parse_topic_id() -> int | None:
         return None
 
 
-# ──────────────── PRICE TRACKING ────────────────
-
-
-def _normalize_title(title: str) -> str:
-    """Normalize title for dedup and price tracking: lowercase, strip, alphanumeric only."""
-    text = title.lower().strip()
-    text = re.sub(r"[^\w\s]", "", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
-
-
-def get_price_tracking_config(profile: dict) -> dict:
-    """Get price tracking config with defaults."""
-    pt = profile.get("price_tracking", {})
-    return {
-        "enabled": pt.get("enabled", True),
-        "min_drop_percent": pt.get("min_drop_percent", 10),
-        "min_drop_amount": pt.get("min_drop_amount", 200),
-        "track_increases": pt.get("track_increases", False),
-    }
-
-
-def check_price_changes(
-    deal: Deal,
-    price_repo: PriceRepository,
-    profile: dict | None = None,
-) -> dict | None:
-    """Check if price changed for a known deal using SQLite price history.
-
-    Returns a structured dict on significant change, None otherwise.
-    """
-    if deal.price <= 0:
-        return None
-
-    pt_config = (
-        get_price_tracking_config(profile)
-        if profile
-        else {
-            "enabled": True,
-            "min_drop_percent": 10,
-            "min_drop_amount": 200,
-            "track_increases": False,
-        }
-    )
-    if not pt_config["enabled"]:
-        return None
-
-    prev_price = price_repo.get_previous_price(deal.id)
-    if prev_price is None or deal.price == prev_price:
-        return None
-
-    if deal.price < prev_price:
-        drop_abs = prev_price - deal.price
-        drop_pct = (drop_abs / prev_price) * 100 if prev_price > 0 else 0
-
-        if drop_pct >= pt_config["min_drop_percent"] or drop_abs >= pt_config["min_drop_amount"]:
-            lowest = price_repo.get_lowest(deal.id)
-            is_lowest = lowest is not None and deal.price <= lowest
-
-            return {
-                "type": "drop",
-                "old_price": prev_price,
-                "new_price": deal.price,
-                "diff_pln": drop_abs,
-                "diff_percent": round(drop_pct, 1),
-                "is_lowest_ever": is_lowest,
-            }
-    elif pt_config["track_increases"]:
-        increase_abs = deal.price - prev_price
-        increase_pct = (increase_abs / prev_price) * 100 if prev_price > 0 else 0
-        return {
-            "type": "increase",
-            "old_price": prev_price,
-            "new_price": deal.price,
-            "diff_pln": increase_abs,
-            "diff_percent": round(increase_pct, 1),
-            "is_lowest_ever": False,
-        }
+def _create_telegram() -> TelegramNotifier | None:
+    """Create a TelegramNotifier if credentials are configured."""
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if tg_token and tg_chat:
+        return TelegramNotifier(tg_token, tg_chat)
     return None
 
 
-# ──────────────── PROFILE ────────────────
+# ──────────────── SERVICE FACTORIES ────────────────
+
+_profile_mgr = ProfileManager(PROFILES_DIR)
+_fetcher = DealFetcher(SOURCE_REGISTRY)
+_scoring = ScoringService(FILTER_REGISTRY)
 
 
-def load_profile(name: str) -> dict:
-    """Load a YAML profile by name from profiles/ directory."""
-    path = PROFILES_DIR / f"{name}.yaml"
-    if not path.exists():
-        logger.error(f"Profile not found: {name}")
-        sys.exit(1)
-    with path.open(encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    if data is None:
-        logger.error(f"Profile is empty: {name}")
-        sys.exit(1)
-    return dict(data)
-
-
-def list_profiles(include_disabled: bool = True) -> list[str]:
-    """List available profile names from profiles/ directory."""
-    names: list[str] = []
-    if not PROFILES_DIR.exists():
-        return names
-    for p in PROFILES_DIR.glob("*.yaml"):
-        if not include_disabled:
-            with p.open(encoding="utf-8") as f:
-                prof = yaml.safe_load(f)
-            if isinstance(prof, dict) and not prof.get("enabled", True):
-                continue
-        names.append(p.stem)
-    return names
-
-
-def get_filter(profile: dict) -> BaseFilter:
-    """Get the appropriate filter for a profile."""
-    custom_filter = profile.get("custom_filter")
-    if custom_filter and custom_filter in FILTER_REGISTRY:
-        return FILTER_REGISTRY[custom_filter](profile)
-    return BaseFilter(profile)
-
-
-def _detect_category(deal: Deal, profile: dict, profile_name: str = "") -> str:
-    """Detect product category from deal title+description using profile's categories mapping."""
-    categories = profile.get("categories", {})
-    if not categories:
-        return profile_name if profile_name else ""
-
-    text = (deal.title + " " + deal.description).lower()
-    for category, keywords in categories.items():
-        if any(kw.lower() in text for kw in keywords):
-            return str(category)
-    return profile_name if profile_name else ""
-
-
-# ──────────────── FETCH ────────────────
-
-
-def fetch_all_deals(profile: dict) -> tuple[list, dict[str, bool], list[str]]:
-    """Fetch deals from all configured sources.
-
-    Returns (deals, source_results, errors) where source_results maps
-    source_name -> True/False for health tracking.
-    """
-    sources_config = profile.get("sources", {})
-    all_deals = []
-    source_results: dict[str, bool] = {}
-    errors: list[str] = []
-
-    for source_name, source_config in sources_config.items():
-        source_class = SOURCE_REGISTRY.get(source_name)
-        if not source_class:
-            logger.warning(f"Unknown source: {source_name}")
-            continue
-
-        try:
-            source = source_class()
-            deals = source.fetch_deals(source_config)
-            all_deals.extend(deals)
-            source_results[source_name] = True
-            logger.info(f"Source {source_name}: {len(deals)} deals fetched")
-        except Exception as e:
-            logger.error(f"Source {source_name} failed: {e}", exc_info=True)
-            source_results[source_name] = False
-            errors.append(f"{source_name}: {e}")
-            # Graceful degradation — continue with other sources
-
-    return all_deals, source_results, errors
-
-
-def deduplicate(deals: list, dedup_config: dict | None = None) -> list:
-    """Deduplicate deals by ID, then merge cross-source duplicates by fuzzy title + price tolerance.
-
-    When duplicates are found, the first deal is kept as the winner and later
-    duplicates' source info is added to the winner's alt_links.
-
-    Args:
-        deals: List of Deal objects.
-        dedup_config: Optional config dict with keys:
-            enabled (bool): If False, only ID dedup. Default True.
-            price_tolerance (float): Max price diff ratio for merge. Default 0.05 (5%).
-            title_similarity (float): Min SequenceMatcher ratio. Default 0.85.
-    """
-    config = dedup_config or {}
-    enabled = config.get("enabled", True)
-    price_tolerance = config.get("price_tolerance", 0.05)
-    title_similarity = config.get("title_similarity", 0.85)
-
-    seen_ids: set[str] = set()
-    unique: list = []
-    # Each entry: (normalized_title, price, index_in_unique)
-    seen_keys: list[tuple[str, int, int]] = []
-
-    for d in deals:
-        if d.id in seen_ids:
-            continue
-        seen_ids.add(d.id)
-
-        norm_title = _normalize_title(d.title)[:60]
-
-        if not enabled:
-            unique.append(d)
-            continue
-
-        # Find matching existing deal to merge with
-        merged = False
-        for _i, (existing_title, existing_price, unique_idx) in enumerate(seen_keys):
-            # Exact title+price match (only when price > 0)
-            if d.price > 0 and (norm_title, d.price) == (existing_title, existing_price):
-                unique[unique_idx].alt_links.append(
-                    {"source": d.source, "link": d.link, "price": d.price}
-                )
-                merged = True
-                break
-
-            # Fuzzy match: similar title + price within tolerance
-            if d.price > 0 and existing_price > 0:
-                price_diff = abs(d.price - existing_price) / max(d.price, existing_price)
-                if price_diff <= price_tolerance:
-                    ratio = SequenceMatcher(None, existing_title, norm_title).ratio()
-                    if ratio >= title_similarity:
-                        unique[unique_idx].alt_links.append(
-                            {"source": d.source, "link": d.link, "price": d.price}
-                        )
-                        merged = True
-                        break
-
-        if not merged:
-            seen_keys.append((norm_title, d.price, len(unique)))
-            unique.append(d)
-
-    return unique
+def _health_tracker() -> HealthTracker:
+    state_dir = Path(os.environ.get("DEAL_HUNTER_STATE_DIR", str(BASE_DIR / "state")))
+    return HealthTracker(state_dir / "health.json")
 
 
 # ──────────────── RUN MODES ────────────────
@@ -384,10 +129,13 @@ def run_profile(
 
     Returns profile result dict for health tracking (None in verify/validate mode).
     """
-    profile = load_profile(profile_name)
+    profile = _profile_mgr.load(profile_name)
+    if profile is None:
+        logger.error(f"Profile not found or empty: {profile_name}")
+        sys.exit(1)
 
     # Validate profile
-    errors = validate_profile(profile)
+    errors = _profile_mgr.validate(profile)
     if errors:
         for err in errors:
             logger.error(f"Profile '{profile_name}' validation: {err}")
@@ -413,51 +161,28 @@ def run_profile(
     logger.info(f"{'=' * 60}")
     logger.info(f"Running profile: {profile_name} {emoji} (verify={verify})")
 
-    # Fetch
-    all_deals, source_results, fetch_errors = fetch_all_deals(profile)
+    # Fetch and deduplicate
+    all_deals, source_results, fetch_errors = _fetcher.fetch_all(profile)
     dedup_config = profile.get("dedup", {})
-    unique_deals = deduplicate(all_deals, dedup_config=dedup_config)
+    unique_deals = _fetcher.deduplicate(all_deals, dedup_config=dedup_config)
     logger.info(f"Total unique deals: {len(unique_deals)}")
 
     # Get filter
-    deal_filter = get_filter(profile)
+    deal_filter = _scoring.get_filter(profile)
 
     if verify:
-        _run_verify(unique_deals, deal_filter, profile, verbose=verbose, top=top)
+        run_verify(unique_deals, deal_filter, profile, verbose=verbose, top=top)
         return None
 
-    # Normal mode
-    num_alerts = _run_normal(unique_deals, deal_filter, profile, profile_name)
-
-    status = "ok" if not fetch_errors else ("partial" if unique_deals else "error")
-    return {
-        "status": status,
-        "deals_found": len(unique_deals),
-        "new_alerts": num_alerts,
-        "errors": fetch_errors,
-        "source_results": source_results,
-    }
-
-
-def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_name: str) -> int:
-    """Normal mode — find new deals, score, and notify. Returns number of alerts sent."""
-    emoji = profile.get("emoji", "\U0001f50d")
+    # ── Normal mode — score, check prices, persist, notify ──
     currency = profile.get("currency", "PLN")
     threshold = profile.get("score_threshold", 50)
     threshold_alert = profile.get("score_threshold_alert", 100)
-
-    # Setup notifiers
-    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-
-    if not tg_token or not tg_chat:
-        logger.warning("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — Telegram alerts disabled")
     tg_config = profile.get("telegram", {})
     tg_topic = tg_config.get("topic_id")
     max_alerts = tg_config.get("max_alerts", 5)
 
-    telegram = TelegramNotifier(tg_token, tg_chat) if tg_token and tg_chat else None
-
+    telegram = _create_telegram()
     alerts: list[dict] = []
     price_drop_alerts: list[dict] = []
 
@@ -467,43 +192,33 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         price_repo = PriceRepository(session)
         watchlist_repo = WatchlistRepository(session)
         alert_repo = AlertQueueRepository(session)
+
+        price_tracker = PriceTracker(price_repo)
+        alert_service = AlertService(telegram, alert_repo)
+
         seen_ids = seen_repo.get_seen_ids(profile_name)
 
         # Flush queued alerts from previous quiet hours
-        if telegram and not is_quiet_hours(profile):
-            pending = alert_repo.get_pending(profile=profile_name)
-            if pending:
-                flush_count = min(len(pending), max_alerts)
-                for alert_data in pending[:flush_count]:
-                    payload = json.loads(alert_data["payload"])
-                    if alert_data["alert_type"] == "deal":
-                        logger.info(f"Flushing queued deal alert: {payload.get('title', '?')[:40]}")
-                        telegram.send_text(
-                            f"\U0001f514 Zakolejkowany alert:\n"
-                            f"<b>{html.escape(payload.get('title', ''))}</b>\n"
-                            f"\U0001f4b0 {payload.get('price', 0):,} PLN\n"
-                            f"Score: {payload.get('score', 0)}\n"
-                            f'\U0001f517 <a href="{html.escape(payload.get("link", ""))}">Link</a>',
-                            topic_id=tg_topic,
-                        )
-                    elif alert_data["alert_type"] == "price_drop":
-                        logger.info(f"Flushing queued price drop: {payload.get('title', '?')[:40]}")
-                        telegram.send_text(
-                            f"\U0001f514 Zakolejkowany spadek ceny:\n"
-                            f"<b>{html.escape(payload.get('title', ''))}</b>\n"
-                            f"{payload.get('old_price', 0):,}"
-                            f" \u2192 {payload.get('new_price', 0):,} PLN",
-                            topic_id=tg_topic,
-                        )
-                alert_repo.mark_sent([p["id"] for p in pending[:flush_count]])
-                logger.info(f"Flushed {flush_count} queued alerts for {profile_name}")
+        alert_service.flush_queued(profile_name, profile, tg_topic, max_alerts)
 
-        for deal in deals:
+        for deal in unique_deals:
             if deal.id in seen_ids:
                 # Even for seen deals, check price changes
-                price_change = check_price_changes(deal, price_repo, profile)
-                if price_change and price_change["type"] == "drop":
-                    price_drop_alerts.append({"deal": deal, "price_change": price_change})
+                pc = price_tracker.check_price_change(deal, profile)
+                if pc and pc.type == "drop":
+                    price_drop_alerts.append(
+                        {
+                            "deal": deal,
+                            "price_change": {
+                                "type": pc.type,
+                                "old_price": pc.old_price,
+                                "new_price": pc.new_price,
+                                "diff_pln": pc.diff_pln,
+                                "diff_percent": pc.diff_percent,
+                                "is_lowest_ever": pc.is_lowest_ever,
+                            },
+                        }
+                    )
                 continue
 
             seen_repo.mark_seen(deal.id, profile_name, f"{deal.title[:60]}|{deal.price}")
@@ -515,11 +230,11 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                 continue
 
             # Price drop detection for new deals too
-            price_change = check_price_changes(deal, price_repo, profile)
+            pc = price_tracker.check_price_change(deal, profile)
 
             # Persist to database
             if result.score >= threshold:
-                category = _detect_category(deal, profile, profile_name)
+                category = _scoring.detect_category(deal, profile, profile_name)
                 deal_repo.upsert(
                     id=deal.id,
                     title=deal.title,
@@ -550,10 +265,9 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
 
             if result.score >= threshold:
                 alert_plus = list(result.plus)
-                if price_change and price_change["type"] == "drop":
+                if pc and pc.type == "drop":
                     alert_plus.append(
-                        f"price drop {price_change['diff_pln']} PLN "
-                        f"({price_change['old_price']} -> {price_change['new_price']})"
+                        f"price drop {pc.diff_pln} PLN ({pc.old_price} -> {pc.new_price})"
                     )
                 alerts.append(
                     {
@@ -564,95 +278,26 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                     }
                 )
 
-        # Send price drop alerts first (higher priority), limited by max_alerts
-        if price_drop_alerts:
-            price_drop_alerts.sort(key=lambda x: x["price_change"]["diff_percent"], reverse=True)
-        if telegram and price_drop_alerts:
-            if is_quiet_hours(profile):
-                for pda in price_drop_alerts[:max_alerts]:
-                    payload = json.dumps(
-                        {
-                            "deal_id": pda["deal"].id,
-                            "title": pda["deal"].title,
-                            "link": pda["deal"].link,
-                            "old_price": pda["price_change"]["old_price"],
-                            "new_price": pda["price_change"]["new_price"],
-                            "diff_pln": pda["price_change"]["diff_pln"],
-                            "diff_percent": pda["price_change"]["diff_percent"],
-                        }
-                    )
-                    alert_repo.queue(profile_name, "price_drop", payload)
-                queued = min(len(price_drop_alerts), max_alerts)
-                logger.info(f"Queued {queued} price drop alerts (quiet hours)")
-            else:
-                for pda in price_drop_alerts[:max_alerts]:
-                    telegram.send_price_drop_alert(
-                        pda["deal"],
-                        pda["price_change"],
-                        topic_id=tg_topic,
-                        emoji=emoji,
-                        currency=currency,
-                    )
-                sent = min(len(price_drop_alerts), max_alerts)
-                logger.info(f"Sent {sent} price drop alerts for {profile_name}")
+        # Send price drop alerts (higher priority)
+        alert_service.send_price_drop_alerts(
+            price_drop_alerts, profile, profile_name, tg_topic, max_alerts
+        )
 
-        # Telegram — top alerts individually, rest in summary (queue if quiet hours)
-        if alerts:
-            alerts.sort(key=lambda x: x["score"], reverse=True)
+        # Send deal alerts
+        alert_service.send_deal_alerts(alerts, profile, profile_name, tg_topic, max_alerts)
 
-        if telegram and alerts:
-            if is_quiet_hours(profile):
-                for a in alerts[:max_alerts]:
-                    payload = json.dumps(
-                        {
-                            "deal_id": a["deal"].id,
-                            "title": a["deal"].title,
-                            "price": a["deal"].price,
-                            "link": a["deal"].link,
-                            "score": a["score"],
-                            "plus": a["plus"][:6],
-                            "minus": a["minus"][:4],
-                        }
-                    )
-                    alert_repo.queue(profile_name, "deal", payload)
-                logger.info(f"Queued {min(len(alerts), max_alerts)} deal alerts (quiet hours)")
-            else:
-                top_alerts = alerts[:max_alerts]
-                remaining = alerts[max_alerts:]
-
-                for a in top_alerts:
-                    tier = (
-                        "\U0001f525\U0001f525\U0001f525 GOR\u0104CA PERE\u0141KA"
-                        if a["score"] >= threshold_alert
-                        else "\U0001f525 ZNALAZ\u0141EM OKAZJ\u0118"
-                    )
-                    telegram.send_alert(
-                        a["deal"],
-                        a["score"],
-                        tier,
-                        a["plus"],
-                        a["minus"],
-                        topic_id=tg_topic,
-                        emoji=emoji,
-                        currency=currency,
-                    )
-
-                if remaining:
-                    telegram.send_summary(
-                        remaining, topic_id=tg_topic, emoji=emoji, currency=currency
-                    )
-
-    # Console output for price drops (outside session — no DB needed)
+    # Console output for price drops
     for pda in price_drop_alerts:
         d = pda["deal"]
-        pc = pda["price_change"]
-        old_str = f"{pc['old_price']:,} {currency}".replace(",", " ")
-        new_str = f"{pc['new_price']:,} {currency}".replace(",", " ")
+        pc_dict = pda["price_change"]
+        old_str = f"{pc_dict['old_price']:,} {currency}".replace(",", " ")
+        new_str = f"{pc_dict['new_price']:,} {currency}".replace(",", " ")
         print(f"{emoji} \U0001f4c9 PRICE DROP: {d.title[:60]}")
         print(
-            f"  {old_str} -> {new_str} (-{pc['diff_percent']:.0f}%, -{pc['diff_pln']} {currency})"
+            f"  {old_str} -> {new_str}"
+            f" (-{pc_dict['diff_percent']:.0f}%, -{pc_dict['diff_pln']} {currency})"
         )
-        if pc.get("is_lowest_ever"):
+        if pc_dict.get("is_lowest_ever"):
             print("  \U0001f525 Najniższa cena w historii!")
         print(f"  {d.link}")
         print()
@@ -660,272 +305,99 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
     if not alerts and not price_drop_alerts:
         print(f"{emoji} No new deals for profile {profile_name}.")
         logger.info(f"No new alerts for {profile_name}")
-        return 0
-
-    if not alerts:
-        return len(price_drop_alerts)
-
-    # Console output
-    for a in alerts:
-        d = a["deal"]
-        tier = (
-            "\U0001f525\U0001f525\U0001f525 TOP DEAL"
-            if a["score"] >= threshold_alert
-            else "\U0001f525 DEAL"
-        )
-        price_str = f"{d.price:,} {currency}".replace(",", " ") if d.price > 0 else "no price"
-        print(f"{emoji} {tier} (score: {a['score']})")
-        print(f"  {d.title}")
-        print(f"  Price: {price_str} | Source: {d.source}")
-        if a["plus"]:
-            print(f"  \u2705 {', '.join(a['plus'][:6])}")
-        if a["minus"]:
-            print(f"  \u26a0\ufe0f  {', '.join(a['minus'][:4])}")
-        print(f"  LINK: {d.link}")
-        print()
-
-    total_alerts = len(alerts) + len(price_drop_alerts)
-    n_deals = len(alerts)
-    n_drops = len(price_drop_alerts)
-    logger.info(f"Profile {profile_name}: {n_deals} new deal alerts, {n_drops} price drop alerts")
-    return total_alerts
-
-
-def _format_breakdown_line(entry: dict) -> str:
-    """Format a single breakdown entry as a text line."""
-    points = entry["points"]
-    rule = entry["rule"]
-    source = entry.get("source", "")
-    match = entry.get("match", "")
-    entry_type = entry.get("type", "")
-
-    sign = f"+{points}" if points > 0 else str(points)
-
-    if entry_type == "budget":
-        label = f"Budget: {match}"
-        return f"\u2502  {sign:>4}  {label}"
-    if entry_type == "temperature":
-        return f"\u2502  {sign:>4}  Temperature: {match}"
-    if entry_type == "excluded":
-        return f"\u2502  {sign:>4}  EXCLUDED: {rule} ({source} match)"
-    if entry_type == "required_any":
-        return f"\u2502  {sign:>4}  REJECTED: none of required_any matched"
-    if entry_type in ("size", "color", "tire", "race"):
-        return f"\u2502  {sign:>4}  {rule}: {match}"
-    if entry_type == "regex":
-        return f"\u2502  {sign:>4}  {rule} ({source} regex: {match})"
-    # keyword / penalty
-    source_hint = f" ({source} match)" if source else ""
-    return f"\u2502  {sign:>4}  {rule}{source_hint}"
-
-
-def _print_verbose_plain(
-    scored: list[tuple],
-    rejected_deals: list[tuple],
-    threshold: int,
-    threshold_alert: int,
-    currency: str,
-    top: int | None,
-) -> None:
-    """Print verbose scoring breakdown using box-drawing characters."""
-    all_entries = list(scored)
-    if top is not None:
-        all_entries = all_entries[:top]
-
-    for deal, result in all_entries:
-        status = "\u2705" if result.score >= threshold else "\u274c"
-        print(f"\u250c\u2500 {deal.title[:70]} \u2014 SCORE: {result.score} {status}")
-
-        for entry in result.breakdown:
-            print(_format_breakdown_line(entry))
-
-        tier = (
-            "ALERT"
-            if result.score >= threshold_alert
-            else ("PASS" if result.score >= threshold else "BELOW")
-        )
-        print(f"\u2514\u2500 Final: {result.score} (threshold: {threshold}) \u2192 {tier} {status}")
-        print()
-
-    # Show rejected deals
-    if rejected_deals:
-        print(f"  --- REJECTED ({len(rejected_deals)}) ---\n")
-        for deal, result in rejected_deals:
-            print(f"\u250c\u2500 {deal.title[:70]} \u2014 REJECTED")
-            if result.breakdown:
-                for entry in result.breakdown:
-                    print(_format_breakdown_line(entry))
-            print(f"\u2514\u2500 Reason: {result.reject_reason}")
+        num_alerts = 0
+    elif not alerts:
+        num_alerts = len(price_drop_alerts)
+    else:
+        # Console output for deal alerts
+        for a in alerts:
+            d = a["deal"]
+            tier = (
+                "\U0001f525\U0001f525\U0001f525 TOP DEAL"
+                if a["score"] >= threshold_alert
+                else "\U0001f525 DEAL"
+            )
+            price_str = f"{d.price:,} {currency}".replace(",", " ") if d.price > 0 else "no price"
+            print(f"{emoji} {tier} (score: {a['score']})")
+            print(f"  {d.title}")
+            print(f"  Price: {price_str} | Source: {d.source}")
+            if a["plus"]:
+                print(f"  \u2705 {', '.join(a['plus'][:6])}")
+            if a["minus"]:
+                print(f"  \u26a0\ufe0f  {', '.join(a['minus'][:4])}")
+            print(f"  LINK: {d.link}")
             print()
 
-    if top is not None and len(scored) > top:
-        print(f"  ... and {len(scored) - top} more scored deals\n")
-
-
-def _print_verbose_rich(
-    scored: list[tuple],
-    rejected_deals: list[tuple],
-    threshold: int,
-    threshold_alert: int,
-    currency: str,
-    top: int | None,
-) -> None:
-    """Print verbose scoring breakdown using the rich library."""
-    from rich.console import Console
-    from rich.panel import Panel
-
-    console = Console()
-    all_entries = list(scored)
-    if top is not None:
-        all_entries = all_entries[:top]
-
-    for deal, result in all_entries:
-        status = "\u2705" if result.score >= threshold else "\u274c"
-        tier = (
-            "ALERT"
-            if result.score >= threshold_alert
-            else ("PASS" if result.score >= threshold else "BELOW")
+        num_alerts = len(alerts) + len(price_drop_alerts)
+        n_deals = len(alerts)
+        n_drops = len(price_drop_alerts)
+        logger.info(
+            f"Profile {profile_name}: {n_deals} new deal alerts, {n_drops} price drop alerts"
         )
 
-        lines = []
-        for entry in result.breakdown:
-            points = entry["points"]
-            sign = f"+{points}" if points > 0 else str(points)
-            rule = entry["rule"]
-            source = entry.get("source", "")
-            match = entry.get("match", "")
-            entry_type = entry.get("type", "")
-
-            color = "green" if points > 0 else ("red" if points < 0 else "yellow")
-
-            if entry_type == "budget":
-                desc = f"Budget: {match}"
-            elif entry_type == "temperature":
-                desc = f"Temperature: {match}"
-            elif entry_type == "excluded":
-                desc = f"EXCLUDED: {rule} ({source} match)"
-            elif entry_type == "required_any":
-                desc = "REJECTED: none of required_any matched"
-            elif entry_type in ("size", "color", "tire", "race"):
-                desc = f"{rule}: {match}"
-            elif entry_type == "regex":
-                desc = f"{rule} ({source} regex: {match})"
-            else:
-                source_hint = f" ({source} match)" if source else ""
-                desc = f"{rule}{source_hint}"
-
-            lines.append(f"[{color}]{sign:>4}[/{color}]  {desc}")
-
-        body = "\n".join(lines) if lines else "(no rules fired)"
-        body += f"\n\nFinal: {result.score} (threshold: {threshold}) \u2192 {tier} {status}"
-
-        border = "green" if result.score >= threshold else "red"
-        title = f"{deal.title[:70]} \u2014 SCORE: {result.score} {status}"
-        console.print(Panel(body, title=title, border_style=border, expand=False))
-
-    if rejected_deals:
-        lines = []
-        for deal, result in rejected_deals:
-            lines.append(f"[red]\u274c[/red] {deal.title[:60]} \u2014 {result.reject_reason}")
-        console.print(
-            Panel(
-                "\n".join(lines),
-                title=f"REJECTED ({len(rejected_deals)})",
-                border_style="dim",
-                expand=False,
-            )
-        )
-
-    if top is not None and len(scored) > top:
-        console.print(f"\n  ... and {len(scored) - top} more scored deals\n")
+    status = "ok" if not fetch_errors else ("partial" if unique_deals else "error")
+    return {
+        "status": status,
+        "deals_found": len(unique_deals),
+        "new_alerts": num_alerts,
+        "errors": fetch_errors,
+        "source_results": source_results,
+    }
 
 
-def _print_verbose(
-    scored: list[tuple],
-    rejected_deals: list[tuple],
-    threshold: int,
-    threshold_alert: int,
-    currency: str,
-    top: int | None,
-) -> None:
-    """Print verbose scoring breakdown. Uses rich if available, falls back to plain text."""
-    try:
-        import rich  # noqa: F401
-
-        _print_verbose_rich(scored, rejected_deals, threshold, threshold_alert, currency, top)
-    except ImportError:
-        _print_verbose_plain(scored, rejected_deals, threshold, threshold_alert, currency, top)
-
-
-def _run_verify(
-    deals: list,
-    deal_filter: BaseFilter,
-    profile: dict,
+def _run_with_health_tracking(
+    profile_names: list[str],
+    verify: bool = False,
     verbose: bool = False,
     top: int | None = None,
 ) -> None:
-    """Verify mode — analyze all deals without state tracking."""
-    emoji = profile.get("emoji", "\U0001f50d")
-    currency = profile.get("currency", "PLN")
-    threshold = profile.get("score_threshold", 50)
-    threshold_alert = profile.get("score_threshold_alert", 100)
-    profile_name = profile.get("name", "unknown")
+    """Run profiles and write health.json with results."""
+    start = time.monotonic()
+    ht = _health_tracker()
+    existing_health = ht.load()
 
-    print(f"\n{'=' * 60}")
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    print(f"  {emoji} DEAL ANALYSIS \u2014 {profile_name.upper()} \u2014 {now_str}")
-    print(f"  Found {len(deals)} deals")
-    print(f"{'=' * 60}\n")
+    profile_results: dict[str, dict] = {}
+    all_source_results: dict[str, bool] = {}
 
-    scored: list[tuple] = []
-    rejected_deals: list[tuple] = []
+    for profile_name in profile_names:
+        try:
+            result = run_profile(profile_name, verify=verify, verbose=verbose, top=top)
+            if result is not None:
+                source_results = result.get("source_results", {})
+                profile_results[profile_name] = {
+                    k: v for k, v in result.items() if k != "source_results"
+                }
+                all_source_results.update(source_results)
+        except Exception as e:
+            logger.error(f"Profile {profile_name} failed: {e}", exc_info=True)
+            profile_results[profile_name] = {
+                "status": "error",
+                "deals_found": 0,
+                "new_alerts": 0,
+                "errors": [str(e)],
+            }
 
-    for deal in deals:
-        result = deal_filter.score_deal(deal)
-        if result.rejected:
-            rejected_deals.append((deal, result))
-            continue
-        scored.append((deal, result))
+    # Skip health tracking for verify mode
+    if verify or not profile_results:
+        return
 
-    scored.sort(key=lambda x: x[1].score, reverse=True)
+    duration = time.monotonic() - start
+    sources_health = ht.update_sources(existing_health, all_source_results)
+    health_data = ht.build_data(profile_results, sources_health, duration, __version__)
+    ht.save(health_data)
 
-    if verbose:
-        _print_verbose(scored, rejected_deals, threshold, threshold_alert, currency, top)
-    else:
-        if rejected_deals:
-            print(f"  ({len(rejected_deals)} deals rejected)\n")
-
-        limit = top if top is not None else 20
-        for deal, result in scored[:limit]:
-            price_str = (
-                f"{deal.price:,} {currency}".replace(",", " ") if deal.price > 0 else "no price"
-            )
-            temp_str = f" | temp: {deal.temperature}\u00b0" if deal.temperature else ""
-
-            if result.score >= threshold_alert:
-                status = "\U0001f525\U0001f525\U0001f525 TOP DEAL"
-            elif result.score >= threshold:
-                status = "\U0001f525 POTENTIAL"
-            elif result.score >= 20:
-                status = "\U0001f914 MAYBE"
-            else:
-                status = "\u274c NO MATCH"
-
-            print(f"[{status}] Score: {result.score}")
-            print(f"  {deal.title}")
-            print(f"  Price: {price_str}{temp_str} | Source: {deal.source}")
-            if result.plus:
-                print(f"  \u2705 {', '.join(result.plus[:6])}")
-            if result.minus:
-                print(f"  \u26a0\ufe0f  {', '.join(result.minus[:4])}")
-            print(f"  {deal.link}")
-            print()
-
-        if top is not None and len(scored) > top:
-            print(f"  ... and {len(scored) - top} more deals\n")
+    # Alert on sources with consecutive failures >= threshold
+    failing_sources = ht.get_failing_sources(sources_health)
+    if failing_sources:
+        telegram = _create_telegram()
+        if telegram:
+            topic_id = _parse_topic_id()
+            alert_repo_stub = None  # Not needed for source failure alerts
+            alert_svc = AlertService(telegram, alert_repo_stub)
+            alert_svc.send_source_failure_alert(failing_sources, sources_health, topic_id)
 
 
-# ──────────────── CLI ────────────────
+# ──────────────── CLI COMMANDS ────────────────
 
 
 def run_digest() -> None:
@@ -972,7 +444,7 @@ def run_digest() -> None:
         chart_path = generate_digest_chart(drops)
         telegram.send_photo(
             str(chart_path),
-            caption="📊 Największe spadki cen (ostatni tydzień)",
+            caption="\U0001f4ca Najwi\u0119ksze spadki cen (ostatni tydzie\u0144)",
             topic_id=topic_id,
         )
         print("Digest chart sent to Telegram.")
@@ -1001,7 +473,9 @@ def run_price_chart(deal_id: str) -> None:
         topic_id = _parse_topic_id()
         telegram = TelegramNotifier(tg_token, tg_chat)
         telegram.send_photo(
-            str(chart_path), caption=f"📈 Historia cen: {deal_id}", topic_id=topic_id
+            str(chart_path),
+            caption=f"\U0001f4c8 Historia cen: {deal_id}",
+            topic_id=topic_id,
         )
         print("Chart sent to Telegram.")
     else:
@@ -1027,79 +501,16 @@ def run_trend_chart(profile_name: str) -> None:
         topic_id = _parse_topic_id()
         telegram = TelegramNotifier(tg_token, tg_chat)
         telegram.send_photo(
-            str(chart_path), caption=f"📊 Trend cenowy: {profile_name}", topic_id=topic_id
+            str(chart_path),
+            caption=f"\U0001f4ca Trend cenowy: {profile_name}",
+            topic_id=topic_id,
         )
         print("Chart sent to Telegram.")
     else:
         print("Telegram not configured — chart not sent.")
 
 
-def _run_with_health_tracking(
-    profile_names: list[str],
-    verify: bool = False,
-    verbose: bool = False,
-    top: int | None = None,
-) -> None:
-    """Run profiles and write health.json with results."""
-    start = time.monotonic()
-    existing_health = load_health()
-
-    profile_results: dict[str, dict] = {}
-    all_source_results: dict[str, bool] = {}
-
-    for profile_name in profile_names:
-        try:
-            result = run_profile(profile_name, verify=verify, verbose=verbose, top=top)
-            if result is not None:
-                source_results = result.get("source_results", {})
-                profile_results[profile_name] = {
-                    k: v for k, v in result.items() if k != "source_results"
-                }
-                # Merge source results (last write wins per source, which is fine)
-                all_source_results.update(source_results)
-        except Exception as e:
-            logger.error(f"Profile {profile_name} failed: {e}", exc_info=True)
-            profile_results[profile_name] = {
-                "status": "error",
-                "deals_found": 0,
-                "new_alerts": 0,
-                "errors": [str(e)],
-            }
-
-    # Skip health tracking for verify mode
-    if verify or not profile_results:
-        return
-
-    duration = time.monotonic() - start
-    sources_health = update_sources_health(existing_health, all_source_results)
-    health_data = build_health_data(profile_results, sources_health, duration, __version__)
-    save_health(health_data)
-
-    # Alert on sources with consecutive failures >= threshold
-    failing_sources = get_failing_sources(sources_health)
-    if failing_sources:
-        _send_source_failure_alert(failing_sources, sources_health)
-
-
-def _send_source_failure_alert(failing_sources: list[str], sources_health: dict) -> None:
-    """Send Telegram alert for sources with too many consecutive failures."""
-    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if not tg_token or not tg_chat:
-        return
-
-    topic_id = _parse_topic_id()
-
-    telegram = TelegramNotifier(tg_token, tg_chat)
-    lines = []
-    for name in failing_sources:
-        data = sources_health[name]
-        count = data.get("consecutive_failures", 0)
-        last = data.get("last_success", "never")
-        lines.append(f"  • {name}: {count} consecutive failures (last success: {last})")
-
-    msg = "⚠️ Deal Hunter: source failures detected!\n\n" + "\n".join(lines)
-    telegram.send_text(msg, topic_id=topic_id)
+# ──────────────── CLI ENTRYPOINT ────────────────
 
 
 def main() -> None:
@@ -1158,22 +569,23 @@ def main() -> None:
         return
 
     if args.health:
-        sys.exit(print_health_status())
+        ht = _health_tracker()
+        sys.exit(ht.print_status())
 
     if args.watchdog:
-        ok, message = check_watchdog()
+        ht = _health_tracker()
+        ok, message = ht.check_watchdog()
         if ok:
             print("OK")
             sys.exit(0)
         else:
             print(f"STALE: {message}")
-            # Send Telegram alert
-            tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-            tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-            if tg_token and tg_chat:
+            telegram = _create_telegram()
+            if telegram:
                 topic_id = _parse_topic_id()
-                telegram = TelegramNotifier(tg_token, tg_chat)
-                telegram.send_text(f"⚠️ Deal Hunter watchdog: {message}", topic_id=topic_id)
+                telegram.send_text(
+                    f"\u26a0\ufe0f Deal Hunter watchdog: {message}", topic_id=topic_id
+                )
             sys.exit(1)
 
     if args.digest:
@@ -1189,25 +601,26 @@ def main() -> None:
         return
 
     if args.list:
-        profiles = list_profiles()
+        profiles = _profile_mgr.list_all()
         print("Available profiles:")
         for p in profiles:
-            prof = load_profile(p)
-            print(f"  {prof.get('emoji', '\U0001f50d')} {p}")
+            prof = _profile_mgr.load(p)
+            if prof:
+                print(f"  {prof.get('emoji', '\U0001f50d')} {p}")
         return
 
     if args.validate:
         if args.profile:
             run_profile(args.profile, validate_only=True)
         elif args.all:
-            for profile_name in list_profiles():
+            for profile_name in _profile_mgr.list_all():
                 run_profile(profile_name, validate_only=True)
         else:
             print("Usage: --validate requires --profile or --all")
         return
 
     if args.all:
-        profiles = list_profiles(include_disabled=False)
+        profiles = _profile_mgr.list_all(include_disabled=False)
         _run_with_health_tracking(profiles, verify=args.verify, verbose=args.verbose, top=args.top)
         return
 

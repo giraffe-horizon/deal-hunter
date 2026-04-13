@@ -68,6 +68,28 @@
 {% endif %}
 {% endmacro %}
 
+{# ── Score Rules / Penalties list ──
+     Renders a labelled keyword→points list.
+     rules      — dict of {keyword: points}
+     title      — section heading (e.g. "Score Rules", "Penalties")
+     show_sign  — if true, prefix positive points with "+"  (default true)
+#}
+{% macro score_rules_list(rules, title, show_sign=true) %}
+{% if rules %}
+<h3 class="text-xs font-label text-on-surface-variant uppercase tracking-wider mt-4 mb-2">{{ title }}</h3>
+<div class="space-y-1">
+    {% for keyword, points in rules.items() %}
+    <div class="flex justify-between text-sm">
+        <span class="text-on-surface">{{ keyword }}</span>
+        <span class="font-medium {% if points > 0 %}text-tertiary{% else %}text-error{% endif %}">
+            {%- if show_sign and points > 0 %}+{{ points }}{% else %}{{ points }}{% endif -%}
+        </span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
 {# ── Section Card ── #}
 {% macro section_card(title, icon="") %}
 <div class="bg-surface-container-low rounded-card p-6">

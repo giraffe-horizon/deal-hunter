@@ -38,7 +38,7 @@ templates.env.globals["app_version"] = APP_VERSION
 
 # CSRF middleware
 @app.middleware("http")
-async def csrf_check(request: Request, call_next):
+async def csrf_check(request: Request, call_next):  # noqa: ANN001
     """Require HX-Request or X-Requested-With header on mutating requests."""
     if request.method in ("POST", "PUT", "DELETE", "PATCH"):
         has_htmx = request.headers.get("HX-Request")
@@ -70,5 +70,5 @@ app.include_router(health.router)
 
 
 @app.get("/")
-def index():
+def index() -> RedirectResponse:
     return RedirectResponse(url="/deals", status_code=302)

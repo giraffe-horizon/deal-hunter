@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
-def _import_matplotlib() -> tuple:  # type: ignore[type-arg]
+def _import_matplotlib() -> tuple:
     """Lazy-import matplotlib with Agg backend.
 
     Raises ImportError with a helpful message if matplotlib is not installed.

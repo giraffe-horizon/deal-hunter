@@ -88,15 +88,24 @@ quote-style = "double"
 python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
+warn_redundant_casts = true
+check_untyped_defs = true
 ignore_missing_imports = false
 disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["telegram.*", "matplotlib.*", "rich.*"]
+module = ["telegram.*", "matplotlib.*", "rich.*", "sqlalchemy.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["dashboard.routes.*", "tests.*"]
+module = ["dashboard.routes.*", "dashboard"]
+disallow_untyped_defs = false
+warn_return_any = false
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
 disallow_untyped_defs = false
 
 [tool.semantic_release]

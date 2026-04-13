@@ -130,11 +130,3 @@
 </div>
 {% endif %}
 
-<script>
-document.querySelectorAll('.sparkline-canvas').forEach(function(el) {
-    var prices = JSON.parse(el.dataset.prices);
-    if (prices.length >= 2 && typeof createSparkline === 'function') {
-        createSparkline(el, prices);
-    }
-});
-</script>

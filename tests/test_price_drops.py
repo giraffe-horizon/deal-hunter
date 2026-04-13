@@ -7,8 +7,8 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from deal_hunter import check_price_changes, get_price_tracking_config
 from notifiers.telegram import TelegramNotifier
+from services.price_tracker import PriceTracker
 from sources.base import Deal
 from storage.models import Base, PriceHistory
 from storage.models import Deal as DealModel
@@ -143,33 +143,33 @@ def profile_tracking_disabled():
 class TestPriceTrackingConfig:
     def test_defaults_when_not_specified(self):
         profile = {"name": "test"}
-        config = get_price_tracking_config(profile)
-        assert config["enabled"] is True
-        assert config["min_drop_percent"] == 10
-        assert config["min_drop_amount"] == 200
-        assert config["track_increases"] is False
+        config = PriceTracker.get_config(profile)
+        assert config.enabled is True
+        assert config.min_drop_percent == 10
+        assert config.min_drop_amount == 200
+        assert config.track_increases is False
 
     def test_custom_values(self, profile_with_tracking):
-        config = get_price_tracking_config(profile_with_tracking)
-        assert config["enabled"] is True
-        assert config["min_drop_percent"] == 15
-        assert config["min_drop_amount"] == 200
-        assert config["track_increases"] is False
+        config = PriceTracker.get_config(profile_with_tracking)
+        assert config.enabled is True
+        assert config.min_drop_percent == 15
+        assert config.min_drop_amount == 200
+        assert config.track_increases is False
 
     def test_disabled(self, profile_tracking_disabled):
-        config = get_price_tracking_config(profile_tracking_disabled)
-        assert config["enabled"] is False
+        config = PriceTracker.get_config(profile_tracking_disabled)
+        assert config.enabled is False
 
     def test_partial_override(self):
         profile = {
             "name": "test",
             "price_tracking": {"min_drop_percent": 20},
         }
-        config = get_price_tracking_config(profile)
-        assert config["min_drop_percent"] == 20
+        config = PriceTracker.get_config(profile)
+        assert config.min_drop_percent == 20
         # Defaults for unspecified
-        assert config["min_drop_amount"] == 200
-        assert config["enabled"] is True
+        assert config.min_drop_amount == 200
+        assert config.enabled is True
 
 
 # ──────────────── PRICE CHANGE DETECTION ────────────────
@@ -179,33 +179,37 @@ class TestCheckPriceChanges:
     def test_no_previous_price_returns_none(self, session, price_repo, deal, profile_with_tracking):
         """First time seen — no previous price — returns None."""
         _seed_deal_with_prices(session, deal.id, prices=[deal.price])
-        result = check_price_changes(deal, price_repo, profile_with_tracking)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(deal, profile_with_tracking)
         assert result is None
 
     def test_same_price_no_change(self, session, price_repo, deal, profile_with_tracking):
         """Same price as previous — no change detected."""
         _seed_deal_with_prices(session, deal.id, prices=[10499, 10499])
-        result = check_price_changes(deal, price_repo, profile_with_tracking)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(deal, profile_with_tracking)
         assert result is None
 
     def test_significant_drop_percent(self, session, price_repo, deal, profile_with_tracking):
         """Drop of 19% should trigger with min_drop_percent=15."""
         _seed_deal_with_prices(session, deal.id, prices=[12999, 10499])
-        result = check_price_changes(deal, price_repo, profile_with_tracking)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(deal, profile_with_tracking)
         assert result is not None
-        assert result["type"] == "drop"
-        assert result["old_price"] == 12999
-        assert result["new_price"] == 10499
-        assert result["diff_pln"] == 2500
-        assert result["diff_percent"] == 19.2
+        assert result.type == "drop"
+        assert result.old_price == 12999
+        assert result.new_price == 10499
+        assert result.diff_pln == 2500
+        assert result.diff_percent == 19.2
 
     def test_significant_drop_amount(self, session, price_repo, deal, profile_with_tracking):
         """Drop of 300 PLN (2.8%) should trigger with min_drop_amount=200."""
         _seed_deal_with_prices(session, deal.id, prices=[10799, 10499])
-        result = check_price_changes(deal, price_repo, profile_with_tracking)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(deal, profile_with_tracking)
         assert result is not None
-        assert result["type"] == "drop"
-        assert result["diff_pln"] == 300
+        assert result.type == "drop"
+        assert result.diff_pln == 300
 
     def test_small_drop_below_thresholds(self, session, price_repo, profile_with_tracking):
         """Drop of 100 PLN (1%) should NOT trigger.
@@ -224,7 +228,8 @@ class TestCheckPriceChanges:
             published_at="",
         )
         _seed_deal_with_prices(session, "test:1", prices=[10000, 9900])
-        result = check_price_changes(small_deal, price_repo, profile_with_tracking)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(small_deal, profile_with_tracking)
         assert result is None
 
     def test_price_increase_ignored_by_default(self, session, price_repo, profile_with_tracking):
@@ -241,7 +246,8 @@ class TestCheckPriceChanges:
             published_at="",
         )
         _seed_deal_with_prices(session, "test:1", prices=[10000, 12000])
-        result = check_price_changes(increase_deal, price_repo, profile_with_tracking)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(increase_deal, profile_with_tracking)
         assert result is None
 
     def test_price_increase_tracked_when_enabled(self, session, price_repo):
@@ -261,16 +267,18 @@ class TestCheckPriceChanges:
             published_at="",
         )
         _seed_deal_with_prices(session, "test:1", prices=[10000, 12000])
-        result = check_price_changes(increase_deal, price_repo, profile)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(increase_deal, profile)
         assert result is not None
-        assert result["type"] == "increase"
-        assert result["diff_pln"] == 2000
+        assert result.type == "increase"
+        assert result.diff_pln == 2000
 
     def test_disabled_tracking_returns_none(
         self, session, price_repo, deal, profile_tracking_disabled
     ):
         _seed_deal_with_prices(session, deal.id, prices=[15000, 10499])
-        result = check_price_changes(deal, price_repo, profile_tracking_disabled)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(deal, profile_tracking_disabled)
         assert result is None
 
     def test_zero_price_ignored(self, session, price_repo, profile_with_tracking):
@@ -285,15 +293,17 @@ class TestCheckPriceChanges:
             image_url="",
             published_at="",
         )
-        result = check_price_changes(zero_deal, price_repo, profile_with_tracking)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(zero_deal, profile_with_tracking)
         assert result is None
 
     def test_lowest_ever_detected(self, session, price_repo, deal, profile_with_tracking):
         """When current price is the all-time lowest, is_lowest_ever=True."""
         _seed_deal_with_prices(session, deal.id, prices=[14000, 12999, 10499])
-        result = check_price_changes(deal, price_repo, profile_with_tracking)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(deal, profile_with_tracking)
         assert result is not None
-        assert result["is_lowest_ever"] is True
+        assert result.is_lowest_ever is True
 
     def test_not_lowest_ever(self, session, price_repo):
         """Price drops but was lower before — not lowest ever."""
@@ -313,16 +323,18 @@ class TestCheckPriceChanges:
             published_at="",
         )
         _seed_deal_with_prices(session, "test:1", prices=[9000, 12000, 11000])
-        result = check_price_changes(drop_deal, price_repo, profile)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(drop_deal, profile)
         assert result is not None
-        assert result["is_lowest_ever"] is False
+        assert result.is_lowest_ever is False
 
-    def test_backwards_compat_no_profile(self, session, price_repo, deal):
-        """check_price_changes works without profile arg (uses defaults)."""
+    def test_no_profile_uses_defaults(self, session, price_repo, deal):
+        """check_price_change works without profile arg (uses defaults)."""
         _seed_deal_with_prices(session, deal.id, prices=[15000, 10499])
-        result = check_price_changes(deal, price_repo)
+        tracker = PriceTracker(price_repo)
+        result = tracker.check_price_change(deal)
         assert result is not None
-        assert result["type"] == "drop"
+        assert result.type == "drop"
 
 
 # ──────────────── SQLITE PRICE QUERIES ────────────────

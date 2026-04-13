@@ -27,14 +27,8 @@
     </div>
 </div>
 
-<script>
-document.querySelectorAll('.sparkline-canvas').forEach(function(el) {
-    var prices = JSON.parse(el.dataset.prices);
-    if (prices.length >= 2 && typeof createSparkline === 'function') {
-        createSparkline(el, prices);
-    }
-});
-</script>
+<script src="/static/js/charts.js"></script>
+<script src="/static/js/sparklines.js"></script>
 {% else %}
 {% from "macros.html" import empty_state %}
 {{ empty_state("bookmark_border", "No watchlist items", "Set target prices on deal pages to start tracking.") }}

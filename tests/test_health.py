@@ -1,29 +1,28 @@
 """Tests for health monitoring — health.json, --health, --watchdog, source tracking."""
 
 import json
-import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import health
+from services.health_tracker import HealthTracker
 
 # ──────────────── Fixtures ────────────────
 
 
-@pytest.fixture(autouse=True)
-def use_tmp_health_file(tmp_path):
-    """Redirect HEALTH_FILE to tmp_path for all tests."""
-    health_file = tmp_path / "health.json"
-    with patch.object(health, "HEALTH_FILE", health_file):
-        yield health_file
+@pytest.fixture
+def health_file(tmp_path):
+    return tmp_path / "health.json"
+
+
+@pytest.fixture
+def tracker(health_file):
+    return HealthTracker(health_file)
 
 
 def _write_health(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data))
 
 
@@ -50,29 +49,29 @@ def _make_health(
 
 
 class TestLoadSaveHealth:
-    def test_load_missing_returns_none(self):
-        assert health.load_health() is None
+    def test_load_missing_returns_none(self, tracker):
+        assert tracker.load() is None
 
-    def test_save_and_load(self, use_tmp_health_file):
+    def test_save_and_load(self, tracker):
         data = _make_health()
-        health.save_health(data)
-        loaded = health.load_health()
+        tracker.save(data)
+        loaded = tracker.load()
         assert loaded is not None
         assert loaded["status"] == "ok"
         assert loaded["version"] == "0.1.0"
 
-    def test_load_corrupt_returns_none(self, use_tmp_health_file):
-        use_tmp_health_file.write_text("not json {{{")
-        assert health.load_health() is None
+    def test_load_corrupt_returns_none(self, tracker, health_file):
+        health_file.write_text("not json {{{")
+        assert tracker.load() is None
 
     def test_save_creates_parent_dir(self, tmp_path):
         nested = tmp_path / "sub" / "health.json"
-        with patch.object(health, "HEALTH_FILE", nested):
-            health.save_health(_make_health())
+        t = HealthTracker(nested)
+        t.save(_make_health())
         assert nested.exists()
 
 
-# ──────────────── compute_overall_status ────────────────
+# ──────────────── _compute_status ────────────────
 
 
 class TestComputeOverallStatus:
@@ -81,42 +80,42 @@ class TestComputeOverallStatus:
             "bikes": {"status": "ok"},
             "nas": {"status": "ok"},
         }
-        assert health.compute_overall_status(results) == "ok"
+        assert HealthTracker._compute_status(results) == "ok"
 
     def test_all_error(self):
         results = {
             "bikes": {"status": "error"},
             "nas": {"status": "error"},
         }
-        assert health.compute_overall_status(results) == "error"
+        assert HealthTracker._compute_status(results) == "error"
 
     def test_partial(self):
         results = {
             "bikes": {"status": "ok"},
             "nas": {"status": "error"},
         }
-        assert health.compute_overall_status(results) == "partial"
+        assert HealthTracker._compute_status(results) == "partial"
 
     def test_empty_profiles_is_error(self):
-        assert health.compute_overall_status({}) == "error"
+        assert HealthTracker._compute_status({}) == "error"
 
 
-# ──────────────── update_sources_health ────────────────
+# ──────────────── update_sources ────────────────
 
 
 class TestUpdateSourcesHealth:
-    def test_first_run_all_success(self):
-        result = health.update_sources_health(None, {"pepper": True, "ceneo": True})
+    def test_first_run_all_success(self, tracker):
+        result = tracker.update_sources(None, {"pepper": True, "ceneo": True})
         assert result["pepper"]["status"] == "ok"
         assert result["pepper"]["consecutive_failures"] == 0
         assert result["ceneo"]["status"] == "ok"
 
-    def test_first_run_failure(self):
-        result = health.update_sources_health(None, {"pepper": False})
+    def test_first_run_failure(self, tracker):
+        result = tracker.update_sources(None, {"pepper": False})
         assert result["pepper"]["status"] == "degraded"
         assert result["pepper"]["consecutive_failures"] == 1
 
-    def test_consecutive_failures_increment(self):
+    def test_consecutive_failures_increment(self, tracker):
         existing = _make_health(
             sources_health={
                 "pepper": {
@@ -126,12 +125,12 @@ class TestUpdateSourcesHealth:
                 },
             }
         )
-        result = health.update_sources_health(existing, {"pepper": False})
+        result = tracker.update_sources(existing, {"pepper": False})
         assert result["pepper"]["consecutive_failures"] == 3
         assert result["pepper"]["status"] == "down"
         assert result["pepper"]["last_success"] == "2026-04-01T10:00:00"
 
-    def test_success_resets_failures(self):
+    def test_success_resets_failures(self, tracker):
         existing = _make_health(
             sources_health={
                 "pepper": {
@@ -141,11 +140,11 @@ class TestUpdateSourcesHealth:
                 },
             }
         )
-        result = health.update_sources_health(existing, {"pepper": True})
+        result = tracker.update_sources(existing, {"pepper": True})
         assert result["pepper"]["consecutive_failures"] == 0
         assert result["pepper"]["status"] == "ok"
 
-    def test_preserves_unseen_sources(self):
+    def test_preserves_unseen_sources(self, tracker):
         existing = _make_health(
             sources_health={
                 "canyon": {
@@ -155,19 +154,19 @@ class TestUpdateSourcesHealth:
                 },
             }
         )
-        result = health.update_sources_health(existing, {"pepper": True})
+        result = tracker.update_sources(existing, {"pepper": True})
         assert "canyon" in result
         assert result["canyon"]["status"] == "ok"
 
 
-# ──────────────── build_health_data ────────────────
+# ──────────────── build_data ────────────────
 
 
 class TestBuildHealthData:
-    def test_builds_complete_structure(self):
+    def test_builds_complete_structure(self, tracker):
         profiles = {"bikes": {"status": "ok", "deals_found": 10, "new_alerts": 2, "errors": []}}
         sources = {"pepper": {"status": "ok", "last_success": "...", "consecutive_failures": 0}}
-        data = health.build_health_data(profiles, sources, 45.2, "0.1.0")
+        data = tracker.build_data(profiles, sources, 45.2, "0.1.0")
 
         assert "last_run" in data
         assert data["status"] == "ok"
@@ -183,7 +182,7 @@ class TestBuildHealthData:
 class TestGetFailingSources:
     def test_no_failures(self):
         sources = {"pepper": {"consecutive_failures": 0}, "ceneo": {"consecutive_failures": 2}}
-        assert health.get_failing_sources(sources) == []
+        assert HealthTracker.get_failing_sources(sources) == []
 
     def test_returns_failing(self):
         sources = {
@@ -191,29 +190,29 @@ class TestGetFailingSources:
             "ceneo": {"consecutive_failures": 0},
             "canyon": {"consecutive_failures": 5},
         }
-        result = health.get_failing_sources(sources)
+        result = HealthTracker.get_failing_sources(sources)
         assert "pepper" in result
         assert "canyon" in result
         assert "ceneo" not in result
 
 
-# ──────────────── --health CLI ────────────────
+# ──────────────── print_status (--health CLI) ────────────────
 
 
 class TestPrintHealthStatus:
-    def test_no_health_file(self, capsys):
-        exit_code = health.print_health_status()
+    def test_no_health_file(self, tracker, capsys):
+        exit_code = tracker.print_status()
         assert exit_code == 3
         assert "No health data" in capsys.readouterr().out
 
-    def test_stale_health(self, use_tmp_health_file, capsys):
+    def test_stale_health(self, tracker, health_file, capsys):
         data = _make_health(minutes_ago=180)
-        _write_health(use_tmp_health_file, data)
-        exit_code = health.print_health_status()
+        _write_health(health_file, data)
+        exit_code = tracker.print_status()
         assert exit_code == 3
         assert "STALE" in capsys.readouterr().out
 
-    def test_ok_status(self, use_tmp_health_file, capsys):
+    def test_ok_status(self, tracker, health_file, capsys):
         data = _make_health(
             status="ok",
             minutes_ago=5,
@@ -222,15 +221,15 @@ class TestPrintHealthStatus:
             },
             sources_health={"pepper": {"status": "ok", "consecutive_failures": 0}},
         )
-        _write_health(use_tmp_health_file, data)
-        exit_code = health.print_health_status()
+        _write_health(health_file, data)
+        exit_code = tracker.print_status()
         captured = capsys.readouterr().out
         assert exit_code == 0
         assert "OK" in captured
         assert "bikes" in captured
         assert "pepper" in captured
 
-    def test_partial_status(self, use_tmp_health_file, capsys):
+    def test_partial_status(self, tracker, health_file, capsys):
         data = _make_health(
             status="partial",
             minutes_ago=10,
@@ -244,56 +243,56 @@ class TestPrintHealthStatus:
                 },
             },
         )
-        _write_health(use_tmp_health_file, data)
-        exit_code = health.print_health_status()
+        _write_health(health_file, data)
+        exit_code = tracker.print_status()
         captured = capsys.readouterr().out
         assert exit_code == 1
         assert "PARTIAL" in captured
         assert "Pepper timeout" in captured
 
-    def test_error_status(self, use_tmp_health_file, capsys):
+    def test_error_status(self, tracker, health_file, capsys):
         data = _make_health(status="error", minutes_ago=10)
-        _write_health(use_tmp_health_file, data)
-        exit_code = health.print_health_status()
+        _write_health(health_file, data)
+        exit_code = tracker.print_status()
         assert exit_code == 2
 
-    def test_degraded_source_shown(self, use_tmp_health_file, capsys):
+    def test_degraded_source_shown(self, tracker, health_file, capsys):
         data = _make_health(
             sources_health={"canyon": {"status": "degraded", "consecutive_failures": 2}},
         )
-        _write_health(use_tmp_health_file, data)
-        health.print_health_status()
+        _write_health(health_file, data)
+        tracker.print_status()
         captured = capsys.readouterr().out
         assert "consecutive failures: 2" in captured
 
 
-# ──────────────── --watchdog CLI ────────────────
+# ──────────────── check_watchdog (--watchdog CLI) ────────────────
 
 
 class TestCheckWatchdog:
-    def test_no_health_file(self):
-        ok, msg = health.check_watchdog()
+    def test_no_health_file(self, tracker):
+        ok, msg = tracker.check_watchdog()
         assert not ok
         assert "never run" in msg
 
-    def test_fresh_run(self, use_tmp_health_file):
-        _write_health(use_tmp_health_file, _make_health(minutes_ago=30))
-        ok, msg = health.check_watchdog()
+    def test_fresh_run(self, tracker, health_file):
+        _write_health(health_file, _make_health(minutes_ago=30))
+        ok, msg = tracker.check_watchdog()
         assert ok
         assert msg == "OK"
 
-    def test_stale_run(self, use_tmp_health_file):
-        _write_health(use_tmp_health_file, _make_health(minutes_ago=180))
-        ok, msg = health.check_watchdog()
+    def test_stale_run(self, tracker, health_file):
+        _write_health(health_file, _make_health(minutes_ago=180))
+        ok, msg = tracker.check_watchdog()
         assert not ok
         assert "ago" in msg
         assert "Check cron" in msg
 
-    def test_invalid_timestamp(self, use_tmp_health_file):
+    def test_invalid_timestamp(self, tracker, health_file):
         data = _make_health()
         data["last_run"] = "not-a-date"
-        _write_health(use_tmp_health_file, data)
-        ok, msg = health.check_watchdog()
+        _write_health(health_file, data)
+        ok, msg = tracker.check_watchdog()
         assert not ok
         assert "invalid" in msg
 
@@ -303,16 +302,16 @@ class TestCheckWatchdog:
 
 class TestFormatTimedelta:
     def test_seconds(self):
-        assert health._format_timedelta(timedelta(seconds=45)) == "45s"
+        assert HealthTracker._format_timedelta(timedelta(seconds=45)) == "45s"
 
     def test_minutes(self):
-        assert health._format_timedelta(timedelta(minutes=15)) == "15m"
+        assert HealthTracker._format_timedelta(timedelta(minutes=15)) == "15m"
 
     def test_hours(self):
-        assert health._format_timedelta(timedelta(hours=3, minutes=15)) == "3h 15m"
+        assert HealthTracker._format_timedelta(timedelta(hours=3, minutes=15)) == "3h 15m"
 
     def test_hours_exact(self):
-        assert health._format_timedelta(timedelta(hours=2)) == "2h"
+        assert HealthTracker._format_timedelta(timedelta(hours=2)) == "2h"
 
     def test_days(self):
-        assert health._format_timedelta(timedelta(days=2, hours=5)) == "2d 5h"
+        assert HealthTracker._format_timedelta(timedelta(days=2, hours=5)) == "2d 5h"

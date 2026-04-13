@@ -1,13 +1,16 @@
 """Tests for deal deduplication and title normalization."""
 
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from deal_hunter import _normalize_title, deduplicate
+from services.fetcher import DealFetcher
 from sources.base import Deal
+
+_fetcher = DealFetcher({})
+_normalize_title = DealFetcher._normalize_title
+
+
+def deduplicate(deals, dedup_config=None):
+    return _fetcher.deduplicate(deals, dedup_config)
 
 
 def _make_deal(**kwargs) -> Deal:

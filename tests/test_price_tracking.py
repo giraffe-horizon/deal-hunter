@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from deal_hunter import check_price_changes
+from services.price_tracker import PriceTracker
 from sources.base import Deal
 from storage.models import Base, PriceHistory
 from storage.models import Deal as DealModel
@@ -74,22 +74,24 @@ def _seed_deal_with_prices(session, deal_id="test:1", prices=None):
 
 
 def test_price_drop_detected(session, price_repo):
-    """Price decrease returns structured dict."""
+    """Price decrease returns PriceChange dataclass."""
     _seed_deal_with_prices(session, "test:1", prices=[10000, 8000])
     deal = _make_deal(title="Test Deal", price=8000)
-    result = check_price_changes(deal, price_repo)
+    tracker = PriceTracker(price_repo)
+    result = tracker.check_price_change(deal)
     assert result is not None
-    assert result["type"] == "drop"
-    assert result["old_price"] == 10000
-    assert result["new_price"] == 8000
-    assert result["diff_pln"] == 2000
+    assert result.type == "drop"
+    assert result.old_price == 10000
+    assert result.new_price == 8000
+    assert result.diff_pln == 2000
 
 
 def test_price_increase_ignored(session, price_repo):
     """Price increase returns None by default."""
     _seed_deal_with_prices(session, "test:1", prices=[8000, 10000])
     deal = _make_deal(title="Test Deal", price=10000)
-    result = check_price_changes(deal, price_repo)
+    tracker = PriceTracker(price_repo)
+    result = tracker.check_price_change(deal)
     assert result is None
 
 
@@ -97,5 +99,6 @@ def test_no_previous_price(session, price_repo):
     """First time seen (single price entry) — no previous price."""
     _seed_deal_with_prices(session, "test:1", prices=[5000])
     deal = _make_deal(title="Brand New Deal", price=5000)
-    result = check_price_changes(deal, price_repo)
+    tracker = PriceTracker(price_repo)
+    result = tracker.check_price_change(deal)
     assert result is None

@@ -18,7 +18,7 @@ jobs:
           cache: pip
 
       - name: Install linting tools
-        run: pip install ruff mypy types-requests types-beautifulsoup4 types-PyYAML
+        run: pip install ruff mypy pydantic types-requests types-beautifulsoup4 types-PyYAML
 
       - name: Ruff check (linting)
         run: ruff check .

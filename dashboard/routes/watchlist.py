@@ -1,11 +1,12 @@
 """Watchlist routes: view, add, remove, update target price."""
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from dashboard import templates
 from dashboard.dependencies import get_db
+from dashboard.schemas import WatchlistAdd, WatchlistUpdate
 from dashboard.services import DealService
 from storage.repositories import WatchlistRepository
 
@@ -13,7 +14,7 @@ router = APIRouter()
 
 
 @router.get("/watchlist", response_class=HTMLResponse)
-def watchlist_page(request: Request, session: Session = Depends(get_db)):
+def watchlist_page(request: Request, session: Session = Depends(get_db)) -> HTMLResponse:
     """Watchlist page — deals with target price alerts."""
     items = WatchlistRepository(session).get_all()
     sparklines = DealService(session).get_sparklines(items)
@@ -28,13 +29,19 @@ def watchlist_page(request: Request, session: Session = Depends(get_db)):
 async def add_to_watchlist_api(
     request: Request,
     session: Session = Depends(get_db),
-):
+) -> HTMLResponse:
     """Add a deal to the watchlist."""
     form = await request.form()
-    deal_id = form.get("deal_id", "")
-    target_price = int(form.get("target_price", 0))
-    if deal_id and target_price > 0:
-        WatchlistRepository(session).add(deal_id, target_price)
+    try:
+        validated = WatchlistAdd(
+            deal_id=str(form.get("deal_id", "")),
+            target_price=int(str(form.get("target_price", 0))),
+        )
+    except Exception:
+        return HTMLResponse(
+            '<span class="text-sm text-tertiary font-medium">\u2713 Target set</span>'
+        )
+    WatchlistRepository(session).add(validated.deal_id, validated.target_price)
     return HTMLResponse('<span class="text-sm text-tertiary font-medium">\u2713 Target set</span>')
 
 
@@ -42,7 +49,7 @@ async def add_to_watchlist_api(
 def remove_from_watchlist_api(
     deal_id: str,
     session: Session = Depends(get_db),
-):
+) -> HTMLResponse:
     """Remove a deal from the watchlist."""
     WatchlistRepository(session).remove(deal_id)
     return HTMLResponse("")
@@ -54,9 +61,11 @@ async def update_watchlist_api(
     deal_id: str,
     target_price: int = Form(...),
     session: Session = Depends(get_db),
-):
+) -> Response:
     """Update target price for a watchlist item."""
-    if target_price <= 0:
+    try:
+        WatchlistUpdate(target_price=target_price)
+    except Exception:
         return JSONResponse({"error": "Target price must be positive"}, status_code=400)
     ok = WatchlistRepository(session).update_target_price(deal_id, target_price)
     if not ok:

@@ -1,18 +1,24 @@
 """Health and price trends routes."""
 
+import os
+from pathlib import Path
+
 from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from dashboard import templates
+from services.health_tracker import HealthTracker
 
 router = APIRouter()
 
+_BASE_DIR = Path(__file__).parent.parent.parent
+_state_dir = Path(os.environ.get("DEAL_HUNTER_STATE_DIR", str(_BASE_DIR / "state")))
+_tracker = HealthTracker(_state_dir / "health.json")
+
 
 @router.get("/health")
-def health_page(request: Request):
-    from health import load_health
-
-    health = load_health()
+def health_page(request: Request) -> HTMLResponse:
+    health = _tracker.load()
 
     # Compute summary metrics from health data
     total_deals = 0
@@ -38,13 +44,11 @@ def health_page(request: Request):
 
 
 @router.get("/api/health-status")
-def api_health_status(request: Request):
+def api_health_status(request: Request) -> HTMLResponse:
     """Compact health status for sidebar indicator."""
     from datetime import datetime
 
-    from health import load_health
-
-    health = load_health()
+    health = _tracker.load()
     status = health.get("status") if health else None
     age = None
     if health and health.get("last_run"):
@@ -68,6 +72,6 @@ def api_health_status(request: Request):
 
 
 @router.get("/price-trends")
-def price_trends_redirect(days: int = 7):
+def price_trends_redirect(days: int = 7) -> RedirectResponse:
     """Redirect old Price Trends page to Deals Explorer drops view."""
     return RedirectResponse(f"/deals?view=drops&days={days}", status_code=302)
