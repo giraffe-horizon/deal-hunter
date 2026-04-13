@@ -2,18 +2,18 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy.orm import Session
 
 from dashboard import templates
 from dashboard.dependencies import (
     _PROFILE_NAME_RE,
-    DB_PATH,
+    get_db,
     get_profiles,
     safe_load_profile,
     safe_profile_path,
 )
-from storage.sqlite import SQLiteStorage
 
 BASE_DIR = Path(__file__).parent.parent.parent
 
@@ -60,7 +60,9 @@ def profile_create_page(request: Request):
 
 
 @router.get("/profiles/{name}", response_class=HTMLResponse)
-def profile_detail_page(request: Request, name: str, tab: str = "overview"):
+def profile_detail_page(
+    request: Request, name: str, tab: str = "overview", session: Session = Depends(get_db)
+):
     """Unified profile page with tabs."""
     safe_profile_path(name)
     profile = safe_load_profile(name)
@@ -88,16 +90,13 @@ def profile_detail_page(request: Request, name: str, tab: str = "overview"):
     # Tuner tab needs scored deals
     if tab == "tuner":
         from dashboard.services import DealService
+        from storage.repositories import DealRepository
 
-        db = SQLiteStorage(DB_PATH)
-        try:
-            deals = db.get_deals(profile=name, limit=50)
-            scored = DealService(db).score_deals_with_profile(deals, profile)
-            context["deals"] = scored
-            context["profile_data"] = profile
-            context["selected_profile"] = name
-        finally:
-            db.close()
+        deals = DealRepository(session).get_filtered(profile=name, limit=50)
+        scored = DealService(session).score_deals_with_profile(deals, profile)
+        context["deals"] = scored
+        context["profile_data"] = profile
+        context["selected_profile"] = name
 
     # HTMX request: return only the tab partial
     if request.headers.get("HX-Request"):
@@ -146,7 +145,7 @@ async def api_update_profile_yaml(request: Request, name: str):
     if errors:
         return JSONResponse({"errors": errors})
 
-    with open(profile_path, "w", encoding="utf-8") as f:
+    with profile_path.open("w", encoding="utf-8") as f:
         f.write(yaml_text)
 
     return JSONResponse({"ok": True})
@@ -181,7 +180,7 @@ async def api_create_profile(request: Request):
 
     profile_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(profile_path, "w", encoding="utf-8") as f:
+    with profile_path.open("w", encoding="utf-8") as f:
         _yaml.dump(body, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
     return JSONResponse({"ok": True})
@@ -215,7 +214,7 @@ async def api_update_profile(request: Request, name: str):
         return JSONResponse({"errors": errors})
 
     profile_path = safe_profile_path(name)
-    with open(profile_path, "w", encoding="utf-8") as f:
+    with profile_path.open("w", encoding="utf-8") as f:
         _yaml.dump(body, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
     return JSONResponse({"ok": True})
@@ -240,12 +239,12 @@ def api_toggle_profile(name: str):
     if not profile_path.exists():
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
 
-    with open(profile_path, encoding="utf-8") as f:
+    with profile_path.open(encoding="utf-8") as f:
         profile = _yaml.safe_load(f)
 
     profile["enabled"] = not profile.get("enabled", True)
 
-    with open(profile_path, "w", encoding="utf-8") as f:
+    with profile_path.open("w", encoding="utf-8") as f:
         _yaml.dump(profile, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
     return JSONResponse({"ok": True, "enabled": profile["enabled"]})
@@ -276,10 +275,15 @@ def api_run_profile(name: str):
         output = f"Error: {e}"
 
     safe_output = _html.escape(output)
+    pre_cls = (
+        "text-xs text-on-surface-variant whitespace-pre-wrap"
+        " overflow-x-auto bg-surface-container rounded-lg p-4"
+    )
     return HTMLResponse(
         f'<div class="bg-surface-container-low rounded-card p-6 mt-4">'
-        f'<h3 class="font-headline text-base font-semibold text-on-surface mb-3">Run Output</h3>'
-        f'<pre class="text-xs text-on-surface-variant whitespace-pre-wrap overflow-x-auto bg-surface-container rounded-lg p-4">{safe_output}</pre>'
+        f'<h3 class="font-headline text-base font-semibold text-on-surface mb-3">'
+        f"Run Output</h3>"
+        f'<pre class="{pre_cls}">{safe_output}</pre>'
         f"</div>"
     )
 

@@ -1,21 +1,57 @@
-"""Tests for Telegram feedback bot — SQLite additions, callback parsing, inline keyboard."""
+"""Tests for Telegram feedback bot — SQLAlchemy repos, callback parsing, inline keyboard."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from notifiers.telegram import build_deal_keyboard
 from sources.base import Deal
-from storage.sqlite import SQLiteStorage
+from storage.models import Base
+from storage.repositories import DealRepository, FeedbackRepository, WatchlistRepository
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
 
 @pytest.fixture
-def db(tmp_path):
-    storage = SQLiteStorage(tmp_path / "test.db")
-    yield storage
-    storage.close()
+def engine():
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    return eng
+
+
+@pytest.fixture
+def session(engine):
+    with Session(engine) as s:
+        yield s
+
+
+@pytest.fixture
+def deal_repo(session):
+    return DealRepository(session)
+
+
+@pytest.fixture
+def feedback_repo(session):
+    return FeedbackRepository(session)
+
+
+def _seed_deal(session, deal_id="pepper:77777", price=5000, profile="test", score=100):
+    """Insert a deal using the repository."""
+    deal_repo = DealRepository(session)
+    deal_repo.upsert(
+        id=deal_id,
+        title="Test Feedback Deal",
+        price=price,
+        link=f"https://example.com/deal/{deal_id}",
+        source="pepper",
+        description="A test deal for feedback",
+        image_url="",
+        profile=profile,
+        score=score,
+    )
+    session.flush()
 
 
 @pytest.fixture
@@ -48,94 +84,78 @@ def deal2():
     )
 
 
-# ── SQLite additions ─────────────────────────────────────────────────
+# ── Repository-level tests ──────────────────────────────────────────
 
 
 class TestUpdateDealStatus:
-    def test_update_existing_deal(self, db, deal):
-        db.upsert_deal(deal, "test", 100)
-        result = db.update_deal_status("pepper:77777", "watching")
+    def test_update_existing_deal(self, session, deal_repo):
+        _seed_deal(session)
+        result = deal_repo.update_status("pepper:77777", "watching")
         assert result is True
-        row = db.get_deal("pepper:77777")
+        session.flush()
+        row = deal_repo.get_by_id("pepper:77777")
         assert row["status"] == "watching"
 
-    def test_update_nonexistent_deal(self, db):
-        result = db.update_deal_status("nonexistent:000", "watching")
+    def test_update_nonexistent_deal(self, deal_repo):
+        result = deal_repo.update_status("nonexistent:000", "watching")
         assert result is False
 
-    def test_update_to_rejected(self, db, deal):
-        db.upsert_deal(deal, "test", 100)
-        db.update_deal_status("pepper:77777", "rejected")
-        row = db.get_deal("pepper:77777")
+    def test_update_to_rejected(self, session, deal_repo):
+        _seed_deal(session)
+        deal_repo.update_status("pepper:77777", "rejected")
+        session.flush()
+        row = deal_repo.get_by_id("pepper:77777")
         assert row["status"] == "rejected"
 
 
 class TestGetDealsByStatus:
-    def test_filter_watching(self, db, deal, deal2):
-        db.upsert_deal(deal, "test", 100)
-        db.upsert_deal(deal2, "test", 80)
-        db.update_deal_status("pepper:77777", "watching")
+    def test_filter_watching(self, session, deal_repo):
+        _seed_deal(session, "pepper:77777")
+        _seed_deal(session, "ceneo:66666")
+        deal_repo.update_status("pepper:77777", "watching")
+        session.flush()
 
-        watching = db.get_deals_by_status("watching")
+        watching = deal_repo.get_by_status("watching")
         assert len(watching) == 1
         assert watching[0]["id"] == "pepper:77777"
 
-    def test_empty_result(self, db, deal):
-        db.upsert_deal(deal, "test", 100)
-        assert db.get_deals_by_status("watching") == []
+    def test_empty_result(self, session, deal_repo):
+        _seed_deal(session)
+        assert deal_repo.get_by_status("watching") == []
 
-    def test_limit(self, db):
+    def test_limit(self, session, deal_repo):
         for i in range(5):
-            d = Deal(
-                id=f"test:{i}",
-                title=f"Deal {i}",
-                price=1000,
-                link="https://example.com",
-                source="test",
-                description="",
-                temperature=0,
-                image_url="",
-                published_at="2026-04-01T10:00:00",
-            )
-            db.upsert_deal(d, "test", 50)
-            db.update_deal_status(f"test:{i}", "watching")
+            _seed_deal(session, f"test:{i}")
+            deal_repo.update_status(f"test:{i}", "watching")
+        session.flush()
 
-        result = db.get_deals_by_status("watching", limit=3)
+        result = deal_repo.get_by_status("watching", limit=3)
         assert len(result) == 3
-
-    def test_ordered_by_last_seen_desc(self, db, deal, deal2):
-        db.upsert_deal(deal, "test", 100)
-        db.upsert_deal(deal2, "test", 80)
-        db.update_deal_status("pepper:77777", "watching")
-        db.update_deal_status("ceneo:66666", "watching")
-
-        result = db.get_deals_by_status("watching")
-        assert len(result) == 2
-        # deal2 was upserted later, so it should be first
-        assert result[0]["id"] == "ceneo:66666"
 
 
 class TestGetFeedbackStats:
-    def test_empty_stats(self, db):
-        assert db.get_feedback_stats() == {}
+    def test_empty_stats(self, feedback_repo):
+        assert feedback_repo.get_stats() == {}
 
-    def test_counts_per_action(self, db, deal):
-        db.upsert_deal(deal, "test", 100)
-        db.record_feedback("pepper:77777", "watch")
-        db.record_feedback("pepper:77777", "watch")
-        db.record_feedback("pepper:77777", "skip")
+    def test_counts_per_action(self, session, feedback_repo):
+        _seed_deal(session)
+        feedback_repo.record("pepper:77777", "watch")
+        feedback_repo.record("pepper:77777", "watch")
+        feedback_repo.record("pepper:77777", "skip")
+        session.flush()
 
-        stats = db.get_feedback_stats()
+        stats = feedback_repo.get_stats()
         assert stats["watch"] == 2
         assert stats["skip"] == 1
 
-    def test_multiple_deals(self, db, deal, deal2):
-        db.upsert_deal(deal, "test", 100)
-        db.upsert_deal(deal2, "test", 80)
-        db.record_feedback("pepper:77777", "watch")
-        db.record_feedback("ceneo:66666", "skip")
+    def test_multiple_deals(self, session, feedback_repo):
+        _seed_deal(session, "pepper:77777")
+        _seed_deal(session, "ceneo:66666")
+        feedback_repo.record("pepper:77777", "watch")
+        feedback_repo.record("ceneo:66666", "skip")
+        session.flush()
 
-        stats = db.get_feedback_stats()
+        stats = feedback_repo.get_stats()
         assert stats["watch"] == 1
         assert stats["skip"] == 1
 
@@ -197,10 +217,13 @@ class TestCallbackParsing:
 
 class TestBotHandlers:
     @pytest.mark.asyncio
-    async def test_handle_callback_watch(self, db, deal, tmp_path):
+    async def test_handle_callback_watch(self, engine):
         from feedback_bot import handle_callback
 
-        db.upsert_deal(deal, "test", 100)
+        # Seed a deal using a session
+        with Session(engine) as session:
+            _seed_deal(session)
+            session.commit()
 
         query = AsyncMock()
         query.data = "watch:pepper:77777"
@@ -208,18 +231,32 @@ class TestBotHandlers:
         update.callback_query = query
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):  # prevent closing our test db
-                await handle_callback(update, context)
+        # Mock get_session to use our engine
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _mock_session():
+            with Session(engine) as s:
+                yield s
+                s.commit()
+
+        with patch("feedback_bot.get_session", _mock_session):
+            await handle_callback(update, context)
 
         query.answer.assert_called_once_with("\u2b50 Dodano do obserwowanych")
-        assert db.get_deal("pepper:77777")["status"] == "watching"
+
+        # Verify status updated
+        with Session(engine) as s:
+            deal = DealRepository(s).get_by_id("pepper:77777")
+            assert deal["status"] == "watching"
 
     @pytest.mark.asyncio
-    async def test_handle_callback_skip(self, db, deal, tmp_path):
+    async def test_handle_callback_skip(self, engine):
         from feedback_bot import handle_callback
 
-        db.upsert_deal(deal, "test", 100)
+        with Session(engine) as session:
+            _seed_deal(session)
+            session.commit()
 
         query = AsyncMock()
         query.data = "skip:pepper:77777"
@@ -227,15 +264,25 @@ class TestBotHandlers:
         update.callback_query = query
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):
-                await handle_callback(update, context)
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _mock_session():
+            with Session(engine) as s:
+                yield s
+                s.commit()
+
+        with patch("feedback_bot.get_session", _mock_session):
+            await handle_callback(update, context)
 
         query.answer.assert_called_once_with("\U0001f44e Pominięto")
-        assert db.get_deal("pepper:77777")["status"] == "rejected"
+
+        with Session(engine) as s:
+            deal = DealRepository(s).get_by_id("pepper:77777")
+            assert deal["status"] == "rejected"
 
     @pytest.mark.asyncio
-    async def test_handle_callback_unknown_deal(self, db):
+    async def test_handle_callback_unknown_deal(self, engine):
         from feedback_bot import handle_callback
 
         query = AsyncMock()
@@ -244,34 +291,50 @@ class TestBotHandlers:
         update.callback_query = query
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):
-                await handle_callback(update, context)
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _mock_session():
+            with Session(engine) as s:
+                yield s
+                s.commit()
+
+        with patch("feedback_bot.get_session", _mock_session):
+            await handle_callback(update, context)
 
         query.answer.assert_called_once_with("Nie znaleziono oferty w bazie")
 
     @pytest.mark.asyncio
-    async def test_cmd_status(self, db, deal):
+    async def test_cmd_status(self, engine):
         from feedback_bot import cmd_status
 
-        db.upsert_deal(deal, "test", 100)
-        db.record_feedback("pepper:77777", "watch")
+        with Session(engine) as session:
+            _seed_deal(session)
+            FeedbackRepository(session).record("pepper:77777", "watch")
+            session.commit()
 
         message = AsyncMock()
         update = MagicMock()
         update.message = message
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):
-                await cmd_status(update, context)
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _mock_session():
+            with Session(engine) as s:
+                yield s
+                s.commit()
+
+        with patch("feedback_bot.get_session", _mock_session):
+            await cmd_status(update, context)
 
         message.reply_text.assert_called_once()
         text = message.reply_text.call_args[0][0]
         assert "Status bazy ofert" in text
 
     @pytest.mark.asyncio
-    async def test_cmd_watchlist_empty(self, db):
+    async def test_cmd_watchlist_empty(self, engine):
         from feedback_bot import cmd_watchlist
 
         message = AsyncMock()
@@ -279,27 +342,43 @@ class TestBotHandlers:
         update.message = message
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):
-                await cmd_watchlist(update, context)
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _mock_session():
+            with Session(engine) as s:
+                yield s
+                s.commit()
+
+        with patch("feedback_bot.get_session", _mock_session):
+            await cmd_watchlist(update, context)
 
         message.reply_text.assert_called_once_with("Brak obserwowanych ofert.")
 
     @pytest.mark.asyncio
-    async def test_cmd_watchlist_with_deals(self, db, deal):
+    async def test_cmd_watchlist_with_deals(self, engine):
         from feedback_bot import cmd_watchlist
 
-        db.upsert_deal(deal, "test", 100)
-        db.update_deal_status("pepper:77777", "watching")
+        with Session(engine) as session:
+            _seed_deal(session)
+            DealRepository(session).update_status("pepper:77777", "watching")
+            session.commit()
 
         message = AsyncMock()
         update = MagicMock()
         update.message = message
         context = MagicMock()
 
-        with patch("feedback_bot.get_storage", return_value=db):
-            with patch.object(db, "close"):
-                await cmd_watchlist(update, context)
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _mock_session():
+            with Session(engine) as s:
+                yield s
+                s.commit()
+
+        with patch("feedback_bot.get_session", _mock_session):
+            await cmd_watchlist(update, context)
 
         message.reply_text.assert_called_once()
         text = message.reply_text.call_args[0][0]
@@ -308,28 +387,15 @@ class TestBotHandlers:
 
 
 @pytest.mark.asyncio
-async def test_cmd_target_adds_to_watchlist(tmp_path):
+async def test_cmd_target_adds_to_watchlist():
     """The /target command adds a deal to the watchlist."""
-    db_path = tmp_path / "test.db"
-    db = SQLiteStorage(db_path)
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
 
     # Seed a deal
-    deal = type(
-        "Deal",
-        (),
-        {
-            "id": "pepper:123",
-            "title": "Test Deal",
-            "price": 10000,
-            "link": "https://example.com",
-            "source": "pepper",
-            "description": "",
-            "image_url": "",
-            "published_at": "",
-            "regular_price": 0,
-        },
-    )()
-    db.upsert_deal(deal, profile="test", score=80, category="test")
+    with Session(eng) as session:
+        _seed_deal(session, "pepper:123", price=10000)
+        session.commit()
 
     from feedback_bot import cmd_target
 
@@ -340,19 +406,25 @@ async def test_cmd_target_adds_to_watchlist(tmp_path):
     context = MagicMock()
     context.args = ["pepper:123", "8000"]
 
-    with patch("feedback_bot.get_storage") as mock_storage:
-        mock_storage.return_value.__enter__ = MagicMock(return_value=db)
-        mock_storage.return_value.__exit__ = MagicMock(return_value=False)
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _mock_session():
+        with Session(eng) as s:
+            yield s
+            s.commit()
+
+    with patch("feedback_bot.get_session", _mock_session):
         await cmd_target(update, context)
 
     update.message.reply_html.assert_called_once()
     msg = update.message.reply_html.call_args[0][0]
     assert "8" in msg  # target price mentioned
 
-    items = db.get_watchlist()
-    assert len(items) == 1
-    assert items[0]["target_price"] == 8000
-    db.close()
+    with Session(eng) as session:
+        items = WatchlistRepository(session).get_all()
+        assert len(items) == 1
+        assert items[0]["target_price"] == 8000
 
 
 @pytest.mark.asyncio

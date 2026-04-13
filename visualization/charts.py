@@ -5,10 +5,12 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
 logger = logging.getLogger(__name__)
 
 
-def _import_matplotlib():
+def _import_matplotlib() -> tuple:  # type: ignore[type-arg]
     """Lazy-import matplotlib with Agg backend.
 
     Raises ImportError with a helpful message if matplotlib is not installed.
@@ -28,24 +30,29 @@ def _import_matplotlib():
         ) from err
 
 
-def generate_price_chart(deal_id: str, db, output_path: str | None = None) -> Path:
+def generate_price_chart(deal_id: str, session: Session, output_path: str | None = None) -> Path:
     """Generate a price history line chart for a specific deal.
 
     Args:
         deal_id: The deal ID to chart.
-        db: SQLiteStorage instance.
+        session: SQLAlchemy Session instance.
         output_path: Optional path for the output PNG. Defaults to /tmp/price_chart_{deal_id}.png.
 
     Returns:
         Path to the generated PNG file.
     """
+    from storage.repositories import DealRepository, PriceRepository
+
     plt, mdates = _import_matplotlib()
 
-    deal = db.get_deal(deal_id)
+    deal_repo = DealRepository(session)
+    price_repo = PriceRepository(session)
+
+    deal = deal_repo.get_by_id(deal_id)
     if not deal:
         raise ValueError(f"Nie znaleziono oferty: {deal_id}")
 
-    history = db.get_price_history(deal_id)
+    history = price_repo.get_history(deal_id)
     if not history:
         raise ValueError(f"Brak historii cen dla: {deal_id}")
 
@@ -111,7 +118,7 @@ def generate_digest_chart(drops: list[dict], output_path: str | None = None) -> 
     """Generate a bar chart of the biggest price drops from the last week.
 
     Args:
-        drops: List of price drop dicts (from SQLiteStorage.get_price_drops).
+        drops: List of price drop dicts (from PriceRepository.get_drops).
         output_path: Optional path for the output PNG.
 
     Returns:
@@ -171,33 +178,41 @@ def generate_digest_chart(drops: list[dict], output_path: str | None = None) -> 
     return path
 
 
-def generate_trend_chart(profile: str, db, days: int = 30, output_path: str | None = None) -> Path:
+def generate_trend_chart(
+    profile: str, session: Session, days: int = 30, output_path: str | None = None
+) -> Path:
     """Generate a line chart showing average prices in a profile over the last N days.
 
     Args:
         profile: Profile name to chart.
-        db: SQLiteStorage instance.
+        session: SQLAlchemy Session instance.
         days: Number of days to look back.
         output_path: Optional path for the output PNG.
 
     Returns:
         Path to the generated PNG file.
     """
+    from storage.repositories import DealRepository, PriceRepository
+
     plt, mdates = _import_matplotlib()
 
     cutoff = (datetime.now() - timedelta(days=days)).isoformat()
 
+    deal_repo = DealRepository(session)
+    price_repo = PriceRepository(session)
+
     # Get all deals for this profile
-    deals = db.get_deals(profile=profile)
+    deals = deal_repo.get_filtered(profile=profile)
     if not deals:
         raise ValueError(f"Brak ofert dla profilu: {profile}")
 
     deal_ids = [d["id"] for d in deals]
 
-    # Collect all price points within the date range
+    # Collect all price points within the date range (batch query — no N+1)
     daily_prices: dict[str, list[int]] = {}
+    histories = price_repo.get_histories_batch(deal_ids)
     for deal_id in deal_ids:
-        history = db.get_price_history(deal_id)
+        history = histories.get(deal_id, [])
         for h in history:
             if h["recorded_at"] < cutoff:
                 continue

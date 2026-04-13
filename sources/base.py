@@ -11,7 +11,10 @@ import requests
 logger = logging.getLogger(__name__)
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+        " (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.5",
 }
@@ -39,7 +42,7 @@ class Deal:
         default_factory=list
     )  # [{"source": "...", "link": "...", "price": N}]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.title or not self.title.strip():
             raise ValueError(f"Deal has empty title: {self.id}")
         if self.price < 0:

@@ -1,9 +1,15 @@
 """Bike-specific filter — extends BaseFilter with size, color, tire, race logic."""
 
+from __future__ import annotations
+
 import logging
 import re
+from typing import TYPE_CHECKING
 
 from .base import BaseFilter, ScoreResult
+
+if TYPE_CHECKING:
+    from sources.base import Deal
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +25,7 @@ class BikeFilter(BaseFilter):
         self.excluded_colors: list = custom.get("excluded_colors", [])
         self.race_keywords: list = custom.get("race_keywords", [])
 
-    def score_deal(self, deal) -> ScoreResult:
+    def score_deal(self, deal: Deal) -> ScoreResult:
         """Score a bike deal with additional bike-specific checks."""
         text = (deal.title + " " + deal.description).lower()
 
@@ -167,8 +173,7 @@ class BikeFilter(BaseFilter):
             if re.search(rf"\b{re.escape(brand)}\b", text, re.IGNORECASE):
                 if any(sz in [s.lower() for s in target_sizes] for sz in found_sizes):
                     return "good"
-                else:
-                    return "wrong"
+                return "wrong"
 
         # Generic check
         generic_lower = [s.lower() for s in self.generic_good_sizes]

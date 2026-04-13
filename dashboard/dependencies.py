@@ -1,28 +1,27 @@
+# dashboard/dependencies.py
 """Shared dependencies for dashboard routes."""
 
 import os
 import re
+from collections.abc import Iterator
 from pathlib import Path
 
 import yaml
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
-from storage.sqlite import SQLiteStorage
+from storage.database import get_session
 
 BASE_DIR = Path(__file__).parent.parent
-DB_PATH = Path(os.environ.get("DEAL_HUNTER_DB_PATH", str(BASE_DIR / "state" / "deals.db")))
 PROFILES_DIR = Path(os.environ.get("DEAL_HUNTER_PROFILES_DIR", str(BASE_DIR / "profiles")))
 
 _PROFILE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
 
 
-def get_db():
-    """FastAPI dependency: yields SQLiteStorage instance, closes after request."""
-    db = SQLiteStorage(DB_PATH)
-    try:
-        yield db
-    finally:
-        db.close()
+def get_db() -> Iterator[Session]:
+    """FastAPI dependency: yields a SQLAlchemy session with auto commit/rollback."""
+    with get_session() as session:
+        yield session
 
 
 def safe_profile_path(name: str) -> Path:
@@ -41,7 +40,7 @@ def safe_load_profile(name: str) -> dict | None:
     if not path.exists():
         return None
     try:
-        with open(path, encoding="utf-8") as f:
+        with path.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
         return dict(data) if data else None
     except (yaml.YAMLError, OSError):

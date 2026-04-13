@@ -1,8 +1,10 @@
 """Tests for the Deal Hunter web dashboard."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 from dashboard import _get_profiles, format_pln, safe_load_profile
+from storage.repositories import DealRepository
 
 # ──────────────── Unit tests: format_pln ────────────────
 
@@ -623,12 +625,12 @@ class TestApiUpdateStatus:
         )
         assert response.status_code == 404
 
-    def test_status_persists_in_db(self, client, dashboard_db):
+    def test_status_persists_in_db(self, client, dashboard_session):
         client.post(
             "/api/deals/pepper:99999/status",
             data={"status": "watching"},
         )
-        deal = dashboard_db.get_deal("pepper:99999")
+        deal = DealRepository(dashboard_session).get_by_id("pepper:99999")
         assert deal["status"] == "watching"
 
     def test_update_response_preserves_action_buttons(self, client):
@@ -651,16 +653,16 @@ class TestApiUpdateStatus:
         )
         assert "Skipped" in response.text
 
-    def test_sequential_status_updates(self, client, dashboard_db):
+    def test_sequential_status_updates(self, client, dashboard_session):
         """Changing status multiple times should always reflect the latest."""
         client.post("/api/deals/pepper:99999/status", data={"status": "watching"})
-        assert dashboard_db.get_deal("pepper:99999")["status"] == "watching"
+        assert DealRepository(dashboard_session).get_by_id("pepper:99999")["status"] == "watching"
 
         client.post("/api/deals/pepper:99999/status", data={"status": "rejected"})
-        assert dashboard_db.get_deal("pepper:99999")["status"] == "rejected"
+        assert DealRepository(dashboard_session).get_by_id("pepper:99999")["status"] == "rejected"
 
         client.post("/api/deals/pepper:99999/status", data={"status": "active"})
-        assert dashboard_db.get_deal("pepper:99999")["status"] == "active"
+        assert DealRepository(dashboard_session).get_by_id("pepper:99999")["status"] == "active"
 
 
 class TestApiStats:
@@ -800,28 +802,28 @@ class TestE2EWorkflows:
         assert response.status_code == 302
         assert "view=drops" in response.headers["location"]
 
-    def test_full_deal_lifecycle(self, client, dashboard_db):
+    def test_full_deal_lifecycle(self, client, dashboard_session):
         """Deal goes through active -> watching -> rejected -> active."""
         deal_id = "pepper:99999"
 
         # Initially active
-        deal = dashboard_db.get_deal(deal_id)
+        deal = DealRepository(dashboard_session).get_by_id(deal_id)
         assert deal["status"] == "active"
 
         # Watch it
         resp = client.post(f"/api/deals/{deal_id}/status", data={"status": "watching"})
         assert resp.status_code == 200
-        assert dashboard_db.get_deal(deal_id)["status"] == "watching"
+        assert DealRepository(dashboard_session).get_by_id(deal_id)["status"] == "watching"
 
         # Reject it
         resp = client.post(f"/api/deals/{deal_id}/status", data={"status": "rejected"})
         assert resp.status_code == 200
-        assert dashboard_db.get_deal(deal_id)["status"] == "rejected"
+        assert DealRepository(dashboard_session).get_by_id(deal_id)["status"] == "rejected"
 
         # Reactivate
         resp = client.post(f"/api/deals/{deal_id}/status", data={"status": "active"})
         assert resp.status_code == 200
-        assert dashboard_db.get_deal(deal_id)["status"] == "active"
+        assert DealRepository(dashboard_session).get_by_id(deal_id)["status"] == "active"
 
     def test_api_deals_matches_page_deals(self, client):
         """API /api/deals returns same data as visible on /deals page."""
@@ -976,13 +978,9 @@ class TestProfilePages:
         assert response.status_code == 200
         data = response.json()
         # Clean up: delete the created file if it exists
-        import os
-
-        profile_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "profiles", "test_create_profile.yaml"
-        )
-        if os.path.exists(profile_path):
-            os.unlink(profile_path)
+        profile_path = Path(__file__).parent.parent / "profiles" / "test_create_profile.yaml"
+        if profile_path.exists():
+            profile_path.unlink()
         assert data.get("ok") is True
 
     def test_api_delete_profile(self, client):
@@ -1090,7 +1088,7 @@ class TestComparePage:
         response = client.get("/compare?ids=pepper:99999,ceneo:88888")
         assert "share-link" in response.text or "copy" in response.text.lower()
 
-    def test_compare_max_5_deals(self, client, dashboard_db):
+    def test_compare_max_5_deals(self, client, dashboard_session):
         """Compare page enforces max 5 deals."""
         # Only 4 deals exist in seeded data, so even with 6 IDs only found ones show
         ids = "pepper:99999,ceneo:88888,pepper:77777,pepper:66666,fake:1,fake:2"
@@ -1290,9 +1288,9 @@ class TestTunerPage:
         # Clean up
         client.delete("/api/profiles/test_tuner_profile")
 
-    def test_tuner_simulate_with_data(self, client, dashboard_db):
+    def test_tuner_simulate_with_data(self, client, dashboard_session):
         """Simulate API returns scoring results for deals in DB."""
-        # Create profile matching deals in dashboard_db (profile="bikes")
+        # Create profile matching deals in dashboard_session (profile="bikes")
         client.post(
             "/api/profiles",
             json={
@@ -1328,7 +1326,7 @@ class TestTunerPage:
         # Clean up
         client.delete("/api/profiles/bikes")
 
-    def test_tuner_simulate_returns_diff(self, client, dashboard_db):
+    def test_tuner_simulate_returns_diff(self, client, dashboard_session):
         """Simulate with different rules produces different scores."""
         client.post(
             "/api/profiles",
@@ -1479,3 +1477,31 @@ class TestCompareAndTunerWorkflows:
         response = client.get("/deals")
         assert response.status_code == 200
         assert 'href="/tuner"' not in response.text
+
+
+def test_deals_per_page_env_override(monkeypatch):
+    """DEALS_PER_PAGE reads from env var with fallback to 50."""
+    monkeypatch.setenv("DEALS_PER_PAGE", "25")
+    import importlib
+
+    import dashboard.services
+
+    importlib.reload(dashboard.services)
+    assert dashboard.services.DEALS_PER_PAGE == 25
+    monkeypatch.delenv("DEALS_PER_PAGE")
+    importlib.reload(dashboard.services)
+    assert dashboard.services.DEALS_PER_PAGE == 50
+
+
+def test_score_threshold_env_override(monkeypatch):
+    """SCORE_THRESHOLD reads from env var with fallback to 70."""
+    monkeypatch.setenv("SCORE_THRESHOLD", "60")
+    import importlib
+
+    import dashboard.services
+
+    importlib.reload(dashboard.services)
+    assert dashboard.services.SCORE_THRESHOLD == 60
+    monkeypatch.delenv("SCORE_THRESHOLD")
+    importlib.reload(dashboard.services)
+    assert dashboard.services.SCORE_THRESHOLD == 70

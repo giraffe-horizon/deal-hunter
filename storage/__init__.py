@@ -1,5 +1,40 @@
-"""Storage layer for Deal Hunter."""
+# storage/__init__.py
+"""Storage layer — SQLAlchemy ORM models, session management, and repositories."""
 
-from storage.sqlite import SQLiteStorage
+from storage.database import SessionLocal, engine, get_session
+from storage.models import (
+    AlertQueue,
+    Base,
+    Deal,
+    Feedback,
+    PriceHistory,
+    SeenDeal,
+    WatchlistItem,
+)
+from storage.repositories import (
+    AlertQueueRepository,
+    DealRepository,
+    FeedbackRepository,
+    PriceRepository,
+    SeenDealRepository,
+    WatchlistRepository,
+)
 
-__all__ = ["SQLiteStorage"]
+__all__ = [
+    "AlertQueue",
+    "AlertQueueRepository",
+    "Base",
+    "Deal",
+    "DealRepository",
+    "Feedback",
+    "FeedbackRepository",
+    "PriceHistory",
+    "PriceRepository",
+    "SeenDeal",
+    "SeenDealRepository",
+    "SessionLocal",
+    "WatchlistItem",
+    "WatchlistRepository",
+    "engine",
+    "get_session",
+]

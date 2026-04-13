@@ -4,9 +4,12 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.orm import Session
 
 from sources.base import Deal
-from storage.sqlite import SQLiteStorage
+from storage.models import Base
+from storage.repositories import DealRepository
 
 
 @pytest.fixture
@@ -65,76 +68,107 @@ def tmp_state_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def dashboard_db(tmp_path):
-    """SQLiteStorage seeded with test data for dashboard tests."""
-    db = SQLiteStorage(tmp_path / "dashboard.db")
-    today = datetime.now().isoformat()
+def dashboard_session(tmp_path):
+    """SQLAlchemy session seeded with test data for dashboard tests."""
+    eng = create_engine(f"sqlite:///{tmp_path / 'dashboard.db'}")
 
-    # Deal 1: high-score bike, active, seen today
-    deal1 = Deal(
+    @event.listens_for(eng, "connect")
+    def _set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    Base.metadata.create_all(eng)
+    session = Session(eng)
+
+    today = datetime.now().isoformat()
+    deal_repo = DealRepository(session)
+
+    # Deal 1: high-score bike, active (set first_seen/last_seen early so price history
+    # manual inserts come after the upsert's initial price)
+    deal_repo.upsert(
         id="pepper:99999",
         title="Test Carbon Bike XL",
         price=8500,
         link="https://example.com/deal/99999",
         source="pepper",
         description="A great carbon bike",
-        temperature=120,
         image_url="https://example.com/img.jpg",
-        published_at="2026-04-01T10:00:00",
+        profile="bikes",
+        score=85,
+        category="road",
+        first_seen="2026-03-15T10:00:00",
+        last_seen="2026-03-15T10:00:00",
     )
-    db.upsert_deal(deal1, "bikes", 85, category="road")
 
     # Deal 2: mid-score NAS, watching
-    deal2 = Deal(
+    deal_repo.upsert(
         id="ceneo:88888",
         title="NAS HDD Seagate IronWolf 8TB",
         price=1200,
         link="https://ceneo.pl/88888",
         source="ceneo",
         description="Seagate IronWolf 8TB",
-        temperature=0,
         image_url="https://example.com/hdd.jpg",
-        published_at="2026-04-02T12:00:00",
+        profile="nas_hdd",
+        score=55,
+        category="storage",
     )
-    db.upsert_deal(deal2, "nas_hdd", 55, category="storage")
-    db.update_deal_status("ceneo:88888", "watching")
+    deal_repo.update_status("ceneo:88888", "watching")
 
     # Deal 3: low-score bike, rejected, no category
-    deal3 = Deal(
+    deal_repo.upsert(
         id="pepper:77777",
         title="Cheap Broken Bike Parts",
         price=200,
         link="https://example.com/deal/77777",
         source="pepper",
         description="Spare parts only",
-        temperature=0,
         image_url="",
-        published_at="2026-03-15T08:00:00",
+        profile="bikes",
+        score=20,
+        category="",
     )
-    db.upsert_deal(deal3, "bikes", 20, category="")
-    db.update_deal_status("pepper:77777", "rejected")
+    deal_repo.update_status("pepper:77777", "rejected")
 
     # Deal 4: seen today (for new_today metric)
-    deal4 = Deal(
+    deal_repo.upsert(
         id="pepper:66666",
         title="Brand New Road Bike Today",
         price=5000,
         link="https://example.com/deal/66666",
         source="pepper",
         description="Fresh deal",
-        temperature=50,
         image_url="",
-        published_at=today,
+        profile="bikes",
+        score=72,
+        category="road",
+        first_seen=today,
     )
-    db.upsert_deal(deal4, "bikes", 72, category="road")
 
-    # Price history for deal1 (two prices → enables drop detection)
-    db.record_price("pepper:99999", 9500)
-    # Small delay not needed — record_price uses datetime.now() each call
-    db.record_price("pepper:99999", 8500)
+    session.flush()
 
-    yield db
-    db.close()
+    # Price history for deal1 (two prices — enables drop detection)
+    session.execute(
+        text(
+            "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"
+            " VALUES (:deal_id, :price, :recorded_at)"
+        ),
+        {"deal_id": "pepper:99999", "price": 9500, "recorded_at": "2026-03-20T10:00:00"},
+    )
+    session.execute(
+        text(
+            "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"
+            " VALUES (:deal_id, :price, :recorded_at)"
+        ),
+        {"deal_id": "pepper:99999", "price": 8500, "recorded_at": "2026-03-25T10:00:00"},
+    )
+
+    session.commit()
+
+    yield session
+    session.close()
 
 
 class _CsrfTestClient:
@@ -171,14 +205,16 @@ class _CsrfTestClient:
 
 
 @pytest.fixture
-def raw_client(dashboard_db):
+def raw_client(dashboard_session):
     """FastAPI TestClient WITHOUT auto CSRF headers (for CSRF-specific tests)."""
     from fastapi.testclient import TestClient
 
     from dashboard import app, get_db
 
     def _override():
-        yield dashboard_db
+        yield dashboard_session
+        # Flush pending ORM writes so subsequent raw-SQL reads see them
+        dashboard_session.flush()
 
     app.dependency_overrides[get_db] = _override
     yield TestClient(app, follow_redirects=False)
@@ -186,14 +222,16 @@ def raw_client(dashboard_db):
 
 
 @pytest.fixture
-def client(dashboard_db):
-    """FastAPI TestClient with dashboard_db injected and auto CSRF headers."""
+def client(dashboard_session):
+    """FastAPI TestClient with dashboard_session injected and auto CSRF headers."""
     from fastapi.testclient import TestClient
 
     from dashboard import app, get_db
 
     def _override():
-        yield dashboard_db
+        yield dashboard_session
+        # Flush pending ORM writes so subsequent raw-SQL reads see them
+        dashboard_session.flush()
 
     app.dependency_overrides[get_db] = _override
     yield _CsrfTestClient(TestClient(app, follow_redirects=False))

@@ -5,62 +5,96 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from storage.models import Base, PriceHistory
+from storage.models import Deal as DealModel
 
 # ── Fixtures ──
 
 
 @pytest.fixture
-def mock_db():
-    """Create a mock SQLiteStorage with sample data."""
-    db = MagicMock()
+def engine():
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    return eng
 
-    db.get_deal.return_value = {
-        "id": "pepper:12345",
-        "title": "Canyon Endurace CF 8 Di2",
-        "price": 10499,
-        "link": "https://example.com/deal",
-        "source": "pepper",
-        "profile": "bikes",
-    }
 
-    now = datetime.now()
-    db.get_price_history.return_value = [
-        {
-            "deal_id": "pepper:12345",
-            "price": 12999,
-            "recorded_at": (now - timedelta(days=10)).isoformat(),
-        },
-        {
-            "deal_id": "pepper:12345",
-            "price": 11999,
-            "recorded_at": (now - timedelta(days=7)).isoformat(),
-        },
-        {
-            "deal_id": "pepper:12345",
-            "price": 10999,
-            "recorded_at": (now - timedelta(days=3)).isoformat(),
-        },
-        {"deal_id": "pepper:12345", "price": 10499, "recorded_at": now.isoformat()},
-    ]
+@pytest.fixture
+def chart_session(engine):
+    """Session seeded with sample data for chart generation."""
+    with Session(engine) as session:
+        now = datetime.now()
 
-    db.get_deals.return_value = [
-        {
-            "id": "pepper:12345",
-            "title": "Canyon Endurace CF 8 Di2",
-            "price": 10499,
-            "source": "pepper",
-            "profile": "bikes",
-        },
-        {
-            "id": "pepper:67890",
-            "title": "Giant Defy Advanced 2",
-            "price": 8999,
-            "source": "pepper",
-            "profile": "bikes",
-        },
-    ]
+        # Deal with price history
+        deal = DealModel(
+            id="pepper:12345",
+            title="Canyon Endurace CF 8 Di2",
+            price=10499,
+            link="https://example.com/deal",
+            source="pepper",
+            description="",
+            image_url="",
+            profile="bikes",
+            score=80,
+            status="active",
+            first_seen=now.isoformat(),
+            last_seen=now.isoformat(),
+        )
+        session.add(deal)
 
-    return db
+        # Second deal for trend chart
+        deal2 = DealModel(
+            id="pepper:67890",
+            title="Giant Defy Advanced 2",
+            price=8999,
+            link="https://example.com/deal2",
+            source="pepper",
+            description="",
+            image_url="",
+            profile="bikes",
+            score=75,
+            status="active",
+            first_seen=now.isoformat(),
+            last_seen=now.isoformat(),
+        )
+        session.add(deal2)
+        session.flush()
+
+        # Price history for first deal
+        prices = [
+            (12999, now - timedelta(days=10)),
+            (11999, now - timedelta(days=7)),
+            (10999, now - timedelta(days=3)),
+            (10499, now),
+        ]
+        for price, ts in prices:
+            session.add(
+                PriceHistory(
+                    deal_id="pepper:12345",
+                    price=price,
+                    recorded_at=ts.isoformat(),
+                )
+            )
+
+        # Price history for second deal
+        session.add(
+            PriceHistory(
+                deal_id="pepper:67890",
+                price=8999,
+                recorded_at=(now - timedelta(days=5)).isoformat(),
+            )
+        )
+        session.flush()
+        yield session
+
+
+@pytest.fixture
+def empty_session(engine):
+    """Session with no data."""
+    with Session(engine) as session:
+        yield session
 
 
 @pytest.fixture
@@ -96,7 +130,7 @@ def sample_drops():
 
 def _is_png(path: Path) -> bool:
     """Check if a file starts with a PNG signature."""
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         header = f.read(8)
     return header == b"\x89PNG\r\n\x1a\n"
 
@@ -105,41 +139,55 @@ def _is_png(path: Path) -> bool:
 
 
 class TestGeneratePriceChart:
-    def test_generates_valid_png(self, mock_db, tmp_path):
+    def test_generates_valid_png(self, chart_session, tmp_path):
         from visualization.charts import generate_price_chart
 
         output = tmp_path / "test_chart.png"
-        result = generate_price_chart("pepper:12345", mock_db, output_path=str(output))
+        result = generate_price_chart("pepper:12345", chart_session, output_path=str(output))
 
         assert result == output
         assert output.exists()
         assert _is_png(output)
 
-    def test_default_output_path(self, mock_db):
+    def test_default_output_path(self, chart_session):
         from visualization.charts import generate_price_chart
 
-        result = generate_price_chart("pepper:12345", mock_db)
+        result = generate_price_chart("pepper:12345", chart_session)
 
         assert result.exists()
         assert _is_png(result)
         # Cleanup
         result.unlink(missing_ok=True)
 
-    def test_deal_not_found(self, mock_db):
+    def test_deal_not_found(self, empty_session):
         from visualization.charts import generate_price_chart
-
-        mock_db.get_deal.return_value = None
 
         with pytest.raises(ValueError, match="Nie znaleziono oferty"):
-            generate_price_chart("nonexistent:999", mock_db)
+            generate_price_chart("nonexistent:999", empty_session)
 
-    def test_no_price_history(self, mock_db):
+    def test_no_price_history(self, engine):
         from visualization.charts import generate_price_chart
 
-        mock_db.get_price_history.return_value = []
+        # Create a deal with no price history
+        with Session(engine) as session:
+            deal = DealModel(
+                id="pepper:noprice",
+                title="No Price Deal",
+                price=1000,
+                source="pepper",
+                description="",
+                image_url="",
+                profile="bikes",
+                score=50,
+                status="active",
+                first_seen=datetime.now().isoformat(),
+                last_seen=datetime.now().isoformat(),
+            )
+            session.add(deal)
+            session.flush()
 
-        with pytest.raises(ValueError, match="Brak historii cen"):
-            generate_price_chart("pepper:12345", mock_db)
+            with pytest.raises(ValueError, match="Brak historii cen"):
+                generate_price_chart("pepper:noprice", session)
 
 
 # ── generate_digest_chart ──
@@ -176,31 +224,45 @@ class TestGenerateDigestChart:
 
 
 class TestGenerateTrendChart:
-    def test_generates_valid_png(self, mock_db, tmp_path):
+    def test_generates_valid_png(self, chart_session, tmp_path):
         from visualization.charts import generate_trend_chart
 
         output = tmp_path / "trend.png"
-        result = generate_trend_chart("bikes", mock_db, days=30, output_path=str(output))
+        result = generate_trend_chart("bikes", chart_session, days=30, output_path=str(output))
 
         assert result == output
         assert output.exists()
         assert _is_png(output)
 
-    def test_no_deals_raises(self, mock_db):
+    def test_no_deals_raises(self, empty_session):
         from visualization.charts import generate_trend_chart
-
-        mock_db.get_deals.return_value = []
 
         with pytest.raises(ValueError, match="Brak ofert"):
-            generate_trend_chart("empty_profile", mock_db)
+            generate_trend_chart("empty_profile", empty_session)
 
-    def test_no_price_data_raises(self, mock_db):
+    def test_no_price_data_raises(self, engine):
         from visualization.charts import generate_trend_chart
 
-        mock_db.get_price_history.return_value = []
+        # Create a deal with no price history
+        with Session(engine) as session:
+            deal = DealModel(
+                id="pepper:noprice",
+                title="No Price Deal",
+                price=1000,
+                source="pepper",
+                description="",
+                image_url="",
+                profile="test_profile",
+                score=50,
+                status="active",
+                first_seen=datetime.now().isoformat(),
+                last_seen=datetime.now().isoformat(),
+            )
+            session.add(deal)
+            session.flush()
 
-        with pytest.raises(ValueError, match="Brak danych cenowych"):
-            generate_trend_chart("bikes", mock_db)
+            with pytest.raises(ValueError, match="Brak danych cenowych"):
+                generate_trend_chart("test_profile", session)
 
 
 # ── Lazy import ──
@@ -208,7 +270,6 @@ class TestGenerateTrendChart:
 
 class TestLazyImport:
     def test_import_error_message(self):
-
         # Temporarily hide matplotlib
         real_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
 

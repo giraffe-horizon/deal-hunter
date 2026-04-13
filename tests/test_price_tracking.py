@@ -1,12 +1,34 @@
-"""Tests for price tracking."""
+"""Tests for price tracking via SQLAlchemy repositories."""
 
-import sys
-from pathlib import Path
+from datetime import datetime
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from deal_hunter import check_price_changes
 from sources.base import Deal
+from storage.models import Base, PriceHistory
+from storage.models import Deal as DealModel
+from storage.repositories import PriceRepository
+
+
+@pytest.fixture
+def engine():
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    return eng
+
+
+@pytest.fixture
+def session(engine):
+    with Session(engine) as s:
+        yield s
+
+
+@pytest.fixture
+def price_repo(session):
+    return PriceRepository(session)
 
 
 def _make_deal(**kwargs) -> Deal:
@@ -25,16 +47,37 @@ def _make_deal(**kwargs) -> Deal:
     return Deal(**defaults)
 
 
-def test_price_drop_detected():
+def _seed_deal_with_prices(session, deal_id="test:1", prices=None):
+    """Insert a deal and its price history."""
+    now = datetime.now().isoformat()
+    deal = DealModel(
+        id=deal_id,
+        title="Test Deal",
+        price=prices[-1] if prices else 0,
+        source="pepper",
+        description="",
+        image_url="",
+        profile="test",
+        score=80,
+        status="active",
+        first_seen=now,
+        last_seen=now,
+    )
+    session.add(deal)
+    session.flush()
+    if prices:
+        for i, p in enumerate(prices):
+            ts = f"2026-04-{10 + i:02d}T10:00:00"
+            ph = PriceHistory(deal_id=deal_id, price=p, recorded_at=ts)
+            session.add(ph)
+    session.flush()
+
+
+def test_price_drop_detected(session, price_repo):
     """Price decrease returns structured dict."""
-    state = {
-        "seen": {},
-        "prices": {
-            "test:1": [{"price": 10000, "ts": "2026-03-19T10:00:00"}],
-        },
-    }
+    _seed_deal_with_prices(session, "test:1", prices=[10000, 8000])
     deal = _make_deal(title="Test Deal", price=8000)
-    result = check_price_changes(deal, state, "test")
+    result = check_price_changes(deal, price_repo)
     assert result is not None
     assert result["type"] == "drop"
     assert result["old_price"] == 10000
@@ -42,24 +85,17 @@ def test_price_drop_detected():
     assert result["diff_pln"] == 2000
 
 
-def test_price_increase_ignored():
-    """Price increase is logged but returns None by default."""
-    state = {
-        "seen": {},
-        "prices": {
-            "test:1": [{"price": 8000, "ts": "2026-03-19T10:00:00"}],
-        },
-    }
+def test_price_increase_ignored(session, price_repo):
+    """Price increase returns None by default."""
+    _seed_deal_with_prices(session, "test:1", prices=[8000, 10000])
     deal = _make_deal(title="Test Deal", price=10000)
-    result = check_price_changes(deal, state, "test")
+    result = check_price_changes(deal, price_repo)
     assert result is None
 
 
-def test_no_previous_price():
-    """First time seen — no tracking, just records price."""
-    state = {"seen": {}, "prices": {}}
+def test_no_previous_price(session, price_repo):
+    """First time seen (single price entry) — no previous price."""
+    _seed_deal_with_prices(session, "test:1", prices=[5000])
     deal = _make_deal(title="Brand New Deal", price=5000)
-    result = check_price_changes(deal, state, "test")
+    result = check_price_changes(deal, price_repo)
     assert result is None
-    # Price should be recorded
-    assert len(state["prices"]) == 1

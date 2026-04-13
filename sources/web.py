@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+from typing import Any
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -109,7 +110,7 @@ class WebSource(Source):
         return deals
 
     @staticmethod
-    def _extract(container, selector: str) -> str:
+    def _extract(container: Any, selector: str) -> str:
         """Extract text or attribute from a container using a selector.
 
         Supports @attr syntax: ``a@href`` finds ``<a>`` then gets the href attribute.

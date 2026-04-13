@@ -1,8 +1,14 @@
 """Base scoring engine — loads rules from YAML profile."""
 
+from __future__ import annotations
+
 import logging
 import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sources.base import Deal
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +77,7 @@ class BaseFilter:
 
         return False, "", ""
 
-    def score_deal(self, deal) -> ScoreResult:
+    def score_deal(self, deal: Deal) -> ScoreResult:
         """Score a deal. Returns ScoreResult with score, reasons, and rejection status."""
         result = ScoreResult(score=0)
 
