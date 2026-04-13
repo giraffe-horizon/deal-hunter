@@ -216,3 +216,42 @@ class TestPriceTracker:
         tracker = PriceTracker(repo)
         deal = _make_deal(price=0)
         assert tracker.check_price_change(deal) is None
+
+
+class TestAlertService:
+    def test_is_quiet_hours_no_config(self):
+        from services.alerter import is_quiet_hours
+
+        assert is_quiet_hours({}) is False
+
+    def test_send_deal_alerts_no_telegram(self):
+        from services.alerter import AlertService
+
+        repo = MagicMock()
+        svc = AlertService(telegram=None, alert_repo=repo)
+        result = svc.send_deal_alerts(
+            [{"deal": _make_deal(), "score": 50, "plus": [], "minus": []}],
+            {},
+            "test",
+            None,
+            5,
+        )
+        assert result == 0
+
+    def test_send_source_failure_no_telegram(self):
+        from services.alerter import AlertService
+
+        repo = MagicMock()
+        svc = AlertService(telegram=None, alert_repo=repo)
+        svc.send_source_failure_alert(["pepper"], {"pepper": {"consecutive_failures": 5}}, None)
+        # Should not raise
+
+    def test_flush_queued_empty(self):
+        from services.alerter import AlertService
+
+        repo = MagicMock()
+        repo.get_pending.return_value = []
+        telegram = MagicMock()
+        svc = AlertService(telegram=telegram, alert_repo=repo)
+        result = svc.flush_queued("test", {}, None, 10)
+        assert result == 0
