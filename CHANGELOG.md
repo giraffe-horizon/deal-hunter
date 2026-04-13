@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v0.14.1 (2026-04-13)
+
+### Bug Fixes
+
+- **docker**: Update Dockerfile for Phase 3 file changes
+  ([`44633f0`](https://github.com/giraffe-horizon/deal-hunter/commit/44633f06869bec063a1462562bef99cefd4b652c))
+
+Remove deleted health.py, add new cli/ and services/ packages.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.14.0 (2026-04-13)
 
 ### Bug Fixes
