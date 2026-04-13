@@ -14,7 +14,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -31,7 +31,14 @@ from health import (
     save_health,
     update_sources_health,
 )
-from storage.sqlite import SQLiteStorage
+from storage.database import get_session
+from storage.repositories import (
+    AlertQueueRepository,
+    DealRepository,
+    PriceRepository,
+    SeenDealRepository,
+    WatchlistRepository,
+)
 
 __version__ = "0.12.2"  # maintained by semantic-release
 with contextlib.suppress(importlib.metadata.PackageNotFoundError):
@@ -45,9 +52,6 @@ from utils.validation import validate_profile
 
 BASE_DIR = Path(__file__).parent
 PROFILES_DIR = BASE_DIR / "profiles"
-STATE_DIR = BASE_DIR / "state"
-STATE_TTL_DAYS = 14
-DB_PATH = STATE_DIR / "deals.db"
 
 
 def is_quiet_hours(profile: dict) -> bool:
@@ -132,53 +136,6 @@ def _parse_topic_id() -> int | None:
         return None
 
 
-# ──────────────── STATE ────────────────
-
-
-def _state_path(profile_name: str) -> Path:
-    STATE_DIR.mkdir(exist_ok=True)
-    return STATE_DIR / f"{profile_name}_state.json"
-
-
-def load_state(profile_name: str) -> dict:
-    """Load state with TTL cleanup. Supports both old (flat) and new (sectioned) format."""
-    path = _state_path(profile_name)
-    if not path.exists():
-        return {"seen": {}, "prices": {}}
-    try:
-        with path.open(encoding="utf-8") as f:
-            state = json.load(f)
-
-        # Backwards compat: old format was flat list
-        if isinstance(state, list):
-            return {"seen": {item: datetime.now().isoformat() for item in state}, "prices": {}}
-        if "seen" not in state:
-            # Old flat format — migrate
-            cutoff = (datetime.now() - timedelta(days=STATE_TTL_DAYS)).isoformat()
-            seen = {k: v for k, v in state.items() if isinstance(v, str) and v > cutoff}
-            return {"seen": seen, "prices": {}}
-
-        # New format — TTL cleanup on seen
-        cutoff = (datetime.now() - timedelta(days=STATE_TTL_DAYS)).isoformat()
-        state["seen"] = {k: v for k, v in state.get("seen", {}).items() if v > cutoff}
-        if "prices" not in state:
-            state["prices"] = {}
-        return dict(state)
-    except (json.JSONDecodeError, ValueError):
-        logger.warning(f"State file corrupted for {profile_name}, resetting")
-        return {"seen": {}, "prices": {}}
-
-
-def save_state(profile_name: str, state: dict) -> None:
-    """Save state to disk."""
-    path = _state_path(profile_name)
-    try:
-        with path.open("w", encoding="utf-8") as f:
-            json.dump(state, f, indent=2)
-    except Exception as e:
-        logger.error(f"Error saving state for {profile_name}: {e}")
-
-
 # ──────────────── PRICE TRACKING ────────────────
 
 
@@ -203,19 +160,12 @@ def get_price_tracking_config(profile: dict) -> dict:
 
 def check_price_changes(
     deal,
-    state: dict,
-    profile_name: str,
+    price_repo: PriceRepository,
     profile: dict | None = None,
-    db: "SQLiteStorage | None" = None,
 ) -> dict | None:
-    """Check if price changed for a known deal.
+    """Check if price changed for a known deal using SQLite price history.
 
-    Returns a structured dict on significant change:
-        {type: 'drop'|'increase', old_price, new_price, diff_pln, diff_percent, is_lowest_ever}
-    Returns None if no significant change.
-
-    The state JSON price tracking always runs (backwards compat).
-    If db (SQLiteStorage) is available, also checks for lowest-ever price.
+    Returns a structured dict on significant change, None otherwise.
     """
     if deal.price <= 0:
         return None
@@ -230,96 +180,40 @@ def check_price_changes(
             "track_increases": False,
         }
     )
-
     if not pt_config["enabled"]:
         return None
 
-    prices = state.get("prices", {})
-    # Use deal.id (source:native_id) to avoid cross-source false positives
-    dedup_key = deal.id
-    now = datetime.now().isoformat()
-
-    history = prices.get(dedup_key, [])
-
-    if not history:
-        # First time seeing this deal — record price
-        prices[dedup_key] = [{"price": deal.price, "ts": now}]
-        state["prices"] = prices
+    prev_price = price_repo.get_previous_price(deal.id)
+    if prev_price is None or deal.price == prev_price:
         return None
 
-    last_price = history[-1]["price"]
-    if deal.price == last_price:
-        return None
+    if deal.price < prev_price:
+        drop_abs = prev_price - deal.price
+        drop_pct = (drop_abs / prev_price) * 100 if prev_price > 0 else 0
 
-    # Price changed — append to state JSON
-    history.append({"price": deal.price, "ts": now})
-    prices[dedup_key] = history[-10:]  # Keep last 10 entries
-    state["prices"] = prices
-
-    if deal.price < last_price:
-        drop_abs = last_price - deal.price
-        drop_pct = (drop_abs / last_price) * 100 if last_price > 0 else 0
-
-        # Check thresholds (OR logic)
         if drop_pct >= pt_config["min_drop_percent"] or drop_abs >= pt_config["min_drop_amount"]:
-            # Cooldown: skip if we already alerted on this deal within 24h
-            if len(history) >= 3:
-                prev_ts = history[-2].get("ts", "")
-                if prev_ts:
-                    try:
-                        prev_dt = datetime.fromisoformat(prev_ts)
-                        if (datetime.now() - prev_dt).total_seconds() < 86400:
-                            logger.debug(
-                                f"Price drop cooldown for '{deal.title[:60]}': "
-                                f"last change was {prev_ts}"
-                            )
-                            return None
-                    except (ValueError, TypeError):
-                        pass
+            lowest = price_repo.get_lowest(deal.id)
+            is_lowest = lowest is not None and deal.price <= lowest
 
-            # Check if this is the lowest ever price via SQLite
-            is_lowest = False
-            if db:
-                try:
-                    lowest = db.get_lowest_price(deal.id)
-                    if lowest is None or deal.price <= lowest:
-                        is_lowest = True
-                except Exception:  # noqa: S110
-                    pass
-            else:
-                # Fallback: check state JSON history
-                all_prices = [h["price"] for h in history]
-                if deal.price <= min(all_prices):
-                    is_lowest = True
-
-            result = {
+            return {
                 "type": "drop",
-                "old_price": last_price,
+                "old_price": prev_price,
                 "new_price": deal.price,
                 "diff_pln": drop_abs,
                 "diff_percent": round(drop_pct, 1),
                 "is_lowest_ever": is_lowest,
             }
-            logger.info(
-                f"Price drop detected for '{deal.title[:60]}': "
-                f"{drop_abs} PLN ({last_price} -> {deal.price})"
-            )
-            return result
-    else:
-        increase_abs = deal.price - last_price
-        increase_pct = (increase_abs / last_price) * 100 if last_price > 0 else 0
-        logger.info(f"Price increased for '{deal.title[:60]}': {last_price} -> {deal.price}")
-
-        if pt_config["track_increases"]:
-            return {
-                "type": "increase",
-                "old_price": last_price,
-                "new_price": deal.price,
-                "diff_pln": increase_abs,
-                "diff_percent": round(increase_pct, 1),
-                "is_lowest_ever": False,
-            }
-
+    elif pt_config["track_increases"]:
+        increase_abs = deal.price - prev_price
+        increase_pct = (increase_abs / prev_price) * 100 if prev_price > 0 else 0
+        return {
+            "type": "increase",
+            "old_price": prev_price,
+            "new_price": deal.price,
+            "diff_pln": increase_abs,
+            "diff_percent": round(increase_pct, 1),
+            "is_lowest_ever": False,
+        }
     return None
 
 
@@ -546,9 +440,6 @@ def run_profile(
 
 def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_name: str) -> int:
     """Normal mode — find new deals, score, and notify. Returns number of alerts sent."""
-    state = load_state(profile_name)
-    seen = state.get("seen", {})
-    now = datetime.now().isoformat()
     emoji = profile.get("emoji", "\U0001f50d")
     currency = profile.get("currency", "PLN")
     threshold = profile.get("score_threshold", 50)
@@ -566,55 +457,55 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
 
     telegram = TelegramNotifier(tg_token, tg_chat) if tg_token and tg_chat else None
 
-    # SQLite persistence
-    db: SQLiteStorage | None = None
-    try:
-        db = SQLiteStorage(DB_PATH)
-    except Exception as e:
-        logger.error(f"SQLite storage unavailable, continuing without persistence: {e}")
-
-    # Flush queued alerts from previous quiet hours
-    if db and telegram and not is_quiet_hours(profile):
-        pending = db.get_pending_alerts(profile=profile_name)
-        if pending:
-            flush_count = min(len(pending), max_alerts)
-            for alert_data in pending[:flush_count]:
-                payload = json.loads(alert_data["payload"])
-                if alert_data["alert_type"] == "deal":
-                    logger.info(f"Flushing queued deal alert: {payload.get('title', '?')[:40]}")
-                    telegram.send_text(
-                        f"\U0001f514 Zakolejkowany alert:\n"
-                        f"<b>{html.escape(payload.get('title', ''))}</b>\n"
-                        f"\U0001f4b0 {payload.get('price', 0):,} PLN\n"
-                        f"Score: {payload.get('score', 0)}\n"
-                        f'\U0001f517 <a href="{html.escape(payload.get("link", ""))}">Link</a>',
-                        topic_id=tg_topic,
-                    )
-                elif alert_data["alert_type"] == "price_drop":
-                    logger.info(f"Flushing queued price drop: {payload.get('title', '?')[:40]}")
-                    telegram.send_text(
-                        f"\U0001f514 Zakolejkowany spadek ceny:\n"
-                        f"<b>{html.escape(payload.get('title', ''))}</b>\n"
-                        f"{payload.get('old_price', 0):,}"
-                        f" \u2192 {payload.get('new_price', 0):,} PLN",
-                        topic_id=tg_topic,
-                    )
-            db.mark_alerts_sent([p["id"] for p in pending[:flush_count]])
-            logger.info(f"Flushed {flush_count} queued alerts for {profile_name}")
-
     alerts: list[dict] = []
     price_drop_alerts: list[dict] = []
 
-    try:
+    with get_session() as session:
+        seen_repo = SeenDealRepository(session)
+        deal_repo = DealRepository(session)
+        price_repo = PriceRepository(session)
+        watchlist_repo = WatchlistRepository(session)
+        alert_repo = AlertQueueRepository(session)
+        seen_ids = seen_repo.get_seen_ids(profile_name)
+
+        # Flush queued alerts from previous quiet hours
+        if telegram and not is_quiet_hours(profile):
+            pending = alert_repo.get_pending(profile=profile_name)
+            if pending:
+                flush_count = min(len(pending), max_alerts)
+                for alert_data in pending[:flush_count]:
+                    payload = json.loads(alert_data["payload"])
+                    if alert_data["alert_type"] == "deal":
+                        logger.info(f"Flushing queued deal alert: {payload.get('title', '?')[:40]}")
+                        telegram.send_text(
+                            f"\U0001f514 Zakolejkowany alert:\n"
+                            f"<b>{html.escape(payload.get('title', ''))}</b>\n"
+                            f"\U0001f4b0 {payload.get('price', 0):,} PLN\n"
+                            f"Score: {payload.get('score', 0)}\n"
+                            f'\U0001f517 <a href="{html.escape(payload.get("link", ""))}">Link</a>',
+                            topic_id=tg_topic,
+                        )
+                    elif alert_data["alert_type"] == "price_drop":
+                        logger.info(f"Flushing queued price drop: {payload.get('title', '?')[:40]}")
+                        telegram.send_text(
+                            f"\U0001f514 Zakolejkowany spadek ceny:\n"
+                            f"<b>{html.escape(payload.get('title', ''))}</b>\n"
+                            f"{payload.get('old_price', 0):,}"
+                            f" \u2192 {payload.get('new_price', 0):,} PLN",
+                            topic_id=tg_topic,
+                        )
+                alert_repo.mark_sent([p["id"] for p in pending[:flush_count]])
+                logger.info(f"Flushed {flush_count} queued alerts for {profile_name}")
+
         for deal in deals:
-            if deal.id in seen:
+            if deal.id in seen_ids:
                 # Even for seen deals, check price changes
-                price_change = check_price_changes(deal, state, profile_name, profile, db)
+                price_change = check_price_changes(deal, price_repo, profile)
                 if price_change and price_change["type"] == "drop":
                     price_drop_alerts.append({"deal": deal, "price_change": price_change})
                 continue
 
-            seen[deal.id] = now
+            seen_repo.mark_seen(deal.id, profile_name, f"{deal.title[:60]}|{deal.price}")
 
             result = deal_filter.score_deal(deal)
 
@@ -623,14 +514,25 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                 continue
 
             # Price drop detection for new deals too
-            price_change = check_price_changes(deal, state, profile_name, profile, db)
+            price_change = check_price_changes(deal, price_repo, profile)
 
-            # Persist to SQLite
-            if db and result.score >= threshold:
+            # Persist to database
+            if result.score >= threshold:
                 category = _detect_category(deal, profile, profile_name)
-                db.upsert_deal(deal, profile_name, result.score, category)
+                deal_repo.upsert(
+                    id=deal.id,
+                    title=deal.title,
+                    price=deal.price,
+                    link=deal.link,
+                    source=deal.source,
+                    description=deal.description,
+                    image_url=deal.image_url,
+                    profile=profile_name,
+                    score=result.score,
+                    category=category,
+                )
                 # Check watchlist triggers
-                trigger = db.check_watchlist_triggers(deal.id, deal.price)
+                trigger = watchlist_repo.check_trigger(deal.id, deal.price)
                 if trigger and telegram:
                     telegram.send_watchlist_alert(
                         deal,
@@ -639,7 +541,7 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                         topic_id=tg_topic,
                         currency=currency,
                     )
-                    db.mark_watchlist_triggered(deal.id)
+                    watchlist_repo.mark_triggered(deal.id)
                     logger.info(
                         f"Watchlist triggered: {deal.title[:40]} "
                         f"(target: {trigger['target_price']}, current: {deal.price})"
@@ -660,19 +562,12 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                         "minus": result.minus,
                     }
                 )
-    finally:
-        if db:
-            db.close()
 
-    state["seen"] = seen
-    save_state(profile_name, state)
-
-    # Send price drop alerts first (higher priority), limited by max_alerts
-    if price_drop_alerts:
-        price_drop_alerts.sort(key=lambda x: x["price_change"]["diff_percent"], reverse=True)
-    if telegram and price_drop_alerts:
-        if is_quiet_hours(profile):
-            if db:
+        # Send price drop alerts first (higher priority), limited by max_alerts
+        if price_drop_alerts:
+            price_drop_alerts.sort(key=lambda x: x["price_change"]["diff_percent"], reverse=True)
+        if telegram and price_drop_alerts:
+            if is_quiet_hours(profile):
                 for pda in price_drop_alerts[:max_alerts]:
                     payload = json.dumps(
                         {
@@ -685,22 +580,68 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                             "diff_percent": pda["price_change"]["diff_percent"],
                         }
                     )
-                    db.queue_alert(profile_name, "price_drop", payload)
+                    alert_repo.queue(profile_name, "price_drop", payload)
                 queued = min(len(price_drop_alerts), max_alerts)
                 logger.info(f"Queued {queued} price drop alerts (quiet hours)")
-        else:
-            for pda in price_drop_alerts[:max_alerts]:
-                telegram.send_price_drop_alert(
-                    pda["deal"],
-                    pda["price_change"],
-                    topic_id=tg_topic,
-                    emoji=emoji,
-                    currency=currency,
-                )
-            sent = min(len(price_drop_alerts), max_alerts)
-            logger.info(f"Sent {sent} price drop alerts for {profile_name}")
+            else:
+                for pda in price_drop_alerts[:max_alerts]:
+                    telegram.send_price_drop_alert(
+                        pda["deal"],
+                        pda["price_change"],
+                        topic_id=tg_topic,
+                        emoji=emoji,
+                        currency=currency,
+                    )
+                sent = min(len(price_drop_alerts), max_alerts)
+                logger.info(f"Sent {sent} price drop alerts for {profile_name}")
 
-    # Console output for price drops
+        # Telegram — top alerts individually, rest in summary (queue if quiet hours)
+        if alerts:
+            alerts.sort(key=lambda x: x["score"], reverse=True)
+
+        if telegram and alerts:
+            if is_quiet_hours(profile):
+                for a in alerts[:max_alerts]:
+                    payload = json.dumps(
+                        {
+                            "deal_id": a["deal"].id,
+                            "title": a["deal"].title,
+                            "price": a["deal"].price,
+                            "link": a["deal"].link,
+                            "score": a["score"],
+                            "plus": a["plus"][:6],
+                            "minus": a["minus"][:4],
+                        }
+                    )
+                    alert_repo.queue(profile_name, "deal", payload)
+                logger.info(f"Queued {min(len(alerts), max_alerts)} deal alerts (quiet hours)")
+            else:
+                top_alerts = alerts[:max_alerts]
+                remaining = alerts[max_alerts:]
+
+                for a in top_alerts:
+                    tier = (
+                        "\U0001f525\U0001f525\U0001f525 GOR\u0104CA PERE\u0141KA"
+                        if a["score"] >= threshold_alert
+                        else "\U0001f525 ZNALAZ\u0141EM OKAZJ\u0118"
+                    )
+                    telegram.send_alert(
+                        a["deal"],
+                        a["score"],
+                        tier,
+                        a["plus"],
+                        a["minus"],
+                        topic_id=tg_topic,
+                        emoji=emoji,
+                        currency=currency,
+                    )
+
+                if remaining:
+                    telegram.send_summary(
+                        remaining, topic_id=tg_topic, emoji=emoji, currency=currency
+                    )
+
+    # Console output for price drops (outside session — no DB needed)
     for pda in price_drop_alerts:
         d = pda["deal"]
         pc = pda["price_change"]
@@ -722,51 +663,6 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
 
     if not alerts:
         return len(price_drop_alerts)
-
-    # Sort by score descending
-    alerts.sort(key=lambda x: x["score"], reverse=True)
-
-    # Telegram — top alerts individually, rest in summary
-    if telegram:
-        if is_quiet_hours(profile):
-            if db:
-                for a in alerts[:max_alerts]:
-                    payload = json.dumps(
-                        {
-                            "deal_id": a["deal"].id,
-                            "title": a["deal"].title,
-                            "price": a["deal"].price,
-                            "link": a["deal"].link,
-                            "score": a["score"],
-                            "plus": a["plus"][:6],
-                            "minus": a["minus"][:4],
-                        }
-                    )
-                    db.queue_alert(profile_name, "deal", payload)
-                logger.info(f"Queued {min(len(alerts), max_alerts)} deal alerts (quiet hours)")
-        else:
-            top_alerts = alerts[:max_alerts]
-            remaining = alerts[max_alerts:]
-
-            for a in top_alerts:
-                tier = (
-                    "\U0001f525\U0001f525\U0001f525 GOR\u0104CA PERE\u0141KA"
-                    if a["score"] >= threshold_alert
-                    else "\U0001f525 ZNALAZ\u0141EM OKAZJ\u0118"
-                )
-                telegram.send_alert(
-                    a["deal"],
-                    a["score"],
-                    tier,
-                    a["plus"],
-                    a["minus"],
-                    topic_id=tg_topic,
-                    emoji=emoji,
-                    currency=currency,
-                )
-
-            if remaining:
-                telegram.send_summary(remaining, topic_id=tg_topic, emoji=emoji, currency=currency)
 
     # Console output
     for a in alerts:
@@ -1042,18 +938,8 @@ def run_digest() -> None:
         )
         return
 
-    db: SQLiteStorage | None = None
-    try:
-        db = SQLiteStorage(DB_PATH)
-    except Exception as e:
-        logger.error(f"SQLite unavailable, cannot generate digest: {e}")
-        print("Error: SQLite database unavailable for digest generation.")
-        sys.exit(1)
-
-    try:
-        drops = db.get_price_drops(days=7)
-    finally:
-        db.close()
+    with get_session() as session:
+        drops = PriceRepository(session).get_drops(days=7)
 
     if not drops:
         print("No price drops in the last 7 days.")
@@ -1099,21 +985,12 @@ def run_price_chart(deal_id: str) -> None:
     """Generate a price history chart for a deal and send to Telegram."""
     from visualization.charts import generate_price_chart
 
-    db: SQLiteStorage | None = None
-    try:
-        db = SQLiteStorage(DB_PATH)
-    except Exception as e:
-        logger.error(f"SQLite unavailable: {e}")
-        print("Error: SQLite database unavailable.")
-        sys.exit(1)
-
-    try:
-        chart_path = generate_price_chart(deal_id, db)
-    except (ValueError, ImportError) as e:
-        print(f"Error: {e}")
-        sys.exit(1)
-    finally:
-        db.close()
+    with get_session() as session:
+        try:
+            chart_path = generate_price_chart(deal_id, session)
+        except (ValueError, ImportError) as e:
+            print(f"Error: {e}")
+            sys.exit(1)
 
     print(f"Chart saved to {chart_path}")
 
@@ -1134,21 +1011,12 @@ def run_trend_chart(profile_name: str) -> None:
     """Generate a trend chart for a profile and send to Telegram."""
     from visualization.charts import generate_trend_chart
 
-    db: SQLiteStorage | None = None
-    try:
-        db = SQLiteStorage(DB_PATH)
-    except Exception as e:
-        logger.error(f"SQLite unavailable: {e}")
-        print("Error: SQLite database unavailable.")
-        sys.exit(1)
-
-    try:
-        chart_path = generate_trend_chart(profile_name, db)
-    except (ValueError, ImportError) as e:
-        print(f"Error: {e}")
-        sys.exit(1)
-    finally:
-        db.close()
+    with get_session() as session:
+        try:
+            chart_path = generate_trend_chart(profile_name, session)
+        except (ValueError, ImportError) as e:
+            print(f"Error: {e}")
+            sys.exit(1)
 
     print(f"Chart saved to {chart_path}")
 
