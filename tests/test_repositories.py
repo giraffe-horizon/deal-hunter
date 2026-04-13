@@ -6,12 +6,13 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from storage.models import Base, Deal, PriceHistory
+from storage.models import Base, Deal, PriceHistory, SeenDeal
 from storage.repositories import (
     AlertQueueRepository,
     DealRepository,
     FeedbackRepository,
     PriceRepository,
+    SeenDealRepository,
     WatchlistRepository,
 )
 
@@ -500,3 +501,52 @@ class TestFeedbackRepository:
 
     def test_get_stats_empty(self, feedback_repo):
         assert feedback_repo.get_stats() == {}
+
+
+@pytest.fixture
+def seen_repo(session):
+    return SeenDealRepository(session)
+
+
+class TestSeenDealRepository:
+    def test_mark_seen(self, session, seen_repo):
+        seen_repo.mark_seen("pepper:100", "bikes", "test bike|5000")
+        session.flush()
+        assert seen_repo.is_seen("pepper:100", "bikes") is True
+
+    def test_is_seen_false(self, seen_repo):
+        assert seen_repo.is_seen("pepper:999", "bikes") is False
+
+    def test_is_seen_wrong_profile(self, session, seen_repo):
+        seen_repo.mark_seen("pepper:100", "bikes", "test|5000")
+        session.flush()
+        assert seen_repo.is_seen("pepper:100", "nas_hdd") is False
+
+    def test_cleanup_expired(self, session, seen_repo):
+        # Insert an old entry
+        old_seen = SeenDeal(
+            deal_id="pepper:old",
+            profile="bikes",
+            dedup_key="old|1000",
+            first_seen_at="2020-01-01T00:00:00",
+        )
+        session.add(old_seen)
+        # Insert a recent entry
+        seen_repo.mark_seen("pepper:new", "bikes", "new|2000")
+        session.flush()
+
+        seen_repo.cleanup_expired(ttl_days=14)
+        session.flush()
+
+        assert seen_repo.is_seen("pepper:old", "bikes") is False
+        assert seen_repo.is_seen("pepper:new", "bikes") is True
+
+    def test_get_seen_ids(self, session, seen_repo):
+        seen_repo.mark_seen("pepper:1", "bikes", "a|1000")
+        seen_repo.mark_seen("pepper:2", "bikes", "b|2000")
+        seen_repo.mark_seen("pepper:3", "nas_hdd", "c|3000")
+        session.flush()
+        ids = seen_repo.get_seen_ids("bikes")
+        assert "pepper:1" in ids
+        assert "pepper:2" in ids
+        assert "pepper:3" not in ids
