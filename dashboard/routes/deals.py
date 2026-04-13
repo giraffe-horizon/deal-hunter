@@ -4,11 +4,12 @@ import math
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy.orm import Session
 
 from dashboard import templates
 from dashboard.dependencies import get_db, get_profiles
 from dashboard.services import DEALS_PER_PAGE, SCORE_THRESHOLD, DealService
-from storage.sqlite import SQLiteStorage
+from storage.repositories import DealRepository, PriceRepository
 
 router = APIRouter()
 
@@ -24,11 +25,11 @@ def deals_page(
     status: str | None = None,
     page: int = 1,
     days: int = 7,
-    db: SQLiteStorage = Depends(get_db),
+    session: Session = Depends(get_db),
 ):
     # Price Drops view
     if view == "drops":
-        return _price_drops_view(request, days, db)
+        return _price_drops_view(request, days, session)
 
     # Normalize empty string params to None
     profile = profile or None
@@ -38,7 +39,7 @@ def deals_page(
     page = max(1, page)
 
     offset = (page - 1) * DEALS_PER_PAGE
-    deals = db.get_deals(
+    deals = DealRepository(session).get_filtered(
         profile=profile,
         source=source,
         min_score=min_score,
@@ -47,7 +48,7 @@ def deals_page(
         limit=DEALS_PER_PAGE,
         offset=offset,
     )
-    total_filtered = db.count_deals(
+    total_filtered = DealRepository(session).count(
         profile=profile,
         source=source,
         min_score=min_score,
@@ -69,7 +70,7 @@ def deals_page(
     if status:
         filter_params += f"&status={status}"
 
-    sparklines = DealService(db).get_sparklines(deals)
+    sparklines = DealService(session).get_sparklines(deals)
 
     # HTMX partial refresh — return only the table fragment
     if request.headers.get("HX-Request"):
@@ -87,14 +88,14 @@ def deals_page(
         )
 
     # Compute metrics via SQL aggregates (no full table scan)
-    stats = db.get_deal_stats(score_threshold=SCORE_THRESHOLD)
+    stats = DealRepository(session).get_stats(score_threshold=SCORE_THRESHOLD)
     total_deals = stats["total"]
     high_score_pct = round(stats["high_score"] / total_deals * 100) if total_deals else 0
     new_today = stats["new_today"]
-    drops_count = len(db.get_price_drops(days=7))
+    drops_count = len(PriceRepository(session).get_drops(days=7))
 
     # Filter dropdown options via SQL
-    filter_opts = db.get_filter_options()
+    filter_opts = DealRepository(session).get_filter_options()
     profiles = get_profiles()
 
     return templates.TemplateResponse(
@@ -125,10 +126,10 @@ def deals_page(
     )
 
 
-def _price_drops_view(request: Request, days: int, db: SQLiteStorage):
+def _price_drops_view(request: Request, days: int, session: Session):
     """Build the price drops view (shared by /deals?view=drops and redirect)."""
-    drops = db.get_price_drops(days=days)
-    all_deals = db.get_deals()
+    drops = PriceRepository(session).get_drops(days=days)
+    all_deals = DealRepository(session).get_filtered()
 
     total_drops = len(drops)
     avg_drop_pct = (
@@ -144,7 +145,7 @@ def _price_drops_view(request: Request, days: int, db: SQLiteStorage):
 
     category_trends: dict[str, list[dict]] = {}
     for cat_name in list(categories.keys())[:3]:
-        trend = db.get_category_price_trend(cat_name, days=30)
+        trend = DealRepository(session).get_category_price_trend(cat_name, days=30)
         if trend:
             category_trends[cat_name] = trend
 
@@ -169,16 +170,16 @@ def _price_drops_view(request: Request, days: int, db: SQLiteStorage):
 def deal_detail_page(
     request: Request,
     deal_id: str,
-    db: SQLiteStorage = Depends(get_db),
+    session: Session = Depends(get_db),
 ):
-    deal = db.get_deal(deal_id)
+    deal = DealRepository(session).get_by_id(deal_id)
     if not deal:
         return HTMLResponse(content="Deal not found", status_code=404)
 
-    price_history = db.get_price_history(deal_id)
-    lowest_price = db.get_lowest_price(deal_id)
-    previous_price = db.get_previous_price(deal_id)
-    score_data = DealService(db).score_single_deal(deal)
+    price_history = PriceRepository(session).get_history(deal_id)
+    lowest_price = PriceRepository(session).get_lowest(deal_id)
+    previous_price = PriceRepository(session).get_previous_price(deal_id)
+    score_data = DealService(session).score_single_deal(deal)
 
     return templates.TemplateResponse(
         request,
@@ -194,9 +195,9 @@ def deal_detail_page(
 
 
 @router.get("/compare", response_class=HTMLResponse)
-def compare_deals(request: Request, ids: str = "", db: SQLiteStorage = Depends(get_db)):
+def compare_deals(request: Request, ids: str = "", session: Session = Depends(get_db)):
     deal_ids = [i.strip() for i in ids.split(",") if i.strip()] if ids else []
-    data = DealService(db).get_comparison_data(deal_ids)
+    data = DealService(session).get_comparison_data(deal_ids)
     return templates.TemplateResponse(
         request,
         "compare.html",
@@ -205,8 +206,8 @@ def compare_deals(request: Request, ids: str = "", db: SQLiteStorage = Depends(g
 
 
 @router.get("/api/price-history/{deal_id}")
-def api_price_history(deal_id: str, db: SQLiteStorage = Depends(get_db)):
-    history = db.get_price_history(deal_id)
+def api_price_history(deal_id: str, session: Session = Depends(get_db)):
+    history = PriceRepository(session).get_history(deal_id)
     if not history:
         return {"labels": [], "prices": [], "lowest": None, "highest": None}
 
@@ -227,11 +228,11 @@ def api_update_deal_status(
     deal_id: str,
     status: str = Form(...),
     inline: str = Form(""),
-    db: SQLiteStorage = Depends(get_db),
+    session: Session = Depends(get_db),
 ):
     if status not in ("watching", "rejected", "active"):
         return JSONResponse({"error": "Invalid status"}, status_code=400)
-    ok = db.update_deal_status(deal_id, status)
+    ok = DealRepository(session).update_status(deal_id, status)
     if not ok:
         return JSONResponse({"error": "Deal not found"}, status_code=404)
     if inline:
@@ -242,7 +243,7 @@ def api_update_deal_status(
         )
     # Return HTML fragment for HTMX swap — must include full action buttons
     # so the user can change status again
-    deal = db.get_deal(deal_id)
+    deal = DealRepository(session).get_by_id(deal_id)
     link = deal["link"] if deal else "#"
     encoded_id = deal_id.replace(":", "%3A")
 
@@ -264,9 +265,9 @@ def api_deals(
     min_score: int | None = None,
     category: str | None = None,
     status: str | None = None,
-    db: SQLiteStorage = Depends(get_db),
+    session: Session = Depends(get_db),
 ):
-    return db.get_deals(
+    return DealRepository(session).get_filtered(
         profile=profile or None,
         source=source or None,
         min_score=min_score,
@@ -276,10 +277,10 @@ def api_deals(
 
 
 @router.get("/api/stats")
-def api_stats(db: SQLiteStorage = Depends(get_db)):
-    stats = db.get_deal_stats(score_threshold=SCORE_THRESHOLD)
+def api_stats(session: Session = Depends(get_db)):
+    stats = DealRepository(session).get_stats(score_threshold=SCORE_THRESHOLD)
     total = stats["total"]
-    drops = db.get_price_drops(days=7)
+    drops = PriceRepository(session).get_drops(days=7)
     return {
         "total_deals": total,
         "high_score_pct": round(stats["high_score"] / total * 100) if total else 0,

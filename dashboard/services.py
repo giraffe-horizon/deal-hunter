@@ -2,7 +2,9 @@
 
 import os
 
-from storage.sqlite import SQLiteStorage
+from sqlalchemy.orm import Session
+
+from storage.repositories import DealRepository, PriceRepository
 
 DEALS_PER_PAGE = int(os.getenv("DEALS_PER_PAGE", "50"))
 SCORE_THRESHOLD = int(os.getenv("SCORE_THRESHOLD", "70"))
@@ -11,24 +13,26 @@ SCORE_THRESHOLD = int(os.getenv("SCORE_THRESHOLD", "70"))
 class DealService:
     """Encapsulates deal-related business logic."""
 
-    def __init__(self, db: SQLiteStorage) -> None:
-        self.db = db
+    def __init__(self, session: Session) -> None:
+        self.session = session
+        self.deals = DealRepository(session)
+        self.prices = PriceRepository(session)
 
     def get_comparison_data(self, deal_ids: list[str]) -> dict:
         """Batch-fetch deals, price histories, and lowest prices."""
         deal_ids = deal_ids[:5]
-        deals = self.db.get_deals_by_ids(deal_ids) if deal_ids else []
+        deals = self.deals.get_by_ids(deal_ids) if deal_ids else []
         id_list = [d["id"] for d in deals]
         return {
             "deals": deals,
-            "price_histories": self.db.get_price_histories_batch(id_list),
-            "lowest_prices": self.db.get_lowest_prices_batch(id_list),
+            "price_histories": self.prices.get_histories_batch(id_list),
+            "lowest_prices": self.prices.get_lowest_prices_batch(id_list),
         }
 
     def get_sparklines(self, deals: list[dict]) -> dict[str, list[int]]:
         """Get sparkline price data for a list of deals."""
         ids = [d.get("id") or d.get("deal_id") for d in deals]
-        return self.db.get_sparkline_data_batch([i for i in ids if i])
+        return self.prices.get_sparkline_data_batch([i for i in ids if i])
 
     def score_single_deal(self, deal_dict: dict) -> dict | None:
         """Re-score a deal using its profile config. Returns breakdown or None."""

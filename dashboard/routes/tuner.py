@@ -2,11 +2,12 @@
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy.orm import Session
 
 from dashboard import templates
 from dashboard.dependencies import get_db, get_profiles, safe_load_profile, safe_profile_path
 from dashboard.services import DealService
-from storage.sqlite import SQLiteStorage
+from storage.repositories import DealRepository
 
 router = APIRouter()
 
@@ -35,7 +36,7 @@ def tuner_profile(request: Request, profile: str):
 
 
 @router.post("/api/tuner/{profile}/simulate")
-async def tuner_simulate(request: Request, profile: str, db: SQLiteStorage = Depends(get_db)):
+async def tuner_simulate(request: Request, profile: str, session: Session = Depends(get_db)):
     """Re-score deals with modified rules and return JSON results."""
     safe_profile_path(profile)
     body = await request.json()
@@ -54,8 +55,8 @@ async def tuner_simulate(request: Request, profile: str, db: SQLiteStorage = Dep
     ):
         if key in body:
             modified[key] = body[key]
-    deals = db.get_deals(profile=profile, limit=50)
-    scored = DealService(db).score_deals_with_profile(deals, modified)
+    deals = DealRepository(session).get_filtered(profile=profile, limit=50)
+    scored = DealService(session).score_deals_with_profile(deals, modified)
     results = []
     for s in scored:
         results.append(

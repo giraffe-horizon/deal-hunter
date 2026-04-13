@@ -8,12 +8,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from dashboard import templates
 from dashboard.dependencies import (
     _PROFILE_NAME_RE,
-    DB_PATH,
     get_profiles,
     safe_load_profile,
     safe_profile_path,
 )
-from storage.sqlite import SQLiteStorage
 
 BASE_DIR = Path(__file__).parent.parent.parent
 
@@ -88,16 +86,15 @@ def profile_detail_page(request: Request, name: str, tab: str = "overview"):
     # Tuner tab needs scored deals
     if tab == "tuner":
         from dashboard.services import DealService
+        from storage.database import get_session
+        from storage.repositories import DealRepository
 
-        db = SQLiteStorage(DB_PATH)
-        try:
-            deals = db.get_deals(profile=name, limit=50)
-            scored = DealService(db).score_deals_with_profile(deals, profile)
-            context["deals"] = scored
-            context["profile_data"] = profile
-            context["selected_profile"] = name
-        finally:
-            db.close()
+        with get_session() as session:
+            deals = DealRepository(session).get_filtered(profile=name, limit=50)
+            scored = DealService(session).score_deals_with_profile(deals, profile)
+        context["deals"] = scored
+        context["profile_data"] = profile
+        context["selected_profile"] = name
 
     # HTMX request: return only the tab partial
     if request.headers.get("HX-Request"):
