@@ -6,8 +6,7 @@ from sqlalchemy.orm import Session
 
 from dashboard import templates
 from dashboard.dependencies import get_db, get_profiles, safe_load_profile, safe_profile_path
-from dashboard.services import DealService
-from storage.repositories import DealRepository
+from dashboard.services import TunerService
 
 router = APIRouter()
 
@@ -39,39 +38,11 @@ def tuner_profile(request: Request, profile: str):
 async def tuner_simulate(request: Request, profile: str, session: Session = Depends(get_db)):
     """Re-score deals with modified rules and return JSON results."""
     safe_profile_path(profile)
-    body = await request.json()
     profile_data = safe_load_profile(profile)
     if profile_data is None:
         return JSONResponse({"error": "Profile not found"}, status_code=404)
-    modified = dict(profile_data)
-    for key in (
-        "score_rules",
-        "penalties",
-        "budget",
-        "score_threshold",
-        "score_threshold_alert",
-        "excluded_words",
-        "required_any",
-    ):
-        if key in body:
-            modified[key] = body[key]
-    deals = DealRepository(session).get_filtered(profile=profile, limit=50)
-    scored = DealService(session).score_deals_with_profile(deals, modified)
-    results = []
-    for s in scored:
-        results.append(
-            {
-                "id": s["id"],
-                "title": s["title"],
-                "price": s["price"],
-                "current_score": s["score"],
-                "new_score": s["new_score"],
-                "diff": s["diff"],
-                "rejected": s["rejected"],
-                "reject_reason": s["reject_reason"],
-                "breakdown": s["breakdown"],
-            }
-        )
+    body = await request.json()
+    results = TunerService(session).simulate(profile, profile_data, body)
     return JSONResponse({"results": results})
 
 
@@ -79,32 +50,11 @@ async def tuner_simulate(request: Request, profile: str, session: Session = Depe
 async def tuner_save(request: Request, profile: str):
     """Save modified scoring rules to the profile YAML file."""
     profile_path = safe_profile_path(profile)
-    body = await request.json()
     profile_data = safe_load_profile(profile)
     if profile_data is None:
         return JSONResponse({"error": "Profile not found"}, status_code=404)
-    for key in (
-        "score_rules",
-        "penalties",
-        "budget",
-        "score_threshold",
-        "score_threshold_alert",
-        "excluded_words",
-        "required_any",
-    ):
-        if key in body:
-            profile_data[key] = body[key]
-    from utils.validation import validate_profile
-
-    errors = validate_profile(profile_data)
+    body = await request.json()
+    errors = TunerService.save_rules(profile_path, profile_data, body)
     if errors:
         return JSONResponse({"ok": False, "errors": errors}, status_code=400)
-    import yaml as _yaml_save
-
-    profile_path.write_text(
-        _yaml_save.dump(
-            profile_data, allow_unicode=True, default_flow_style=False, sort_keys=False
-        ),
-        encoding="utf-8",
-    )
     return JSONResponse({"ok": True})
