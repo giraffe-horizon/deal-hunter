@@ -2,12 +2,14 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy.orm import Session
 
 from dashboard import templates
 from dashboard.dependencies import (
     _PROFILE_NAME_RE,
+    get_db,
     get_profiles,
     safe_load_profile,
     safe_profile_path,
@@ -58,7 +60,9 @@ def profile_create_page(request: Request):
 
 
 @router.get("/profiles/{name}", response_class=HTMLResponse)
-def profile_detail_page(request: Request, name: str, tab: str = "overview"):
+def profile_detail_page(
+    request: Request, name: str, tab: str = "overview", session: Session = Depends(get_db)
+):
     """Unified profile page with tabs."""
     safe_profile_path(name)
     profile = safe_load_profile(name)
@@ -86,12 +90,10 @@ def profile_detail_page(request: Request, name: str, tab: str = "overview"):
     # Tuner tab needs scored deals
     if tab == "tuner":
         from dashboard.services import DealService
-        from storage.database import get_session
         from storage.repositories import DealRepository
 
-        with get_session() as session:
-            deals = DealRepository(session).get_filtered(profile=name, limit=50)
-            scored = DealService(session).score_deals_with_profile(deals, profile)
+        deals = DealRepository(session).get_filtered(profile=name, limit=50)
+        scored = DealService(session).score_deals_with_profile(deals, profile)
         context["deals"] = scored
         context["profile_data"] = profile
         context["selected_profile"] = name

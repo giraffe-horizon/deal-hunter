@@ -10,9 +10,11 @@ from pathlib import Path
 
 import pytest
 import yaml
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.orm import Session
 
-from sources.base import Deal
-from storage.sqlite import SQLiteStorage
+from storage.models import Base
+from storage.repositories import DealRepository
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
@@ -33,75 +35,98 @@ def e2e_profiles_dir(tmp_path_factory):
 def seeded_db(e2e_state_dir):
     """Create and seed a SQLite database for E2E tests."""
     db_path = e2e_state_dir / "deals.db"
-    db = SQLiteStorage(db_path)
-    today = datetime.now().isoformat()
+    eng = create_engine(f"sqlite:///{db_path}")
 
-    deal1 = Deal(
+    @event.listens_for(eng, "connect")
+    def _set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    Base.metadata.create_all(eng)
+    session = Session(eng)
+
+    today = datetime.now().isoformat()
+    deal_repo = DealRepository(session)
+
+    deal_repo.upsert(
         id="pepper:99999",
         title="Test Carbon Bike XL",
         price=8500,
         link="https://example.com/deal/99999",
         source="pepper",
         description="A great carbon bike with Shimano 105",
-        temperature=120,
         image_url="https://example.com/img.jpg",
-        published_at="2026-04-01T10:00:00",
+        profile="bikes",
+        score=85,
+        category="road",
+        first_seen="2026-03-15T10:00:00",
+        last_seen="2026-03-15T10:00:00",
     )
-    db.upsert_deal(deal1, "bikes", 85, category="road")
 
-    deal2 = Deal(
+    deal_repo.upsert(
         id="ceneo:88888",
         title="NAS HDD Seagate IronWolf 8TB",
         price=1200,
         link="https://ceneo.pl/88888",
         source="ceneo",
         description="Seagate IronWolf 8TB NAS drive",
-        temperature=0,
         image_url="https://example.com/hdd.jpg",
-        published_at="2026-04-02T12:00:00",
+        profile="nas_hdd",
+        score=55,
+        category="storage",
     )
-    db.upsert_deal(deal2, "nas_hdd", 55, category="storage")
-    db.update_deal_status("ceneo:88888", "watching")
+    deal_repo.update_status("ceneo:88888", "watching")
 
-    deal3 = Deal(
+    deal_repo.upsert(
         id="pepper:77777",
         title="Cheap Broken Bike Parts",
         price=200,
         link="https://example.com/deal/77777",
         source="pepper",
         description="Spare parts only",
-        temperature=0,
         image_url="",
-        published_at="2026-03-15T08:00:00",
+        profile="bikes",
+        score=20,
+        category="",
     )
-    db.upsert_deal(deal3, "bikes", 20, category="")
-    db.update_deal_status("pepper:77777", "rejected")
+    deal_repo.update_status("pepper:77777", "rejected")
 
-    deal4 = Deal(
+    deal_repo.upsert(
         id="pepper:66666",
         title="Brand New Road Bike Today",
         price=5000,
         link="https://example.com/deal/66666",
         source="pepper",
         description="Fresh deal today",
-        temperature=50,
         image_url="",
-        published_at=today,
+        profile="bikes",
+        score=72,
+        category="road",
+        first_seen=today,
     )
-    db.upsert_deal(deal4, "bikes", 72, category="road")
 
-    # Price history for deal1 — insert directly with different timestamps to avoid PK dedup
-    db._conn.execute(
-        "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-        ("pepper:99999", 9500, "2026-03-20T10:00:00"),
-    )
-    db._conn.execute(
-        "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-        ("pepper:99999", 8500, "2026-03-25T10:00:00"),
-    )
-    db._conn.commit()
+    session.flush()
 
-    db.close()
+    # Price history for deal1 — insert directly with different timestamps
+    session.execute(
+        text(
+            "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"
+            " VALUES (:deal_id, :price, :recorded_at)"
+        ),
+        {"deal_id": "pepper:99999", "price": 9500, "recorded_at": "2026-03-20T10:00:00"},
+    )
+    session.execute(
+        text(
+            "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"
+            " VALUES (:deal_id, :price, :recorded_at)"
+        ),
+        {"deal_id": "pepper:99999", "price": 8500, "recorded_at": "2026-03-25T10:00:00"},
+    )
+
+    session.commit()
+    session.close()
     return db_path
 
 
@@ -160,7 +185,7 @@ def health_json(e2e_state_dir):
 def live_server(seeded_db, test_profiles, health_json, e2e_state_dir):
     """Start the FastAPI server as a subprocess, yield the base URL."""
     env = os.environ.copy()
-    env["DEAL_HUNTER_DB_PATH"] = str(seeded_db)
+    env["DATABASE_URL"] = f"sqlite:///{seeded_db}"
     env["DEAL_HUNTER_PROFILES_DIR"] = str(test_profiles)
     env["DEAL_HUNTER_STATE_DIR"] = str(e2e_state_dir)
 

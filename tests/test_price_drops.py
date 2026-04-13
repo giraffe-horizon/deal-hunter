@@ -4,21 +4,67 @@ from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
 from deal_hunter import check_price_changes, get_price_tracking_config
 from notifiers.telegram import TelegramNotifier
 from sources.base import Deal
-from storage.sqlite import SQLiteStorage
+from storage.models import Base, PriceHistory
+from storage.models import Deal as DealModel
+from storage.repositories import DealRepository, PriceRepository
 
 # ──────────────── FIXTURES ────────────────
 
 
 @pytest.fixture
-def db(tmp_path):
-    """Create a temporary SQLite database."""
-    storage = SQLiteStorage(tmp_path / "test.db")
-    yield storage
-    storage.close()
+def engine():
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    return eng
+
+
+@pytest.fixture
+def session(engine):
+    with Session(engine) as s:
+        yield s
+
+
+@pytest.fixture
+def price_repo(session):
+    return PriceRepository(session)
+
+
+@pytest.fixture
+def deal_repo(session):
+    return DealRepository(session)
+
+
+def _seed_deal_with_prices(session, deal_id="pepper:12345", prices=None, profile="bikes"):
+    """Insert a deal and its price history."""
+    now = datetime.now().isoformat()
+    deal = DealModel(
+        id=deal_id,
+        title="Test Deal",
+        price=prices[-1] if prices else 0,
+        source="pepper",
+        description="",
+        image_url="",
+        profile=profile,
+        score=80,
+        category="road",
+        status="active",
+        first_seen=now,
+        last_seen=now,
+    )
+    session.add(deal)
+    session.flush()
+    if prices:
+        for i, p in enumerate(prices):
+            ts = f"2026-04-{10 + i:02d}T10:00:00"
+            ph = PriceHistory(deal_id=deal_id, price=p, recorded_at=ts)
+            session.add(ph)
+    session.flush()
 
 
 @pytest.fixture
@@ -130,28 +176,22 @@ class TestPriceTrackingConfig:
 
 
 class TestCheckPriceChanges:
-    def test_first_time_no_change(self, deal, profile_with_tracking):
-        state = {"seen": {}, "prices": {}}
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
-        assert result is None
-        # Price should be recorded in state
-        assert len(state["prices"]) == 1
-
-    def test_same_price_no_change(self, deal, profile_with_tracking):
-        state = {
-            "seen": {},
-            "prices": {"pepper:12345": [{"price": 10499, "ts": "2026-04-01T10:00:00"}]},
-        }
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
+    def test_no_previous_price_returns_none(self, session, price_repo, deal, profile_with_tracking):
+        """First time seen — no previous price — returns None."""
+        _seed_deal_with_prices(session, deal.id, prices=[deal.price])
+        result = check_price_changes(deal, price_repo, profile_with_tracking)
         assert result is None
 
-    def test_significant_drop_percent(self, deal, profile_with_tracking):
+    def test_same_price_no_change(self, session, price_repo, deal, profile_with_tracking):
+        """Same price as previous — no change detected."""
+        _seed_deal_with_prices(session, deal.id, prices=[10499, 10499])
+        result = check_price_changes(deal, price_repo, profile_with_tracking)
+        assert result is None
+
+    def test_significant_drop_percent(self, session, price_repo, deal, profile_with_tracking):
         """Drop of 19% should trigger with min_drop_percent=15."""
-        state = {
-            "seen": {},
-            "prices": {"pepper:12345": [{"price": 12999, "ts": "2026-04-01T10:00:00"}]},
-        }
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
+        _seed_deal_with_prices(session, deal.id, prices=[12999, 10499])
+        result = check_price_changes(deal, price_repo, profile_with_tracking)
         assert result is not None
         assert result["type"] == "drop"
         assert result["old_price"] == 12999
@@ -159,23 +199,20 @@ class TestCheckPriceChanges:
         assert result["diff_pln"] == 2500
         assert result["diff_percent"] == 19.2
 
-    def test_significant_drop_amount(self, deal, profile_with_tracking):
+    def test_significant_drop_amount(self, session, price_repo, deal, profile_with_tracking):
         """Drop of 300 PLN (2.8%) should trigger with min_drop_amount=200."""
-        state = {
-            "seen": {},
-            "prices": {"pepper:12345": [{"price": 10799, "ts": "2026-04-01T10:00:00"}]},
-        }
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
+        _seed_deal_with_prices(session, deal.id, prices=[10799, 10499])
+        result = check_price_changes(deal, price_repo, profile_with_tracking)
         assert result is not None
         assert result["type"] == "drop"
         assert result["diff_pln"] == 300
 
-    def test_small_drop_below_thresholds(self, profile_with_tracking):
+    def test_small_drop_below_thresholds(self, session, price_repo, profile_with_tracking):
         """Drop of 100 PLN (1%) should NOT trigger.
 
         min_drop_amount=200 and min_drop_percent=15.
         """
-        deal = Deal(
+        small_deal = Deal(
             id="test:1",
             title="Some Bike",
             price=9900,
@@ -186,16 +223,13 @@ class TestCheckPriceChanges:
             image_url="",
             published_at="",
         )
-        state = {
-            "seen": {},
-            "prices": {"test:1": [{"price": 10000, "ts": "2026-04-01T10:00:00"}]},
-        }
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
+        _seed_deal_with_prices(session, "test:1", prices=[10000, 9900])
+        result = check_price_changes(small_deal, price_repo, profile_with_tracking)
         assert result is None
 
-    def test_price_increase_ignored_by_default(self, profile_with_tracking):
+    def test_price_increase_ignored_by_default(self, session, price_repo, profile_with_tracking):
         """Price increase should return None when track_increases=False."""
-        deal = Deal(
+        increase_deal = Deal(
             id="test:1",
             title="Some Bike",
             price=12000,
@@ -206,19 +240,16 @@ class TestCheckPriceChanges:
             image_url="",
             published_at="",
         )
-        state = {
-            "seen": {},
-            "prices": {"test:1": [{"price": 10000, "ts": "2026-04-01T10:00:00"}]},
-        }
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
+        _seed_deal_with_prices(session, "test:1", prices=[10000, 12000])
+        result = check_price_changes(increase_deal, price_repo, profile_with_tracking)
         assert result is None
 
-    def test_price_increase_tracked_when_enabled(self):
+    def test_price_increase_tracked_when_enabled(self, session, price_repo):
         profile = {
             "name": "test",
             "price_tracking": {"track_increases": True},
         }
-        deal = Deal(
+        increase_deal = Deal(
             id="test:1",
             title="Some Bike",
             price=12000,
@@ -229,25 +260,21 @@ class TestCheckPriceChanges:
             image_url="",
             published_at="",
         )
-        state = {
-            "seen": {},
-            "prices": {"test:1": [{"price": 10000, "ts": "2026-04-01T10:00:00"}]},
-        }
-        result = check_price_changes(deal, state, "bikes", profile)
+        _seed_deal_with_prices(session, "test:1", prices=[10000, 12000])
+        result = check_price_changes(increase_deal, price_repo, profile)
         assert result is not None
         assert result["type"] == "increase"
         assert result["diff_pln"] == 2000
 
-    def test_disabled_tracking_returns_none(self, deal, profile_tracking_disabled):
-        state = {
-            "seen": {},
-            "prices": {"pepper:12345": [{"price": 15000, "ts": "2026-04-01T10:00:00"}]},
-        }
-        result = check_price_changes(deal, state, "bikes", profile_tracking_disabled)
+    def test_disabled_tracking_returns_none(
+        self, session, price_repo, deal, profile_tracking_disabled
+    ):
+        _seed_deal_with_prices(session, deal.id, prices=[15000, 10499])
+        result = check_price_changes(deal, price_repo, profile_tracking_disabled)
         assert result is None
 
-    def test_zero_price_ignored(self, profile_with_tracking):
-        deal = Deal(
+    def test_zero_price_ignored(self, session, price_repo, profile_with_tracking):
+        zero_deal = Deal(
             id="test:1",
             title="Free Bike",
             price=0,
@@ -258,29 +285,23 @@ class TestCheckPriceChanges:
             image_url="",
             published_at="",
         )
-        state = {"seen": {}, "prices": {}}
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
+        result = check_price_changes(zero_deal, price_repo, profile_with_tracking)
         assert result is None
 
-    def test_lowest_ever_via_state_json(self, deal, profile_with_tracking):
-        """Without SQLite, lowest-ever should be determined from state JSON."""
-        state = {
-            "seen": {},
-            "prices": {
-                "pepper:12345": [
-                    {"price": 14000, "ts": "2026-03-01T10:00:00"},
-                    {"price": 12999, "ts": "2026-04-01T10:00:00"},
-                ]
-            },
-        }
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking, db=None)
+    def test_lowest_ever_detected(self, session, price_repo, deal, profile_with_tracking):
+        """When current price is the all-time lowest, is_lowest_ever=True."""
+        _seed_deal_with_prices(session, deal.id, prices=[14000, 12999, 10499])
+        result = check_price_changes(deal, price_repo, profile_with_tracking)
         assert result is not None
         assert result["is_lowest_ever"] is True
 
-    def test_not_lowest_ever(self):
+    def test_not_lowest_ever(self, session, price_repo):
         """Price drops but was lower before — not lowest ever."""
-        profile = {"name": "test", "price_tracking": {"min_drop_percent": 5, "min_drop_amount": 50}}
-        deal = Deal(
+        profile = {
+            "name": "test",
+            "price_tracking": {"min_drop_percent": 5, "min_drop_amount": 50},
+        }
+        drop_deal = Deal(
             id="test:1",
             title="Some Bike",
             price=11000,
@@ -291,268 +312,145 @@ class TestCheckPriceChanges:
             image_url="",
             published_at="",
         )
-        state = {
-            "seen": {},
-            "prices": {
-                "test:1": [
-                    {"price": 9000, "ts": "2026-03-01T10:00:00"},
-                    {"price": 12000, "ts": "2026-04-01T10:00:00"},
-                ]
-            },
-        }
-        result = check_price_changes(deal, state, "bikes", profile, db=None)
+        _seed_deal_with_prices(session, "test:1", prices=[9000, 12000, 11000])
+        result = check_price_changes(drop_deal, price_repo, profile)
         assert result is not None
         assert result["is_lowest_ever"] is False
 
-    def test_lowest_ever_via_sqlite(self, deal, profile_with_tracking, db):
-        """With SQLite, lowest-ever should use db.get_lowest_price()."""
-        # Insert deal and price history into SQLite
-        db.upsert_deal(deal, "bikes", 100)
-        db._conn.execute(
-            "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-            (deal.id, 14000, "2026-03-01T10:00:00"),
-        )
-        db._conn.commit()
-
-        state = {
-            "seen": {},
-            "prices": {
-                "pepper:12345": [
-                    {"price": 12999, "ts": "2026-04-01T10:00:00"},
-                ]
-            },
-        }
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking, db=db)
-        assert result is not None
-        assert result["is_lowest_ever"] is True
-
-    def test_backwards_compat_no_profile(self, deal):
+    def test_backwards_compat_no_profile(self, session, price_repo, deal):
         """check_price_changes works without profile arg (uses defaults)."""
-        state = {
-            "seen": {},
-            "prices": {"pepper:12345": [{"price": 15000, "ts": "2026-04-01T10:00:00"}]},
-        }
-        result = check_price_changes(deal, state, "bikes")
-        assert result is not None
-        assert result["type"] == "drop"
-
-    def test_cross_source_no_false_drop(self, profile_with_tracking):
-        """Same product from different sources should NOT trigger false price drop."""
-        deal_a = Deal(
-            id="sprint:100",
-            title="BMC URS TWO",
-            price=13900,
-            link="http://sprint.pl/100",
-            source="sprint",
-            description="",
-            temperature=0,
-            image_url="",
-            published_at="",
-        )
-        deal_b = Deal(
-            id="centrumrowerowe:200",
-            title="BMC URS TWO",
-            price=8999,
-            link="http://cr.pl/200",
-            source="centrumrowerowe",
-            description="",
-            temperature=0,
-            image_url="",
-            published_at="",
-        )
-        state = {"seen": {}, "prices": {}}
-
-        # First source records its price
-        result_a = check_price_changes(deal_a, state, "bikes", profile_with_tracking)
-        assert result_a is None  # first time, no change
-
-        # Second source should NOT see a price drop from first source
-        result_b = check_price_changes(deal_b, state, "bikes", profile_with_tracking)
-        assert result_b is None  # first time for this deal.id too
-
-        # Each deal should have its own price history entry
-        assert "sprint:100" in state["prices"]
-        assert "centrumrowerowe:200" in state["prices"]
-
-    def test_cooldown_suppresses_rapid_drops(self, profile_with_tracking):
-        """Price drop within 24h of a previous change should be suppressed."""
-        deal = Deal(
-            id="test:1",
-            title="Some Bike",
-            price=8000,
-            link="http://x",
-            source="pepper",
-            description="",
-            temperature=0,
-            image_url="",
-            published_at="",
-        )
-        now = datetime.now()
-        recent_ts = (now - timedelta(hours=2)).isoformat()
-        state = {
-            "seen": {},
-            "prices": {
-                "test:1": [
-                    {"price": 12000, "ts": "2026-03-01T10:00:00"},
-                    {"price": 10000, "ts": recent_ts},  # change 2h ago
-                ]
-            },
-        }
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
-        # Should be suppressed — previous change was only 2h ago
-        assert result is None
-
-    def test_cooldown_allows_after_24h(self, profile_with_tracking):
-        """Price drop after 24h cooldown should be allowed."""
-        deal = Deal(
-            id="test:1",
-            title="Some Bike",
-            price=8000,
-            link="http://x",
-            source="pepper",
-            description="",
-            temperature=0,
-            image_url="",
-            published_at="",
-        )
-        old_ts = (datetime.now() - timedelta(hours=25)).isoformat()
-        state = {
-            "seen": {},
-            "prices": {
-                "test:1": [
-                    {"price": 12000, "ts": "2026-03-01T10:00:00"},
-                    {"price": 10000, "ts": old_ts},  # change 25h ago
-                ]
-            },
-        }
-        result = check_price_changes(deal, state, "bikes", profile_with_tracking)
+        _seed_deal_with_prices(session, deal.id, prices=[15000, 10499])
+        result = check_price_changes(deal, price_repo)
         assert result is not None
         assert result["type"] == "drop"
 
 
-# ──────────────── SQLITE STORAGE ────────────────
+# ──────────────── SQLITE PRICE QUERIES ────────────────
 
 
-class TestSQLiteGetLowestPrice:
-    def test_lowest_price(self, db, deal):
-        db.upsert_deal(deal, "bikes", 100)
-        db._conn.execute(
-            "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-            (deal.id, 9000, "2026-03-15T10:00:00"),
-        )
-        db._conn.execute(
-            "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-            (deal.id, 11000, "2026-03-20T10:00:00"),
-        )
-        db._conn.commit()
-        assert db.get_lowest_price(deal.id) == 9000
+class TestPriceRepoGetLowestPrice:
+    def test_lowest_price(self, session, price_repo, deal):
+        _seed_deal_with_prices(session, deal.id, prices=[11000, 9000, 10499])
+        assert price_repo.get_lowest(deal.id) == 9000
 
-    def test_lowest_price_nonexistent(self, db):
-        assert db.get_lowest_price("nonexistent:000") is None
+    def test_lowest_price_nonexistent(self, price_repo):
+        assert price_repo.get_lowest("nonexistent:000") is None
 
 
-class TestSQLiteGetPreviousPrice:
-    def test_previous_price(self, db, deal):
-        db.upsert_deal(deal, "bikes", 100)
-        # Insert a newer price entry after the initial one
-        db._conn.execute(
-            "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-            (deal.id, 9000, "2099-01-01T00:00:00"),
-        )
-        db._conn.commit()
-        # Latest is 9000 (2099), previous is deal.price (10499 from upsert)
-        assert db.get_previous_price(deal.id) == deal.price
+class TestPriceRepoGetPreviousPrice:
+    def test_previous_price(self, session, price_repo, deal):
+        _seed_deal_with_prices(session, deal.id, prices=[10499, 9000])
+        # Latest is 9000, previous is 10499
+        assert price_repo.get_previous_price(deal.id) == 10499
 
-    def test_previous_price_single_entry(self, db, deal):
-        db.upsert_deal(deal, "bikes", 100)
+    def test_previous_price_single_entry(self, session, price_repo, deal):
+        _seed_deal_with_prices(session, deal.id, prices=[10499])
         # Only one entry — no previous
-        assert db.get_previous_price(deal.id) is None
+        assert price_repo.get_previous_price(deal.id) is None
 
-    def test_previous_price_nonexistent(self, db):
-        assert db.get_previous_price("nonexistent:000") is None
+    def test_previous_price_nonexistent(self, price_repo):
+        assert price_repo.get_previous_price("nonexistent:000") is None
 
 
-class TestSQLiteGetPriceDrops:
-    def test_price_drops_found(self, db, deal):
-        db.upsert_deal(deal, "bikes", 100)
+class TestPriceRepoGetPriceDrops:
+    def test_price_drops_found(self, session, price_repo, deal):
         now = datetime.now()
+        _seed_deal_with_prices(session, deal.id, prices=[])
         # Add price history: old high price, then current lower price
-        db._conn.execute(
-            "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-            (deal.id, 12999, (now - timedelta(days=3)).isoformat()),
+        session.execute(
+            text(
+                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+            ),
+            {"id": deal.id, "price": 12999, "ts": (now - timedelta(days=3)).isoformat()},
         )
-        db._conn.execute(
-            "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-            (deal.id, 10499, (now - timedelta(hours=1)).isoformat()),
+        session.execute(
+            text(
+                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+            ),
+            {"id": deal.id, "price": 10499, "ts": (now - timedelta(hours=1)).isoformat()},
         )
-        db._conn.commit()
+        session.flush()
 
-        drops = db.get_price_drops(days=7)
+        drops = price_repo.get_drops(days=7)
         assert len(drops) == 1
         assert drops[0]["old_price"] == 12999
         assert drops[0]["new_price"] == 10499
         assert drops[0]["diff_pln"] == 2500
         assert drops[0]["is_lowest_ever"] is True
 
-    def test_price_drops_with_profile_filter(self, db, deal, deal2):
+    def test_price_drops_with_profile_filter(self, session, price_repo, deal, deal2):
         now = datetime.now()
-        db.upsert_deal(deal, "bikes", 100)
-        db.upsert_deal(deal2, "nas_hdd", 80)
+        _seed_deal_with_prices(session, deal.id, prices=[], profile="bikes")
+        _seed_deal_with_prices(session, deal2.id, prices=[], profile="nas_hdd")
 
         # Price drop for both
         for d in [deal, deal2]:
-            db._conn.execute(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-                (d.id, d.price + 2000, (now - timedelta(days=2)).isoformat()),
+            session.execute(
+                text(
+                    "INSERT INTO price_history (deal_id, price, recorded_at)"
+                    " VALUES (:id, :price, :ts)"
+                ),
+                {"id": d.id, "price": d.price + 2000, "ts": (now - timedelta(days=2)).isoformat()},
             )
-            db._conn.execute(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-                (d.id, d.price, (now - timedelta(hours=1)).isoformat()),
+            session.execute(
+                text(
+                    "INSERT INTO price_history (deal_id, price, recorded_at)"
+                    " VALUES (:id, :price, :ts)"
+                ),
+                {"id": d.id, "price": d.price, "ts": (now - timedelta(hours=1)).isoformat()},
             )
-        db._conn.commit()
+        session.flush()
 
-        drops = db.get_price_drops(profile="bikes", days=7)
+        drops = price_repo.get_drops(profile="bikes", days=7)
         assert len(drops) == 1
         assert drops[0]["id"] == deal.id
 
-    def test_price_drops_min_percent_filter(self, db, deal):
+    def test_price_drops_min_percent_filter(self, session, price_repo, deal):
         now = datetime.now()
-        db.upsert_deal(deal, "bikes", 100)
-        # Small drop: 10499 -> 10400 (~1%)
-        db._conn.execute(
-            "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-            (deal.id, 10600, (now - timedelta(days=2)).isoformat()),
+        _seed_deal_with_prices(session, deal.id, prices=[])
+        # Small drop: 10600 -> 10499 (~1%)
+        session.execute(
+            text(
+                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+            ),
+            {"id": deal.id, "price": 10600, "ts": (now - timedelta(days=2)).isoformat()},
         )
-        db._conn.execute(
-            "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-            (deal.id, 10499, (now - timedelta(hours=1)).isoformat()),
+        session.execute(
+            text(
+                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+            ),
+            {"id": deal.id, "price": 10499, "ts": (now - timedelta(hours=1)).isoformat()},
         )
-        db._conn.commit()
+        session.flush()
 
         # Should not appear with 5% threshold
-        drops = db.get_price_drops(days=7, min_drop_percent=5)
+        drops = price_repo.get_drops(days=7, min_drop_percent=5)
         assert len(drops) == 0
 
-    def test_no_drops_returns_empty(self, db, deal):
-        db.upsert_deal(deal, "bikes", 100)
-        drops = db.get_price_drops(days=7)
+    def test_no_drops_returns_empty(self, session, price_repo, deal):
+        _seed_deal_with_prices(session, deal.id, prices=[10499])
+        drops = price_repo.get_drops(days=7)
         assert drops == []
 
-    def test_drops_outside_window_excluded(self, db, deal):
+    def test_drops_outside_window_excluded(self, session, price_repo, deal):
         now = datetime.now()
-        db.upsert_deal(deal, "bikes", 100)
-        # Old drop (10 days ago)
-        db._conn.execute(
-            "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-            (deal.id, 15000, (now - timedelta(days=15)).isoformat()),
+        _seed_deal_with_prices(session, deal.id, prices=[])
+        # Old drop (10+ days ago)
+        session.execute(
+            text(
+                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+            ),
+            {"id": deal.id, "price": 15000, "ts": (now - timedelta(days=15)).isoformat()},
         )
-        db._conn.execute(
-            "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
-            (deal.id, 10499, (now - timedelta(days=10)).isoformat()),
+        session.execute(
+            text(
+                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+            ),
+            {"id": deal.id, "price": 10499, "ts": (now - timedelta(days=10)).isoformat()},
         )
-        db._conn.commit()
+        session.flush()
 
-        drops = db.get_price_drops(days=7)
+        drops = price_repo.get_drops(days=7)
         assert len(drops) == 0
 
 

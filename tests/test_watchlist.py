@@ -1,122 +1,144 @@
 """Tests for watchlist with price alerts."""
 
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from storage.sqlite import SQLiteStorage
+from storage.models import Base
+from storage.repositories import DealRepository, WatchlistRepository
 
 
 @pytest.fixture
-def db(tmp_path):
-    """Create a temporary SQLiteStorage instance."""
-    db_path = tmp_path / "test.db"
-    storage = SQLiteStorage(db_path)
-    yield storage
-    storage.close()
+def engine():
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    return eng
 
 
-def _seed_deal(db, deal_id="pepper:123", price=10000):
+@pytest.fixture
+def session(engine):
+    with Session(engine) as s:
+        yield s
+
+
+@pytest.fixture
+def deal_repo(session):
+    return DealRepository(session)
+
+
+@pytest.fixture
+def watchlist_repo(session):
+    return WatchlistRepository(session)
+
+
+def _seed_deal(session, deal_id="pepper:123", price=10000):
     """Insert a deal for foreign key reference."""
-    deal = type(
-        "Deal",
-        (),
-        {
-            "id": deal_id,
-            "title": "Test Deal",
-            "price": price,
-            "link": "https://example.com",
-            "source": "pepper",
-            "description": "",
-            "image_url": "",
-            "published_at": "",
-            "regular_price": 0,
-        },
-    )()
-    db.upsert_deal(deal, profile="bikes", score=80, category="test")
+    deal_repo = DealRepository(session)
+    deal_repo.upsert(
+        id=deal_id,
+        title="Test Deal",
+        price=price,
+        link="https://example.com",
+        source="pepper",
+        description="",
+        image_url="",
+        profile="bikes",
+        score=80,
+        category="test",
+    )
+    session.flush()
 
 
 class TestWatchlistCRUD:
     """Tests for watchlist CRUD operations."""
 
-    def test_add_to_watchlist(self, db):
-        _seed_deal(db)
-        result = db.add_to_watchlist("pepper:123", 8000)
+    def test_add_to_watchlist(self, session, watchlist_repo):
+        _seed_deal(session)
+        result = watchlist_repo.add("pepper:123", 8000)
         assert result is True
 
-    def test_add_duplicate_watchlist(self, db):
+    def test_add_duplicate_watchlist(self, session, watchlist_repo):
         """Adding same deal_id twice returns False."""
-        _seed_deal(db)
-        db.add_to_watchlist("pepper:123", 8000)
-        result = db.add_to_watchlist("pepper:123", 7000)
+        _seed_deal(session)
+        watchlist_repo.add("pepper:123", 8000)
+        session.flush()
+        result = watchlist_repo.add("pepper:123", 7000)
         assert result is False
 
-    def test_get_watchlist(self, db):
-        _seed_deal(db, "pepper:1", 10000)
-        _seed_deal(db, "pepper:2", 20000)
-        db.add_to_watchlist("pepper:1", 8000)
-        db.add_to_watchlist("pepper:2", 15000)
-        items = db.get_watchlist()
+    def test_get_watchlist(self, session, watchlist_repo):
+        _seed_deal(session, "pepper:1", 10000)
+        _seed_deal(session, "pepper:2", 20000)
+        watchlist_repo.add("pepper:1", 8000)
+        watchlist_repo.add("pepper:2", 15000)
+        session.flush()
+        items = watchlist_repo.get_all()
         assert len(items) == 2
         assert "target_price" in items[0]
         assert "title" in items[0]
 
-    def test_remove_from_watchlist(self, db):
-        _seed_deal(db)
-        db.add_to_watchlist("pepper:123", 8000)
-        result = db.remove_from_watchlist("pepper:123")
+    def test_remove_from_watchlist(self, session, watchlist_repo):
+        _seed_deal(session)
+        watchlist_repo.add("pepper:123", 8000)
+        session.flush()
+        result = watchlist_repo.remove("pepper:123")
         assert result is True
-        assert db.get_watchlist() == []
+        session.flush()
+        assert watchlist_repo.get_all() == []
 
-    def test_remove_nonexistent(self, db):
-        result = db.remove_from_watchlist("pepper:999")
+    def test_remove_nonexistent(self, watchlist_repo):
+        result = watchlist_repo.remove("pepper:999")
         assert result is False
 
-    def test_check_watchlist_trigger_price_met(self, db):
+    def test_check_watchlist_trigger_price_met(self, session, watchlist_repo):
         """Price at or below target triggers alert."""
-        _seed_deal(db)
-        db.add_to_watchlist("pepper:123", 8000)
-        trigger = db.check_watchlist_triggers("pepper:123", 7500)
+        _seed_deal(session)
+        watchlist_repo.add("pepper:123", 8000)
+        session.flush()
+        trigger = watchlist_repo.check_trigger("pepper:123", 7500)
         assert trigger is not None
         assert trigger["target_price"] == 8000
 
-    def test_check_watchlist_trigger_price_not_met(self, db):
+    def test_check_watchlist_trigger_price_not_met(self, session, watchlist_repo):
         """Price above target does not trigger."""
-        _seed_deal(db)
-        db.add_to_watchlist("pepper:123", 8000)
-        trigger = db.check_watchlist_triggers("pepper:123", 9000)
+        _seed_deal(session)
+        watchlist_repo.add("pepper:123", 8000)
+        session.flush()
+        trigger = watchlist_repo.check_trigger("pepper:123", 9000)
         assert trigger is None
 
-    def test_check_watchlist_trigger_already_triggered(self, db):
+    def test_check_watchlist_trigger_already_triggered(self, session, watchlist_repo):
         """Already triggered watchlist entry does not trigger again."""
-        _seed_deal(db)
-        db.add_to_watchlist("pepper:123", 8000)
-        db.check_watchlist_triggers("pepper:123", 7500)
-        db.mark_watchlist_triggered("pepper:123")
-        trigger = db.check_watchlist_triggers("pepper:123", 7000)
+        _seed_deal(session)
+        watchlist_repo.add("pepper:123", 8000)
+        session.flush()
+        watchlist_repo.check_trigger("pepper:123", 7500)
+        watchlist_repo.mark_triggered("pepper:123")
+        session.flush()
+        trigger = watchlist_repo.check_trigger("pepper:123", 7000)
         assert trigger is None
 
-    def test_mark_watchlist_triggered(self, db):
-        _seed_deal(db)
-        db.add_to_watchlist("pepper:123", 8000)
-        db.mark_watchlist_triggered("pepper:123")
-        items = db.get_watchlist()
+    def test_mark_watchlist_triggered(self, session, watchlist_repo):
+        _seed_deal(session)
+        watchlist_repo.add("pepper:123", 8000)
+        session.flush()
+        watchlist_repo.mark_triggered("pepper:123")
+        session.flush()
+        items = watchlist_repo.get_all()
         assert items[0]["triggered_at"] is not None
 
-    def test_get_watchlist_includes_current_price(self, db):
+    def test_get_watchlist_includes_current_price(self, session, watchlist_repo):
         """Watchlist items include current deal price."""
-        _seed_deal(db, "pepper:1", 10000)
-        db.add_to_watchlist("pepper:1", 8000)
-        items = db.get_watchlist()
+        _seed_deal(session, "pepper:1", 10000)
+        watchlist_repo.add("pepper:1", 8000)
+        session.flush()
+        items = watchlist_repo.get_all()
         assert items[0]["current_price"] == 10000
 
-    def test_watchlist_not_in_watchlist_deal(self, db):
+    def test_watchlist_not_in_watchlist_deal(self, watchlist_repo):
         """Deal not in watchlist returns None for trigger check."""
-        trigger = db.check_watchlist_triggers("pepper:999", 5000)
+        trigger = watchlist_repo.check_trigger("pepper:999", 5000)
         assert trigger is None
 
 

@@ -7,7 +7,7 @@ def test_post_without_csrf_header_rejected(raw_client: TestClient):
     """POST without HX-Request or X-Requested-With must return 403."""
     resp = raw_client.post(
         "/api/watchlist",
-        data={"deal_id": "test:1", "target_price": "100"},
+        data={"deal_id": "pepper:99999", "target_price": "100"},
         headers={},  # no CSRF headers
     )
     assert resp.status_code == 403
@@ -17,7 +17,7 @@ def test_post_with_hx_request_allowed(raw_client: TestClient):
     """POST with HX-Request header must be allowed."""
     resp = raw_client.post(
         "/api/watchlist",
-        data={"deal_id": "test:1", "target_price": "100"},
+        data={"deal_id": "pepper:99999", "target_price": "100"},
         headers={"HX-Request": "true"},
     )
     assert resp.status_code == 200
@@ -27,7 +27,7 @@ def test_post_with_x_requested_with_allowed(raw_client: TestClient):
     """POST with X-Requested-With header must be allowed."""
     resp = raw_client.post(
         "/api/watchlist",
-        data={"deal_id": "test:1", "target_price": "100"},
+        data={"deal_id": "pepper:99999", "target_price": "100"},
         headers={"X-Requested-With": "XMLHttpRequest"},
     )
     assert resp.status_code == 200
@@ -41,7 +41,7 @@ def test_get_without_csrf_header_allowed(raw_client: TestClient):
 
 def test_delete_without_csrf_header_rejected(raw_client: TestClient):
     """DELETE without CSRF headers must return 403."""
-    resp = raw_client.delete("/api/watchlist/test:1", headers={})
+    resp = raw_client.delete("/api/watchlist/pepper:99999", headers={})
     assert resp.status_code == 403
 
 

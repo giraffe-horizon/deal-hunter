@@ -74,6 +74,7 @@ class DealRepository:
 
     def _record_price(self, deal_id: str, price: int, recorded_at: str) -> None:
         """Append price to history, ignoring duplicates."""
+        self.session.flush()  # ensure deal row exists before FK insert
         self.session.execute(
             text(
                 "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"

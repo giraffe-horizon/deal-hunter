@@ -5,70 +5,94 @@ from datetime import datetime
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
-from storage.sqlite import SQLiteStorage
+from storage.models import Base
+from storage.repositories import AlertQueueRepository
 from utils.validation import validate_profile
 
 
 @pytest.fixture
-def db(tmp_path):
-    """Fresh SQLite database for each test."""
-    return SQLiteStorage(tmp_path / "test.db")
+def engine():
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    return eng
+
+
+@pytest.fixture
+def session(engine):
+    with Session(engine) as s:
+        yield s
+
+
+@pytest.fixture
+def alert_repo(session):
+    return AlertQueueRepository(session)
 
 
 class TestAlertQueue:
-    """Tests for alert_queue SQLite table and methods."""
+    """Tests for alert_queue table and methods."""
 
-    def test_queue_alert_stores_entry(self, db):
+    def test_queue_alert_stores_entry(self, session, alert_repo):
         payload = json.dumps({"deal_id": "pepper:123", "title": "Test Deal", "score": 85})
-        db.queue_alert("bikes", "deal", payload)
-        pending = db.get_pending_alerts()
+        alert_repo.queue("bikes", "deal", payload)
+        session.flush()
+        pending = alert_repo.get_pending()
         assert len(pending) == 1
         assert pending[0]["profile"] == "bikes"
         assert pending[0]["alert_type"] == "deal"
         assert json.loads(pending[0]["payload"])["deal_id"] == "pepper:123"
 
-    def test_queue_multiple_alerts(self, db):
-        db.queue_alert("bikes", "deal", json.dumps({"id": "1"}))
-        db.queue_alert("bikes", "price_drop", json.dumps({"id": "2"}))
-        db.queue_alert("nas_hdd", "deal", json.dumps({"id": "3"}))
-        pending = db.get_pending_alerts()
+    def test_queue_multiple_alerts(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", json.dumps({"id": "1"}))
+        alert_repo.queue("bikes", "price_drop", json.dumps({"id": "2"}))
+        alert_repo.queue("nas_hdd", "deal", json.dumps({"id": "3"}))
+        session.flush()
+        pending = alert_repo.get_pending()
         assert len(pending) == 3
 
-    def test_get_pending_alerts_filters_by_profile(self, db):
-        db.queue_alert("bikes", "deal", json.dumps({"id": "1"}))
-        db.queue_alert("nas_hdd", "deal", json.dumps({"id": "2"}))
-        pending = db.get_pending_alerts(profile="bikes")
+    def test_get_pending_alerts_filters_by_profile(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", json.dumps({"id": "1"}))
+        alert_repo.queue("nas_hdd", "deal", json.dumps({"id": "2"}))
+        session.flush()
+        pending = alert_repo.get_pending(profile="bikes")
         assert len(pending) == 1
         assert pending[0]["profile"] == "bikes"
 
-    def test_get_pending_alerts_excludes_sent(self, db):
-        db.queue_alert("bikes", "deal", json.dumps({"id": "1"}))
-        db.queue_alert("bikes", "deal", json.dumps({"id": "2"}))
-        pending = db.get_pending_alerts()
-        db.mark_alerts_sent([pending[0]["id"]])
-        remaining = db.get_pending_alerts()
+    def test_get_pending_alerts_excludes_sent(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", json.dumps({"id": "1"}))
+        alert_repo.queue("bikes", "deal", json.dumps({"id": "2"}))
+        session.flush()
+        pending = alert_repo.get_pending()
+        alert_repo.mark_sent([pending[0]["id"]])
+        session.flush()
+        remaining = alert_repo.get_pending()
         assert len(remaining) == 1
         assert remaining[0]["id"] == pending[1]["id"]
 
-    def test_mark_alerts_sent_updates_sent_at(self, db):
-        db.queue_alert("bikes", "deal", json.dumps({"id": "1"}))
-        pending = db.get_pending_alerts()
-        db.mark_alerts_sent([pending[0]["id"]])
-        assert db.get_pending_alerts() == []
+    def test_mark_alerts_sent_updates_sent_at(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", json.dumps({"id": "1"}))
+        session.flush()
+        pending = alert_repo.get_pending()
+        alert_repo.mark_sent([pending[0]["id"]])
+        session.flush()
+        assert alert_repo.get_pending() == []
 
-    def test_mark_alerts_sent_empty_list(self, db):
-        db.mark_alerts_sent([])
+    def test_mark_alerts_sent_empty_list(self, alert_repo):
+        alert_repo.mark_sent([])
 
-    def test_queue_alert_sets_created_at(self, db):
-        db.queue_alert("bikes", "deal", json.dumps({"id": "1"}))
-        pending = db.get_pending_alerts()
+    def test_queue_alert_sets_created_at(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", json.dumps({"id": "1"}))
+        session.flush()
+        pending = alert_repo.get_pending()
         assert pending[0]["created_at"] is not None
 
-    def test_get_pending_alerts_ordered_by_created_at(self, db):
-        db.queue_alert("bikes", "deal", json.dumps({"id": "first"}))
-        db.queue_alert("bikes", "deal", json.dumps({"id": "second"}))
-        pending = db.get_pending_alerts()
+    def test_get_pending_alerts_ordered_by_created_at(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", json.dumps({"id": "first"}))
+        alert_repo.queue("bikes", "deal", json.dumps({"id": "second"}))
+        session.flush()
+        pending = alert_repo.get_pending()
         assert json.loads(pending[0]["payload"])["id"] == "first"
         assert json.loads(pending[1]["payload"])["id"] == "second"
 
@@ -164,9 +188,9 @@ class TestIsQuietHours:
 class TestQuietHoursIntegration:
     """Tests for quiet hours integration with alert flow."""
 
-    def test_flush_pending_alerts_sends_and_marks(self, db):
+    def test_flush_pending_alerts_sends_and_marks(self, session, alert_repo):
         """flush_pending_alerts should send queued alerts and mark them sent."""
-        db.queue_alert(
+        alert_repo.queue(
             "bikes",
             "deal",
             json.dumps(
@@ -181,7 +205,7 @@ class TestQuietHoursIntegration:
                 }
             ),
         )
-        db.queue_alert(
+        alert_repo.queue(
             "bikes",
             "price_drop",
             json.dumps(
@@ -196,26 +220,30 @@ class TestQuietHoursIntegration:
                 }
             ),
         )
+        session.flush()
 
-        pending = db.get_pending_alerts()
+        pending = alert_repo.get_pending()
         assert len(pending) == 2
 
         # Mark all as sent (simulating flush)
-        db.mark_alerts_sent([p["id"] for p in pending])
-        assert db.get_pending_alerts() == []
+        alert_repo.mark_sent([p["id"] for p in pending])
+        session.flush()
+        assert alert_repo.get_pending() == []
 
-    def test_flush_respects_max_alerts(self, db):
+    def test_flush_respects_max_alerts(self, session, alert_repo):
         """Only first 5 alerts should be sent, rest stay queued."""
         for i in range(8):
-            db.queue_alert("bikes", "deal", json.dumps({"id": str(i)}))
+            alert_repo.queue("bikes", "deal", json.dumps({"id": str(i)}))
+        session.flush()
 
-        pending = db.get_pending_alerts()
+        pending = alert_repo.get_pending()
         assert len(pending) == 8
 
         # Flush only first 5
         to_send = pending[:5]
-        db.mark_alerts_sent([p["id"] for p in to_send])
-        remaining = db.get_pending_alerts()
+        alert_repo.mark_sent([p["id"] for p in to_send])
+        session.flush()
+        remaining = alert_repo.get_pending()
         assert len(remaining) == 3
 
 
