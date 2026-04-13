@@ -1,8 +1,8 @@
 # Products & Offers — migrating from "deal feed" to "products with pinned offers"
 
 **Date:** 2026-04-13
-**Updated:** 2026-04-13 — re-aligned to current repo (post Phase 3-6 refactor: SQLAlchemy ORM, Alembic migrations, service layer, Pydantic dashboard schemas).
-**Status:** design (approved by user through Q&A dialog)
+**Updated:** 2026-04-13 — re-aligned to current repo (post Phase 3-6 refactor: SQLAlchemy ORM, Alembic migrations, service layer, Pydantic dashboard schemas). Later same-day update: Phase A decomposed into **A1** (table + class rename only, column names preserved) and **A2** (column renames + new schema + event writes) to keep each migration's blast radius tight.
+**Status:** design (approved by user through Q&A dialog). Phase A1 in progress on worktree `phase-a1-rename` (commits `2e1cf04`, `bf9df9c`, `cdd7aba`: Alembic 003 + ORM class rename).
 **Goal:** evolutionary transformation of deal-hunter from a per-Deal feed dashboard into a per-Product dashboard with cross-source price history and pinned offers.
 
 ## Context
@@ -113,9 +113,14 @@ Uniqueness: `UNIQUE (identifier_type, identifier_value, COALESCE(source, ''))`. 
 
 ### offers (renamed from `deals`)
 
-The existing `deals` table is renamed to `offers` via Alembic migration. Existing columns are renamed in place; new columns are added. The PK `id TEXT` keeps the format `"{source}:{native_id}"` — no value migration, only table rename + column renames + additions.
+The existing `deals` table is renamed to `offers` via **two** Alembic migrations:
 
-**Existing columns renamed** (to align with product-model vocabulary):
+- **`003_rename_deals_to_offers`** (Phase A1) — table rename only. Column names are preserved verbatim (`title`, `price`, `link`, `first_seen`, `last_seen`). Index `idx_deals_profile_score` → `idx_offers_profile_score`. Sibling table `price_history` → `price_points` with column names (`deal_id`, `price`, `recorded_at`) also preserved. This keeps `_to_dict()` keys, templates, Telegram payloads, and dashboard APIs untouched, so A1 ships as a pure structural rename with no caller-visible contract change.
+- **`004_products_schema`** (Phase A2) — column renames + additive new columns + new sibling tables. This is where the product model actually starts to exist.
+
+The PK `id TEXT` keeps the format `"{source}:{native_id}"` throughout both revisions — no value migration at any step.
+
+**Existing columns renamed in A2** (to align with product-model vocabulary):
 - `title` → `raw_title` (never overwritten after first write)
 - `price` → `current_price_pln`
 - `link` → `url`
@@ -320,10 +325,10 @@ For other profiles (not decided at this time) — defined per profile during imp
 
 Strangler pattern, feature flag `PRODUCT_MODEL_ENABLED`, dual-write, single-read-old → dual-read → cutover. All schema changes are Alembic revisions in `storage/migrations/versions/`.
 
-**Phase 0 — schema only (two Alembic revisions)**
-- `003_rename_deals_to_offers.py` — rename table `deals` → `offers`, rename columns (`title`→`raw_title`, `price`→`current_price_pln`, `link`→`url`, `first_seen`→`first_seen_at`, `last_seen`→`last_seen_at`), rename index, rename `price_history.deal_id` → `offer_id`, rename table `price_history` → `price_points`, rename class `Deal`→`Offer` and `PriceHistory`→`PricePoint` in `storage/models.py`, update `DealRepository`→`OfferRepository` in `storage/repositories.py`, update all importers. Downgrade script reverses rename.
-- `004_products_schema.py` — add new columns on `offers` (`product_id`, `source_native_id`, `current_price_original`, `currency_original`, `fx_rate_used`, `availability`, `attributes_hint`, `is_active`); add new columns on `price_points` (`product_id`, `price_original`, `currency_original`, `fx_rate_used`, `availability`); create new tables `products`, `product_aliases`, `offer_payload_history`, `deal_events`, `match_reviews`, `match_decisions`, `fx_rates`; backfill `source_native_id` from existing `offers.id` (split on first `:`).
-- No write-path code changes beyond the rename. Test suite must pass after 003 alone.
+**Phase 0 — schema only (two Alembic revisions, split over A1 and A2)**
+- `003_rename_deals_to_offers.py` (Phase A1) — rename table `deals` → `offers` and `price_history` → `price_points`; rename index `idx_deals_profile_score` → `idx_offers_profile_score`; retarget FKs on `feedback`, `watchlist`, and the price-point child table onto `offers(id)`. **Column names preserved**: `title`, `price`, `link`, `first_seen`, `last_seen` on offers; `deal_id`, `price`, `recorded_at` on price_points. Python: `class Deal` → `class Offer`, `class PriceHistory` → `class PricePoint`, `DealRepository` → `OfferRepository` (with short-lived backward-compat alias during the callers-migration pass). Downgrade reverses rename.
+- `004_products_schema.py` (Phase A2) — rename columns (`title`→`raw_title`, `price`→`current_price_pln`, `link`→`url`, `first_seen`→`first_seen_at`, `last_seen`→`last_seen_at` on offers; `deal_id`→`offer_id`, `price`→`price_pln` on price_points); add new columns on `offers` (`product_id`, `source_native_id`, `current_price_original`, `currency_original`, `fx_rate_used`, `availability`, `attributes_hint`, `is_active`); add new columns on `price_points` (`product_id`, `price_original`, `currency_original`, `fx_rate_used`, `availability`); create new tables `products`, `product_aliases`, `offer_payload_history`, `deal_events`, `match_reviews`, `match_decisions`, `fx_rates`; backfill `source_native_id` from existing `offers.id` (split on first `:`).
+- After `003` alone: full test suite green, zero caller-visible contract change. After `004`: `_to_dict()` keys change (external contract break) — handle in same PR as the dashboard/Telegram/bot adapters.
 
 **Phase 1 — dual-write events + FX-aware prices**
 - Ingest writes to `offers` (as today, via renamed `OfferRepository`), appends to `offer_payload_history` (new), emits `deal_events` rows for detected transitions (new_listing, price_drop derived from the existing `services/price_tracker.py`).
@@ -368,19 +373,34 @@ Dual-write, because writes are infrequent (crons every 30min) and read consisten
 
 ## 5. Implementation phases
 
-### Phase A — Rename + new schema + event writes
+### Phase A1 — Table + class rename (column names preserved)
 
-- **Goal:** Alembic revisions `003_rename_deals_to_offers` and `004_products_schema` land; `DealRepository` renamed to `OfferRepository`; every ingest appends to `offer_payload_history` and `deal_events`.
+- **Goal:** Ship Alembic `003_rename_deals_to_offers` as a pure structural rename. No contract changes visible to dashboard, Telegram, or CLI.
 - **Scope:**
-  - `storage/migrations/versions/003_rename_deals_to_offers.py`
-  - `storage/migrations/versions/004_products_schema.py`
-  - `storage/models.py` — `Deal` → `Offer`, `PriceHistory` → `PricePoint`; new models `Product`, `ProductAlias`, `OfferPayloadHistory`, `DealEvent`, `MatchReview`, `MatchDecision`, `FxRate`.
-  - `storage/repositories.py` — `DealRepository` → `OfferRepository`; new `ProductRepository`, `OfferPayloadRepository`, `DealEventRepository`, `MatchRepository`, `FxRateRepository`.
-  - `services/fetcher.py` and `services/alerter.py` — use renamed classes; on upsert, also append payload history (N=10 FIFO) and emit event rows.
-  - All test files referencing `DealRepository`/`Deal` ORM class updated (tests/test_repositories.py, tests/test_services.py, tests/test_dashboard.py, etc.).
+  - `storage/migrations/versions/003_rename_deals_to_offers.py` — `rename_table` only; preserve every column name.
+  - `storage/models.py` — `class Deal` → `class Offer`, `class PriceHistory` → `class PricePoint`; ForeignKey targets retargeted to `offers(id)` on `Feedback`, `WatchlistItem`, `PricePoint`; relationship attribute `deal` → `offer` (back_populates aligned). `SeenDeal` and `AlertQueue` untouched.
+  - `storage/repositories.py` — `DealRepository` → `OfferRepository`; raw SQL updated (`FROM deals` → `FROM offers`, `INSERT INTO price_history` → `INSERT INTO price_points`, `JOIN deals d` → `JOIN offers d`). Short-lived `DealRepository = OfferRepository` alias during caller migration; removed at end of A1.
+  - All callers: `tests/conftest.py`, `services/*`, `dashboard/routes/*`, `dashboard/services/*`, `visualization/charts.py`, `deal_hunter.py`, `feedback_bot.py`, `scripts/migrate_json_state.py`.
+  - `tests/test_migration_003_rename.py` — round-trip test: upgrade, insert, downgrade, re-upgrade, verify data survives.
 - **Dependencies:** none.
-- **Risks:** rename touches many files (high surface). Alembic downgrade must reverse table/column renames cleanly. Concurrent-cron write integrity on event writes.
-- **DoD:** `alembic upgrade head` + `alembic downgrade -1` round-trip works on a clean DB copy; full test suite green after rename; new Offer/event writes visible in DB; OfferPayloadHistory capped at N=10.
+- **Risks:** rename touches many files; easy to miss a raw-SQL string. Mitigated by the `FROM (deals|price_history)` grep gate in the plan's Definition of Done.
+- **DoD:** Alembic `003` round-trips cleanly; `grep -rn --include='*.py' -E '(FROM|JOIN|INTO|UPDATE)\s+(deals|price_history)\b'` returns only the migration round-trip test; `grep -rn '\bDealRepository\b'` returns zero outside docs; full test suite matches pre-A1 baseline; `deal_hunter.py --list` and `--health` import cleanly.
+- **Plan:** [docs/superpowers/plans/2026-04-13-phase-a1-rename-deals-to-offers.md](docs/superpowers/plans/2026-04-13-phase-a1-rename-deals-to-offers.md). In progress — Tasks 0–2 shipped on worktree `phase-a1-rename`.
+
+### Phase A2 — Column renames + new schema + event writes
+
+- **Goal:** Alembic `004_products_schema` lands; every ingest appends to `offer_payload_history` and `deal_events`. `_to_dict()` external keys change; dashboard, Telegram, and bot payload assembly all migrate in lockstep.
+- **Scope:**
+  - `storage/migrations/versions/004_products_schema.py` — column renames on `offers` and `price_points` + additive new columns + new tables (`products`, `product_aliases`, `offer_payload_history`, `deal_events`, `match_reviews`, `match_decisions`, `fx_rates`) + `source_native_id` backfill.
+  - `storage/models.py` — new models `Product`, `ProductAlias`, `OfferPayloadHistory`, `DealEvent`, `MatchReview`, `MatchDecision`, `FxRate`; existing models gain the new columns.
+  - `storage/repositories.py` — new `ProductRepository`, `ProductAliasRepository`, `OfferPayloadHistoryRepository`, `DealEventRepository`, `MatchReviewRepository`, `MatchDecisionRepository`, `FxRateRepository`; `OfferRepository._to_dict()` emits new keys (`raw_title`, `current_price_pln`, `url`, `first_seen_at`, `last_seen_at`).
+  - Dashboard templates, JSON API, Telegram alert builders, feedback-bot handlers: accept the new dict keys (with a transitional key-alias adapter if the commit is otherwise too large).
+  - `services/fetcher.py` and `services/alerter.py` — on upsert append payload history (N=10 FIFO), emit event rows (`new_listing`, `price_drop`, `price_increase`, `back_in_stock`, `expiring`).
+  - Test sweep to the new names.
+- **Dependencies:** A1 complete.
+- **Risks:** Contract change is visible end-to-end. Concurrent-cron integrity on event writes. SQLite `ALTER COLUMN` requires the CREATE-new → INSERT-SELECT → DROP-old → RENAME pattern.
+- **DoD:** `alembic upgrade head` + `alembic downgrade -1` round-trips on a DB copy; full test suite green; `OfferPayloadHistory` capped at 10 per offer; `DealEvent` rows emitted for ingest transitions; `/deals` and Telegram alerts visually identical to pre-A2.
+- **Plan:** to be written at `docs/superpowers/plans/2026-04-13-phase-a2-products-schema.md`.
 
 ### Phase B — Attribute + identifier extractor + NBP FX
 
@@ -504,8 +524,8 @@ Dual-write, because writes are infrequent (crons every 30min) and read consisten
 
 - `storage/models.py` — rename `Deal` → `Offer` (table `deals` → `offers`); rename `PriceHistory` → `PricePoint` (table `price_history` → `price_points`); new models `Product`, `ProductAlias`, `OfferPayloadHistory`, `DealEvent`, `MatchReview`, `MatchDecision`, `FxRate`. Keep `WatchlistItem`, `Feedback`, `AlertQueue`, `SeenDeal` — their FKs retarget to `offers` via Alembic.
 - `storage/repositories.py` — rename `DealRepository` → `OfferRepository` (keep an alias for callers); add `ProductRepository`, `ProductAliasRepository`, `OfferPayloadHistoryRepository`, `DealEventRepository`, `MatchReviewRepository`, `MatchDecisionRepository`, `FxRateRepository`. Extend `PricePointRepository` with `price_pln`, `price_original`, `currency_original`, `fx_rate_used`.
-- `storage/migrations/versions/003_rename_deals_to_offers.py` — Alembic revision: table + column renames, FK retargets, index renames.
-- `storage/migrations/versions/004_products_schema.py` — Alembic revision: all new tables + indices + FTS5 triggers.
+- `storage/migrations/versions/003_rename_deals_to_offers.py` — Alembic revision (Phase A1): table renames (`deals`→`offers`, `price_history`→`price_points`) and index rename only. Column names preserved. FK retargets onto `offers(id)`.
+- `storage/migrations/versions/004_products_schema.py` — Alembic revision (Phase A2): column renames on offers/price_points + additive new columns + all new tables + indices + FTS5 triggers.
 - No legacy `storage/sqlite.py` module remains in the repo — all persistence already flows through `storage/repositories.py` and `storage/models.py`. Any future external caller still passing the old name should be redirected to the repository classes.
 
 ### Service layer
@@ -595,8 +615,8 @@ Follow existing naming conventions under `tests/` (flat layout, `test_*.py`) and
 
 ### Migration tests (`tests/`)
 
-- `test_migration_rename.py` — Alembic `003_rename_deals_to_offers`: run against a fixture DB seeded with legacy `deals`/`price_history`; verify renamed tables, preserved row counts, FK retargeting (watchlist → offers), and that offer ids (`{source}:{native_id}`) are preserved verbatim.
-- `test_migration_products_schema.py` — Alembic `004_products_schema`: idempotency under `upgrade`/`downgrade`/`upgrade`, no data loss.
+- `test_migration_003_rename.py` (Phase A1, landed) — Alembic `003_rename_deals_to_offers`: seeds legacy `deals`/`price_history`, upgrades, downgrades, re-upgrades, and verifies row data survives intact across the round-trip plus that column names are unchanged (only the table identifier moved).
+- `test_migration_004_products_schema.py` (Phase A2) — Alembic `004_products_schema`: idempotency under `upgrade`/`downgrade`/`upgrade`, no data loss, `source_native_id` backfill correctness.
 - `test_cli_backfill_products.py` — `cli/backfill_products.py` idempotency, checkpoint recovery, resumable after interruption.
 
 ### Match quality
@@ -625,7 +645,7 @@ Follow existing naming conventions under `tests/` (flat layout, `test_*.py`) and
 
 - **Low EAN/SKU coverage** in Polish stores (Pepper near zero, Ceneo has `ceneo_group_id` — gold, x-kom inconsistent). L2 carries most of the weight → higher `manual_review_rate`.
 - **Cloudflare on x-kom** — store YAML exists, live scraping is sometimes blocked. Product gets created but without fresh offers.
-- **Table rename in Alembic (`003`)** — must retarget all existing FKs (watchlist, feedback, price_history, seen_deals) atomically; run the rename on a copy of a real production DB first and verify `PRAGMA foreign_key_check` clean. SQLite ALTER limits: heavier column restructures in `004` use CREATE new → INSERT SELECT → DROP old → RENAME pattern.
+- **Table rename in Alembic (`003`, A1)** — must retarget all existing FKs (watchlist, feedback, price_points, seen_deals keeps its own table) atomically; `render_as_batch=True` in `env.py` handles SQLite's ALTER limits. Run the rename on a copy of a real production DB first and verify `PRAGMA foreign_key_check` clean. Heavier column restructures in `004` (A2) use CREATE new → INSERT SELECT → DROP old → RENAME pattern.
 - **NBP API downtime** — cache + fallback to last known rate, warning logged.
 - **Regex in profile YAML** (score_rules) and extractor — they do not collide (extractor runs on raw_title before scoring).
 - **In-memory vs persistent dedup overlap** — `DealFetcher.deduplicate()` (fuzzy 0.85 + ±5% price) removes duplicates inside a single fetch; the matching pipeline handles identity across runs. Ensure the pipeline does not re-run fuzzy dedup on an already-deduped batch; treat its input as already-representative.
@@ -661,13 +681,14 @@ Follow existing naming conventions under `tests/` (flat layout, `test_*.py`) and
 
 ---
 
-## Recommended rollout order (8 steps)
+## Recommended rollout order (9 steps)
 
-1. **Schema + dual-write Offer + payload history** (Phase A) — tables + migration + parallel writes.
-2. **Extractor + NBP FX + `identifiers:` section in stores YAML** (Phase B) — extraction + currency conversion + coverage report.
-3. **Pipeline L1 only** — auto-match via hard identifiers; no match → new Product; conservative backfill.
-4. **Golden set + metrics + L2 pipeline with required_match_attrs** (Phase C part 2) — precision ≥ 0.98 gate before enabling L2.
-5. **Dashboard `/products` read-only** (Phase D) — parallel to `/deals`, cross-source timeline.
-6. **Manual review queue + undo** (Phase E) — L3 actionable, audit log, negative evidence.
-7. **Cutover: Telegram + bot + product watchlist** (Phase F) — `/products` default, canary audit green.
-8. **Background merge sweep** (Phase G, post-MVP) — nightly with safety caps.
+1. **Table + class rename, column names preserved** (Phase A1) — Alembic `003`, `Deal`→`Offer`, `PriceHistory`→`PricePoint`. Zero caller-visible contract change. *In progress on worktree `phase-a1-rename`.*
+2. **Column renames + new schema + dual-write** (Phase A2) — Alembic `004`, new tables, `_to_dict()` emits new keys, dashboard/Telegram/bot adapters migrate in lockstep; ingest appends `offer_payload_history` + emits `deal_events`.
+3. **Extractor + NBP FX + `identifiers:` section in stores YAML** (Phase B) — extraction + currency conversion + coverage report.
+4. **Pipeline L1 only** (Phase C part 1) — auto-match via hard identifiers; no match → new Product; conservative backfill.
+5. **Golden set + metrics + L2 pipeline with required_match_attrs** (Phase C part 2) — precision ≥ 0.98 gate before enabling L2.
+6. **Dashboard `/products` read-only** (Phase D) — parallel to `/deals`, cross-source timeline.
+7. **Manual review queue + undo** (Phase E) — L3 actionable, audit log, negative evidence.
+8. **Cutover: Telegram + bot + product watchlist** (Phase F) — `/products` default, canary audit green.
+9. **Background merge sweep** (Phase G, post-MVP) — nightly with safety caps.
