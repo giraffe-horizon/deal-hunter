@@ -31,8 +31,6 @@ with contextlib.suppress(importlib.metadata.PackageNotFoundError):
     __version__ = importlib.metadata.version("deal-hunter")
 
 from cli.verify import (
-    format_breakdown_line,
-    print_verbose,
     run_verify,
 )
 from notifiers.telegram import TelegramNotifier
@@ -115,53 +113,6 @@ _scoring = ScoringService(FILTER_REGISTRY)
 def _health_tracker() -> HealthTracker:
     state_dir = Path(os.environ.get("DEAL_HUNTER_STATE_DIR", str(BASE_DIR / "state")))
     return HealthTracker(state_dir / "health.json")
-
-
-# ──────────────── BACKWARD-COMPAT RE-EXPORTS ────────────────
-# Old tests import these names from deal_hunter; keep them working.
-
-from services.fetcher import DealFetcher as _DealFetcher  # noqa: E402
-
-_normalize_title = _DealFetcher._normalize_title
-
-
-def deduplicate(deals: list, dedup_config: dict | None = None) -> list:
-    """Backward-compat wrapper: delegates to DealFetcher.deduplicate."""
-    return _fetcher.deduplicate(deals, dedup_config)
-
-
-def check_price_changes(deal, price_repo, profile=None):
-    """Backward-compat wrapper: delegates to PriceTracker."""
-    tracker = PriceTracker(price_repo)
-    result = tracker.check_price_change(deal, profile)
-    if result is None:
-        return None
-    # Convert PriceChange dataclass to dict (old API returned dicts)
-    return {
-        "type": result.type,
-        "old_price": result.old_price,
-        "new_price": result.new_price,
-        "diff_pln": result.diff_pln,
-        "diff_percent": result.diff_percent,
-        "is_lowest_ever": result.is_lowest_ever,
-    }
-
-
-def get_price_tracking_config(profile: dict) -> dict:
-    """Backward-compat wrapper: delegates to PriceTracker.get_config."""
-    config = PriceTracker.get_config(profile)
-    return {
-        "enabled": config.enabled,
-        "min_drop_percent": config.min_drop_percent,
-        "min_drop_amount": config.min_drop_amount,
-        "track_increases": config.track_increases,
-    }
-
-
-# Backward-compat aliases for verify functions
-_format_breakdown_line = format_breakdown_line
-_print_verbose = print_verbose
-_run_verify = run_verify
 
 
 # ──────────────── RUN MODES ────────────────
