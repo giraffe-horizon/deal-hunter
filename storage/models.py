@@ -8,8 +8,8 @@ class Base(DeclarativeBase):
     pass
 
 
-class Deal(Base):
-    __tablename__ = "deals"
+class Offer(Base):
+    __tablename__ = "offers"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
@@ -25,31 +25,31 @@ class Deal(Base):
     first_seen: Mapped[str | None] = mapped_column(String, default=None)
     last_seen: Mapped[str | None] = mapped_column(String, default=None)
 
-    prices: Mapped[list["PriceHistory"]] = relationship(back_populates="deal")
-    feedback_entries: Mapped[list["Feedback"]] = relationship(back_populates="deal")
-    watchlist_entry: Mapped["WatchlistItem | None"] = relationship(back_populates="deal")
+    prices: Mapped[list["PricePoint"]] = relationship(back_populates="offer")
+    feedback_entries: Mapped[list["Feedback"]] = relationship(back_populates="offer")
+    watchlist_entry: Mapped["WatchlistItem | None"] = relationship(back_populates="offer")
 
-    __table_args__ = (Index("idx_deals_profile_score", "profile", "score"),)
+    __table_args__ = (Index("idx_offers_profile_score", "profile", "score"),)
 
 
-class PriceHistory(Base):
-    __tablename__ = "price_history"
+class PricePoint(Base):
+    __tablename__ = "price_points"
 
-    deal_id: Mapped[str] = mapped_column(String, ForeignKey("deals.id"), primary_key=True)
+    deal_id: Mapped[str] = mapped_column(String, ForeignKey("offers.id"), primary_key=True)
     price: Mapped[int] = mapped_column(nullable=False)
     recorded_at: Mapped[str] = mapped_column(String, primary_key=True)
 
-    deal: Mapped["Deal"] = relationship(back_populates="prices")
+    offer: Mapped["Offer"] = relationship(back_populates="prices")
 
 
 class Feedback(Base):
     __tablename__ = "feedback"
 
-    deal_id: Mapped[str] = mapped_column(String, ForeignKey("deals.id"), primary_key=True)
+    deal_id: Mapped[str] = mapped_column(String, ForeignKey("offers.id"), primary_key=True)
     action: Mapped[str | None] = mapped_column(String, default=None)
     created_at: Mapped[str] = mapped_column(String, primary_key=True)
 
-    deal: Mapped["Deal"] = relationship(back_populates="feedback_entries")
+    offer: Mapped["Offer"] = relationship(back_populates="feedback_entries")
 
 
 class AlertQueue(Base):
@@ -68,13 +68,13 @@ class WatchlistItem(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     deal_id: Mapped[str] = mapped_column(
-        String, ForeignKey("deals.id"), nullable=False, unique=True
+        String, ForeignKey("offers.id"), nullable=False, unique=True
     )
     target_price: Mapped[int] = mapped_column(nullable=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     triggered_at: Mapped[str | None] = mapped_column(String, default=None)
 
-    deal: Mapped["Deal"] = relationship(back_populates="watchlist_entry")
+    offer: Mapped["Offer"] = relationship(back_populates="watchlist_entry")
 
 
 class SeenDeal(Base):
