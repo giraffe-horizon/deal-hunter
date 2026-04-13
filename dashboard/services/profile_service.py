@@ -78,7 +78,7 @@ class ProfileService:
         with profile_path.open("w", encoding="utf-8") as f:
             yaml.dump(profile, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
-        return profile["enabled"]
+        return bool(profile["enabled"])
 
     def run_verify(self, name: str) -> str:
         """Run a profile with --verify and return HTML-safe output."""

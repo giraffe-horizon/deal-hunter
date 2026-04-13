@@ -35,7 +35,7 @@ async def add_to_watchlist_api(
     try:
         validated = WatchlistAdd(
             deal_id=str(form.get("deal_id", "")),
-            target_price=int(form.get("target_price", 0)),
+            target_price=int(str(form.get("target_price", 0))),
         )
     except Exception:
         return HTMLResponse(

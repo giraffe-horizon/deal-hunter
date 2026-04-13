@@ -58,7 +58,7 @@ class AlertService:
     def __init__(
         self,
         telegram: TelegramNotifier | None,
-        alert_repo: AlertQueueRepository,
+        alert_repo: AlertQueueRepository | None = None,
     ) -> None:
         self.telegram = telegram
         self.alert_repo = alert_repo
@@ -67,7 +67,7 @@ class AlertService:
         self, profile_name: str, profile: dict, topic_id: int | None, max_alerts: int
     ) -> int:
         """Flush queued alerts from previous quiet hours. Returns count flushed."""
-        if not self.telegram or is_quiet_hours(profile):
+        if not self.telegram or not self.alert_repo or is_quiet_hours(profile):
             return 0
 
         pending = self.alert_repo.get_pending(profile=profile_name)
@@ -116,7 +116,7 @@ class AlertService:
         drops.sort(key=lambda x: x["price_change"]["diff_percent"], reverse=True)
         count = min(len(drops), max_alerts)
 
-        if is_quiet_hours(profile):
+        if is_quiet_hours(profile) and self.alert_repo:
             for pda in drops[:count]:
                 payload = json.dumps(
                     {
@@ -161,7 +161,7 @@ class AlertService:
 
         alerts.sort(key=lambda x: x["score"], reverse=True)
 
-        if is_quiet_hours(profile):
+        if is_quiet_hours(profile) and self.alert_repo:
             count = min(len(alerts), max_alerts)
             for a in alerts[:count]:
                 payload = json.dumps(

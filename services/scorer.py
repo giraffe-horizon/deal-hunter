@@ -22,7 +22,7 @@ class ScoringService:
         """Get the appropriate filter for a profile."""
         custom_filter = profile.get("custom_filter")
         if custom_filter and custom_filter in self.filter_registry:
-            return self.filter_registry[custom_filter](profile)
+            return self.filter_registry[custom_filter](profile)  # type: ignore[no-any-return]
         return BaseFilter(profile)
 
     def score_deals(
