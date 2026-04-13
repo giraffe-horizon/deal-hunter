@@ -13,13 +13,15 @@ def alembic_db(tmp_path: Path) -> tuple[Config, str]:
     """Fresh SQLite DB with a pre-wired Alembic config pointing to it."""
     db_url = f"sqlite:///{tmp_path / 'test.db'}"
     cfg = Config("storage/migrations/alembic.ini")
-    cfg.set_main_option("sqlalchemy.url", db_url)
     return cfg, db_url
 
 
 def _table_names(db_url: str) -> set[str]:
     eng = create_engine(db_url)
-    return set(inspect(eng).get_table_names())
+    try:
+        return set(inspect(eng).get_table_names())
+    finally:
+        eng.dispose()
 
 
 def test_003_upgrade_renames_tables(alembic_db, monkeypatch):
@@ -61,10 +63,9 @@ def test_003_roundtrip_preserves_row_data(alembic_db, monkeypatch):
     with eng.begin() as conn:
         conn.execute(
             text(
-                "INSERT INTO deals"
-                " (id, title, price, source, status, first_seen, last_seen)"
-                " VALUES"
-                " ('pepper:abc', 'Test', 100, 'pepper', 'active', '2026-01-01', '2026-01-01')"
+                "INSERT INTO deals (id, title, price, source, status, first_seen, last_seen)"
+                " VALUES ('pepper:abc', 'Test', 100, 'pepper', 'active',"
+                " '2026-01-01', '2026-01-01')"
             )
         )
         conn.execute(
@@ -74,6 +75,8 @@ def test_003_roundtrip_preserves_row_data(alembic_db, monkeypatch):
             )
         )
 
+    command.upgrade(cfg, "003")
+    command.downgrade(cfg, "002")
     command.upgrade(cfg, "003")
 
     with eng.connect() as conn:
