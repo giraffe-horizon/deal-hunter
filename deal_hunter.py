@@ -40,7 +40,7 @@ from storage.repositories import (
     WatchlistRepository,
 )
 
-__version__ = "0.12.2"  # maintained by semantic-release
+__version__ = "0.13.0"  # maintained by semantic-release
 with contextlib.suppress(importlib.metadata.PackageNotFoundError):
     __version__ = importlib.metadata.version("deal-hunter")
 from filters.base import BaseFilter

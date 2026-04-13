@@ -1,6 +1,260 @@
 # CHANGELOG
 
 
+## v0.13.0 (2026-04-13)
+
+### Bug Fixes
+
+- Add type annotations to satisfy mypy disallow_untyped_defs
+  ([`cb99b58`](https://github.com/giraffe-horizon/deal-hunter/commit/cb99b58033f974ccf69032c7f9834cf6c3d87166))
+
+Add missing type annotations for Deal parameters, BS4 elements, SQLAlchemy session/event args, and
+  repository internals. All 23 mypy errors resolved.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Resolve all ruff lint violations (RET505, SIM105, SIM117, PTH123, PTH108/110/118/120, E501)
+  ([`7ac3746`](https://github.com/giraffe-horizon/deal-hunter/commit/7ac3746922b4fa27b5412f0646b83ed099a95037))
+
+- RET505: remove unnecessary else after return (auto-fixed) - SIM117: merge nested with statements
+  into multi-context with - SIM105: replace try/except/pass with contextlib.suppress - PTH123:
+  replace builtin open() with Path.open() - PTH108/110/118/120: replace os.path/os.unlink with
+  pathlib in tests - E501: break long lines (strings, f-strings, SQL queries, docstrings)
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Update pre-commit ruff hook to v0.15.9 to match local version
+  ([`e13fecc`](https://github.com/giraffe-horizon/deal-hunter/commit/e13fecc3ee19d57296efd4d57ed77ad09a7d191f))
+
+The previous v0.11.6 still enforced removed rule UP038, causing false positives on isinstance()
+  calls in utils/validation.py.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **storage**: Address review — DESC index, batch mode, dir creation, template modernization
+  ([`4cdb13f`](https://github.com/giraffe-horizon/deal-hunter/commit/4cdb13fd62ca93320a54fa781a17d68f5fe41c05))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **storage**: Move cutoff filter outside CTE in count_drops to match get_drops semantics
+  ([`af3add9`](https://github.com/giraffe-horizon/deal-hunter/commit/af3add96c4ccd866e5d8ffaa6d5d217500aadbc0))
+
+The cutoff inside the CTE caused LAG() to lose visibility of pre-window prices, undercounting drops
+  where the previous price predates the window.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **storage**: Remove unused topic_id parameter from AlertQueueRepository.queue
+  ([`d754d79`](https://github.com/giraffe-horizon/deal-hunter/commit/d754d790a3a13a3e1631ac67fa749c38e1cce393))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- Add sqlalchemy and alembic dependencies for Phase 2
+  ([`0af2262`](https://github.com/giraffe-horizon/deal-hunter/commit/0af22620dee9ba24f057428a3bc75717d940588e))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Delete storage/sqlite.py — all consumers migrated to repositories
+  ([`2c457f5`](https://github.com/giraffe-horizon/deal-hunter/commit/2c457f5a704d42406698ea339d81e7c4e9534437))
+
+Removes the 690-line raw-SQL monolith and the one-time JSON-to-SQLite migration script now that
+  every caller uses SQLAlchemy repositories. Also removes the backward-compat re-export from
+  storage/__init__.py.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- Enable mypy disallow_untyped_defs for core modules
+  ([`c8f8b56`](https://github.com/giraffe-horizon/deal-hunter/commit/c8f8b56266cd8c18521ee9da4b816e0e23b567cf))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- Tighten ruff lint rules — add RET, SIM, PTH; enforce line-length
+  ([`a0bb9a7`](https://github.com/giraffe-horizon/deal-hunter/commit/a0bb9a747d9b81c2e15d2908487686bcd6147cf4))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Update stale references to deleted storage/sqlite.py
+  ([`dc41aba`](https://github.com/giraffe-horizon/deal-hunter/commit/dc41abac6fd2db9a4a80c004516aa7877ebcb227))
+
+Update CLAUDE.md architecture section, feedback bot docs, and test listing to reflect the new
+  SQLAlchemy ORM layer. Fix stale docstring in charts.py.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Documentation
+
+- Add comprehensive refactoring & cleanup design spec
+  ([`f6d5c6b`](https://github.com/giraffe-horizon/deal-hunter/commit/f6d5c6bbffb112240c3550d14a27933b8361de77))
+
+Six-phase bottom-up refactoring plan covering SQLAlchemy ORM migration, service layer extraction,
+  dashboard cleanup, template DRY, and type safety.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add Phase 1 implementation plan (tooling, formatting, env)
+  ([`57e59b4`](https://github.com/giraffe-horizon/deal-hunter/commit/57e59b4f2b22d4ba203d5a3197b149cf52bd860f))
+
+10 tasks covering: Ruff config tightening, lint violation fixes (42 errors), Mypy strictness,
+  pre-commit hook, env var configuration, and Phase 2 deps.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Add Phase 2 implementation plan — SQLAlchemy ORM migration
+  ([`6d399f3`](https://github.com/giraffe-horizon/deal-hunter/commit/6d399f3ae67beba9e3d5995eec15a1ec1dfe8845))
+
+17 tasks covering: ORM models, session management, Alembic setup, 6 repository classes (Deal, Price,
+  Watchlist, AlertQueue, Feedback, SeenDeal), N+1 query fixes via window functions, dashboard/route
+  migration, deal_hunter.py state consolidation, feedback bot migration, test suite rewrite, and
+  retirement of storage/sqlite.py.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Fix spec self-review issues (counts, ordering, scope gaps)
+  ([`089d0a2`](https://github.com/giraffe-horizon/deal-hunter/commit/089d0a21e4f2a870f158c524a72d6f5096822ecf))
+
+- Fix model count: 5 existing + 1 new, not 6 - Move services/types.py to Phase 3 (services depend on
+  these types) - Remove duplicate return-type item from Phase 6 (already in Phase 4e) - Fix
+  get_session() usage to use context manager - Expand stub repository signatures with key methods -
+  Add feedback_bot.py and visualization/charts.py to Phase 2 scope - Renumber Phase 6 sections after
+  removing duplicates
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Features
+
+- Add JSON state migration script for seen_deals consolidation
+  ([`a7a4589`](https://github.com/giraffe-horizon/deal-hunter/commit/a7a45896b21827a1f40b2f785d6ac885a668618f))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- Make DEALS_PER_PAGE and SCORE_THRESHOLD configurable via env vars
+  ([`e55a32a`](https://github.com/giraffe-horizon/deal-hunter/commit/e55a32ae6148921ff72bdb84bfbeb813df3473db))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **storage**: Add Alembic migrations — baseline schema + seen_deals table
+  ([`c68d57f`](https://github.com/giraffe-horizon/deal-hunter/commit/c68d57f28d8582497f60f0df7472b2570796fb51))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **storage**: Add AlertQueueRepository and FeedbackRepository
+  ([`728f59d`](https://github.com/giraffe-horizon/deal-hunter/commit/728f59d4b1c582cb867ea8a1f0c5689ade0bd11f))
+
+Implements queue/get_pending/mark_sent for alert_queue table and record/get_stats for feedback
+  table, with 8 new tests (54 total passing).
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **storage**: Add DealRepository with upsert, query, stats, and status
+  ([`1f6c2cd`](https://github.com/giraffe-horizon/deal-hunter/commit/1f6c2cd3a3ca17ab1273b6294b6f739b33214a09))
+
+Implements Task 4 of the SQLAlchemy ORM migration. DealRepository wraps all deal-related queries
+  with upsert (preserves status on update), price history recording, filtered queries, pagination,
+  stats, and status management. Covered by 21 tests following TDD.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **storage**: Add PriceRepository with N+1-free get_drops using window functions
+  ([`e8a80d1`](https://github.com/giraffe-horizon/deal-hunter/commit/e8a80d1f3775a73257261e3d8ad37ed0aebdf9b2))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **storage**: Add SeenDealRepository — replaces JSON state file tracking
+  ([`06f034f`](https://github.com/giraffe-horizon/deal-hunter/commit/06f034f2744229b6c3ac854c78b6a6e4fec806f0))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **storage**: Add SQLAlchemy ORM models for all 6 tables
+  ([`9a33dee`](https://github.com/giraffe-horizon/deal-hunter/commit/9a33dee5f3fe8178d60bdaf656089774aa3646ee))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **storage**: Add SQLAlchemy session management with auto commit/rollback
+  ([`8a74ce6`](https://github.com/giraffe-horizon/deal-hunter/commit/8a74ce660fa48f0b323cfe591d3dabba039e14dd))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **storage**: Add WatchlistRepository with CRUD and trigger checking
+  ([`41351a1`](https://github.com/giraffe-horizon/deal-hunter/commit/41351a161a0d23b3c1abc4b9c8517c3067dfdd5c))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+### Performance Improvements
+
+- Use count_drops() instead of materializing full get_drops()
+  ([`30e27b2`](https://github.com/giraffe-horizon/deal-hunter/commit/30e27b296e66986707a1952b254d6f9a65383f48))
+
+The deals page was calling get_drops(days=7) and taking len() just to get a count, materializing all
+  drop rows with deal joins. count_drops() uses SELECT COUNT(*) with the same CTE — much cheaper.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- Migrate charts.py to session + repositories, fix N+1 in trend_chart
+  ([`a8270da`](https://github.com/giraffe-horizon/deal-hunter/commit/a8270dab9debda3bb0fa90bcffe64eb9509b08fa))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- Migrate deal_hunter.py from SQLiteStorage + JSON state to repositories
+  ([`1396a60`](https://github.com/giraffe-horizon/deal-hunter/commit/1396a602d0914039b1ea61ca254d52b3212eda7b))
+
+Replace SQLiteStorage direct usage with repository pattern (DealRepository, PriceRepository,
+  WatchlistRepository, AlertQueueRepository, SeenDealRepository). Delete
+  load_state/save_state/STATE_TTL_DAYS — seen-deal tracking now uses SeenDealRepository backed by
+  SQLite instead of per-profile JSON files.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- Migrate feedback_bot.py from SQLiteStorage to repositories
+  ([`977219b`](https://github.com/giraffe-horizon/deal-hunter/commit/977219bda881bc6fc5cab8924509844f99416126))
+
+Replace SQLiteStorage with get_session() + DealRepository, FeedbackRepository, and
+  WatchlistRepository. Remove DB_PATH and get_storage() helper.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Migrate all routes from SQLiteStorage to repositories
+  ([`4de4ed2`](https://github.com/giraffe-horizon/deal-hunter/commit/4de4ed22e75471f6d83c467739c3ee16950994d6))
+
+Replace SQLiteStorage dependency injection in all dashboard routes with SQLAlchemy Session +
+  DealRepository/PriceRepository/WatchlistRepository calls. DealService updated to accept Session
+  directly.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Switch get_db() from SQLiteStorage to SQLAlchemy session
+  ([`007d904`](https://github.com/giraffe-horizon/deal-hunter/commit/007d904ee8846b1127ce75384b1b07d9b79fe668))
+
+Wire up storage/__init__.py to re-export ORM models, repositories, and session helpers alongside the
+  legacy SQLiteStorage. Update get_db() in dashboard/dependencies.py to yield a SQLAlchemy Session
+  via get_session().
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- Expand ORM model tests — cover all 6 models, relationships, and indexes
+  ([`b7772a6`](https://github.com/giraffe-horizon/deal-hunter/commit/b7772a600639e36b44ddc47378cc74310a3c99a0))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- Migrate all test fixtures from SQLiteStorage to SQLAlchemy sessions
+  ([`b7c6b31`](https://github.com/giraffe-horizon/deal-hunter/commit/b7c6b314180260188adcc1349a7d27398150bb28))
+
+Replace SQLiteStorage with SQLAlchemy engine/session/repository fixtures across all test files.
+  Delete obsolete test_sqlite_storage.py, test_batch_queries.py, and test_state.py (replaced by
+  test_repositories.py).
+
+Also fixes two bugs found during migration: - storage/repositories.py: flush before raw SQL in
+  _record_price() to satisfy FK constraints - dashboard/routes/profiles.py: tuner tab now uses
+  injected session via Depends(get_db) instead of bypassing dependency injection
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.12.2 (2026-04-13)
 
 ### Bug Fixes
