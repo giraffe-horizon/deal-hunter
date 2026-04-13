@@ -29,15 +29,28 @@ def get_url() -> str:
 
 
 def run_migrations_offline() -> None:
-    context.configure(url=get_url(), target_metadata=target_metadata, literal_binds=True)
+    context.configure(
+        url=get_url(),
+        target_metadata=target_metadata,
+        literal_binds=True,
+        render_as_batch=True,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def run_migrations_online() -> None:
-    connectable = create_engine(get_url())
+    url = get_url()
+    db_path = url.replace("sqlite:///", "")
+    if db_path:
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    connectable = create_engine(url)
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=True,
+        )
         with context.begin_transaction():
             context.run_migrations()
 

@@ -33,7 +33,7 @@ def upgrade() -> None:
         sa.Column("last_seen", sa.Text),
         sa.Column("status", sa.Text, server_default="active"),
     )
-    op.create_index("idx_deals_profile_score", "deals", ["profile", "score"])
+    op.create_index("idx_deals_profile_score", "deals", ["profile", sa.text("score DESC")])
 
     op.create_table(
         "price_history",
@@ -43,6 +43,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("deal_id", "recorded_at"),
     )
 
+    # feedback has no explicit PK — uses SQLite implicit rowid (matches original schema)
     op.create_table(
         "feedback",
         sa.Column("deal_id", sa.Text, sa.ForeignKey("deals.id")),
