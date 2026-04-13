@@ -437,7 +437,7 @@ class PriceRepository:
         result = self.session.execute(
             text(
                 """WITH ranked AS (
-                    SELECT ph.deal_id, ph.price,
+                    SELECT ph.deal_id, ph.price, ph.recorded_at,
                            LAG(ph.price) OVER (
                                PARTITION BY ph.deal_id ORDER BY ph.recorded_at
                            ) as prev_price,
@@ -445,10 +445,10 @@ class PriceRepository:
                                PARTITION BY ph.deal_id ORDER BY ph.recorded_at DESC
                            ) as rn
                     FROM price_history ph
-                    WHERE ph.recorded_at >= :cutoff
                 )
                 SELECT COUNT(*) FROM ranked
-                WHERE prev_price IS NOT NULL AND price < prev_price AND rn = 1"""
+                WHERE prev_price IS NOT NULL AND price < prev_price AND rn = 1
+                  AND recorded_at >= :cutoff"""
             ),
             {"cutoff": cutoff},
         ).scalar()
