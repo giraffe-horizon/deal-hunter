@@ -1,18 +1,24 @@
 """Health and price trends routes."""
 
+import os
+from pathlib import Path
+
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
 from dashboard import templates
+from services.health_tracker import HealthTracker
 
 router = APIRouter()
+
+_BASE_DIR = Path(__file__).parent.parent.parent
+_state_dir = Path(os.environ.get("DEAL_HUNTER_STATE_DIR", str(_BASE_DIR / "state")))
+_tracker = HealthTracker(_state_dir / "health.json")
 
 
 @router.get("/health")
 def health_page(request: Request):
-    from health import load_health
-
-    health = load_health()
+    health = _tracker.load()
 
     # Compute summary metrics from health data
     total_deals = 0
@@ -42,9 +48,7 @@ def api_health_status(request: Request):
     """Compact health status for sidebar indicator."""
     from datetime import datetime
 
-    from health import load_health
-
-    health = load_health()
+    health = _tracker.load()
     status = health.get("status") if health else None
     age = None
     if health and health.get("last_run"):
