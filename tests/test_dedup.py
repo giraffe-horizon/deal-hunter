@@ -6,8 +6,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from deal_hunter import _normalize_title, deduplicate
+from deal_hunter import deduplicate
+from services.fetcher import DealFetcher
 from sources.base import Deal
+
+_normalize_title = DealFetcher._normalize_title
 
 
 def _make_deal(**kwargs) -> Deal:

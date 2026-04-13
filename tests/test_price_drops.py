@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from deal_hunter import check_price_changes, get_price_tracking_config
+from deal_hunter import check_price_changes, get_price_tracking_config  # backward-compat wrappers
 from notifiers.telegram import TelegramNotifier
 from sources.base import Deal
 from storage.models import Base, PriceHistory

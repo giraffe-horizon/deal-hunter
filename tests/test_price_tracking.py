@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from deal_hunter import check_price_changes
+from deal_hunter import check_price_changes  # backward-compat wrapper
 from sources.base import Deal
 from storage.models import Base, PriceHistory
 from storage.models import Deal as DealModel
