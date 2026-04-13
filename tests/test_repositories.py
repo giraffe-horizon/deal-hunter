@@ -7,7 +7,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from storage.models import Base, Deal, PriceHistory
-from storage.repositories import DealRepository, PriceRepository, WatchlistRepository
+from storage.repositories import (
+    AlertQueueRepository,
+    DealRepository,
+    FeedbackRepository,
+    PriceRepository,
+    WatchlistRepository,
+)
 
 
 @pytest.fixture
@@ -429,3 +435,68 @@ class TestWatchlistRepository:
         session.flush()
         # After triggering, check_trigger should return None
         assert watchlist_repo.check_trigger("pepper:w1", current_price=3000) is None
+
+
+@pytest.fixture
+def alert_repo(session):
+    return AlertQueueRepository(session)
+
+
+@pytest.fixture
+def feedback_repo(session):
+    return FeedbackRepository(session)
+
+
+class TestAlertQueueRepository:
+    def test_queue_alert(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", '{"title": "test"}')
+        session.flush()
+        pending = alert_repo.get_pending()
+        assert len(pending) == 1
+        assert pending[0]["profile"] == "bikes"
+
+    def test_get_pending_filters_by_profile(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", '{"a": 1}')
+        alert_repo.queue("nas_hdd", "deal", '{"b": 2}')
+        session.flush()
+        assert len(alert_repo.get_pending(profile="bikes")) == 1
+
+    def test_get_pending_excludes_sent(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", '{"a": 1}')
+        session.flush()
+        pending = alert_repo.get_pending()
+        alert_repo.mark_sent([p["id"] for p in pending])
+        session.flush()
+        assert len(alert_repo.get_pending()) == 0
+
+    def test_mark_sent_empty_list(self, alert_repo):
+        alert_repo.mark_sent([])  # should not error
+
+    def test_get_pending_ordered_by_created_at(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", '{"first": true}')
+        alert_repo.queue("bikes", "deal", '{"second": true}')
+        session.flush()
+        pending = alert_repo.get_pending()
+        assert len(pending) == 2
+
+
+class TestFeedbackRepository:
+    @pytest.fixture(autouse=True)
+    def _seed_deal(self, session):
+        _seed_deal_with_prices(session, deal_id="pepper:fb1", prices=[])
+
+    def test_record_feedback(self, session, feedback_repo):
+        feedback_repo.record("pepper:fb1", "watch")
+        session.flush()
+
+    def test_get_stats(self, session, feedback_repo):
+        feedback_repo.record("pepper:fb1", "watch")
+        feedback_repo.record("pepper:fb1", "watch")
+        feedback_repo.record("pepper:fb1", "skip")
+        session.flush()
+        stats = feedback_repo.get_stats()
+        assert stats["watch"] == 2
+        assert stats["skip"] == 1
+
+    def test_get_stats_empty(self, feedback_repo):
+        assert feedback_repo.get_stats() == {}

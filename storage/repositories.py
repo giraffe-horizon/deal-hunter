@@ -6,7 +6,9 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from storage.models import (
+    AlertQueue,
     Deal,
+    Feedback,
     PriceHistory,
     WatchlistItem,
 )
@@ -544,3 +546,75 @@ class WatchlistRepository:
         item = self.session.query(WatchlistItem).filter_by(deal_id=deal_id).first()
         if item:
             item.triggered_at = datetime.now().isoformat()
+
+
+class AlertQueueRepository:
+    """Query and mutation wrapper for alert_queue table."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def queue(
+        self, profile: str, alert_type: str, payload_json: str, topic_id: str | None = None
+    ) -> None:
+        """Queue an alert for later sending."""
+        alert = AlertQueue(
+            profile=profile,
+            alert_type=alert_type,
+            payload=payload_json,
+            created_at=datetime.now().isoformat(),
+        )
+        self.session.add(alert)
+
+    def get_pending(self, profile: str | None = None) -> list[dict]:
+        """Get unsent alerts, ordered by creation time."""
+        stmt = select(AlertQueue).where(AlertQueue.sent_at.is_(None))
+        if profile is not None:
+            stmt = stmt.where(AlertQueue.profile == profile)
+        stmt = stmt.order_by(AlertQueue.created_at.asc())
+        return [
+            {
+                "id": a.id,
+                "profile": a.profile,
+                "alert_type": a.alert_type,
+                "payload": a.payload,
+                "created_at": a.created_at,
+            }
+            for a in self.session.scalars(stmt)
+        ]
+
+    def mark_sent(self, alert_ids: list[int]) -> None:
+        """Mark alerts as sent."""
+        if not alert_ids:
+            return
+        now = datetime.now().isoformat()
+        self.session.execute(
+            text(
+                f"UPDATE alert_queue SET sent_at = :now"  # noqa: S608
+                f" WHERE id IN ({','.join(f':id_{i}' for i in range(len(alert_ids)))})"
+            ),
+            {"now": now, **{f"id_{i}": aid for i, aid in enumerate(alert_ids)}},
+        )
+
+
+class FeedbackRepository:
+    """Query and mutation wrapper for feedback table."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def record(self, deal_id: str, action: str) -> None:
+        """Record user feedback on a deal."""
+        fb = Feedback(
+            deal_id=deal_id,
+            action=action,
+            created_at=datetime.now().isoformat(),
+        )
+        self.session.add(fb)
+
+    def get_stats(self) -> dict[str, int]:
+        """Get counts of feedback actions."""
+        rows = self.session.execute(
+            select(Feedback.action, func.count().label("cnt")).group_by(Feedback.action)
+        ).all()
+        return {row[0]: row[1] for row in rows}
