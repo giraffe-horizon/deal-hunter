@@ -19,7 +19,6 @@ from storage.repositories import (
     SeenDealRepository,
     WatchlistRepository,
 )
-from storage.sqlite import SQLiteStorage  # kept until all consumers migrated
 
 __all__ = [
     "AlertQueue",
@@ -31,7 +30,6 @@ __all__ = [
     "FeedbackRepository",
     "PriceHistory",
     "PriceRepository",
-    "SQLiteStorage",
     "SeenDeal",
     "SeenDealRepository",
     "SessionLocal",
