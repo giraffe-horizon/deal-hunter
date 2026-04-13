@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from storage.models import Base, Deal, PriceHistory
-from storage.repositories import DealRepository, PriceRepository
+from storage.repositories import DealRepository, PriceRepository, WatchlistRepository
 
 
 @pytest.fixture
@@ -332,3 +332,100 @@ class TestPriceRepositoryDrops:
     def test_drops_with_min_percent_filter(self, price_repo):
         drops = price_repo.get_drops(days=30, min_drop_percent=50)
         assert len(drops) == 0  # 20% drop doesn't meet 50% threshold
+
+
+@pytest.fixture
+def watchlist_repo(session):
+    return WatchlistRepository(session)
+
+
+def _seed_deal(session, deal_id="pepper:w1"):
+    """Insert a deal for FK reference in watchlist tests."""
+    deal = Deal(
+        id=deal_id,
+        title="Watchlist Test",
+        price=5000,
+        source="pepper",
+        description="",
+        image_url="",
+        profile="bikes",
+        score=80,
+        category="road",
+        status="active",
+        first_seen=datetime.now().isoformat(),
+        last_seen=datetime.now().isoformat(),
+    )
+    session.add(deal)
+    session.flush()
+
+
+class TestWatchlistRepository:
+    def test_add(self, session, watchlist_repo):
+        _seed_deal(session)
+        result = watchlist_repo.add("pepper:w1", 4000)
+        session.flush()
+        assert result is True
+
+    def test_add_duplicate(self, session, watchlist_repo):
+        _seed_deal(session)
+        watchlist_repo.add("pepper:w1", 4000)
+        session.flush()
+        assert watchlist_repo.add("pepper:w1", 3000) is False
+
+    def test_remove(self, session, watchlist_repo):
+        _seed_deal(session)
+        watchlist_repo.add("pepper:w1", 4000)
+        session.flush()
+        assert watchlist_repo.remove("pepper:w1") is True
+
+    def test_remove_nonexistent(self, watchlist_repo):
+        assert watchlist_repo.remove("nope:0") is False
+
+    def test_get_all(self, session, watchlist_repo):
+        _seed_deal(session, "pepper:w1")
+        _seed_deal(session, "pepper:w2")
+        watchlist_repo.add("pepper:w1", 4000)
+        watchlist_repo.add("pepper:w2", 3000)
+        session.flush()
+        items = watchlist_repo.get_all()
+        assert len(items) == 2
+
+    def test_get_item(self, session, watchlist_repo):
+        _seed_deal(session)
+        watchlist_repo.add("pepper:w1", 4000)
+        session.flush()
+        item = watchlist_repo.get_item("pepper:w1")
+        assert item is not None
+        assert item["target_price"] == 4000
+        assert item["title"] == "Watchlist Test"
+
+    def test_update_target_price(self, session, watchlist_repo):
+        _seed_deal(session)
+        watchlist_repo.add("pepper:w1", 4000)
+        session.flush()
+        assert watchlist_repo.update_target_price("pepper:w1", 3500) is True
+        item = watchlist_repo.get_item("pepper:w1")
+        assert item["target_price"] == 3500
+
+    def test_check_trigger_met(self, session, watchlist_repo):
+        _seed_deal(session)
+        watchlist_repo.add("pepper:w1", 4000)
+        session.flush()
+        result = watchlist_repo.check_trigger("pepper:w1", current_price=3500)
+        assert result is not None
+        assert result["target_price"] == 4000
+
+    def test_check_trigger_not_met(self, session, watchlist_repo):
+        _seed_deal(session)
+        watchlist_repo.add("pepper:w1", 4000)
+        session.flush()
+        assert watchlist_repo.check_trigger("pepper:w1", current_price=5000) is None
+
+    def test_mark_triggered(self, session, watchlist_repo):
+        _seed_deal(session)
+        watchlist_repo.add("pepper:w1", 4000)
+        session.flush()
+        watchlist_repo.mark_triggered("pepper:w1")
+        session.flush()
+        # After triggering, check_trigger should return None
+        assert watchlist_repo.check_trigger("pepper:w1", current_price=3000) is None
