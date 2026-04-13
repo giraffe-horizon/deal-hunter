@@ -142,7 +142,8 @@ class SQLiteStorage:
         now = datetime.now().isoformat()
         try:
             self._conn.execute(
-                "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO price_history"
+                " (deal_id, price, recorded_at) VALUES (?, ?, ?)",
                 (deal_id, price, now),
             )
         except sqlite3.Error as e:
@@ -259,10 +260,14 @@ class SQLiteStorage:
         """Get distinct sources and categories for filter dropdowns."""
         try:
             sources = self._conn.execute(
-                "SELECT DISTINCT source FROM deals WHERE source IS NOT NULL AND source != '' ORDER BY source"
+                "SELECT DISTINCT source FROM deals"
+                " WHERE source IS NOT NULL AND source != ''"
+                " ORDER BY source"
             ).fetchall()
             categories = self._conn.execute(
-                "SELECT DISTINCT category FROM deals WHERE category IS NOT NULL AND category != '' ORDER BY category"
+                "SELECT DISTINCT category FROM deals"
+                " WHERE category IS NOT NULL AND category != ''"
+                " ORDER BY category"
             ).fetchall()
             return {
                 "sources": [r["source"] for r in sources],
@@ -369,7 +374,8 @@ class SQLiteStorage:
         """Import a price history entry from legacy state files."""
         try:
             self._conn.execute(
-                "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at) VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO price_history"
+                " (deal_id, price, recorded_at) VALUES (?, ?, ?)",
                 (deal_id, price, recorded_at),
             )
         except sqlite3.Error as e:
@@ -395,7 +401,8 @@ class SQLiteStorage:
         try:
             placeholders = ",".join("?" for _ in deal_ids)
             rows = self._conn.execute(
-                f"SELECT * FROM price_history WHERE deal_id IN ({placeholders}) ORDER BY recorded_at",  # noqa: S608
+                f"SELECT * FROM price_history WHERE deal_id IN ({placeholders})"  # noqa: S608
+                " ORDER BY recorded_at",
                 deal_ids,
             ).fetchall()
             for row in rows:
@@ -412,7 +419,15 @@ class SQLiteStorage:
             return {}
         placeholders = ",".join("?" * len(deal_ids))
         try:
-            query = f"SELECT deal_id, price FROM (SELECT deal_id, price, recorded_at, ROW_NUMBER() OVER (PARTITION BY deal_id ORDER BY recorded_at DESC) as rn FROM price_history WHERE deal_id IN ({placeholders})) WHERE rn <= ? ORDER BY deal_id, recorded_at"  # noqa: S608
+            query = (
+                f"SELECT deal_id, price FROM ("  # noqa: S608
+                f"SELECT deal_id, price, recorded_at,"
+                f" ROW_NUMBER() OVER (PARTITION BY deal_id"
+                f" ORDER BY recorded_at DESC) as rn"
+                f" FROM price_history"
+                f" WHERE deal_id IN ({placeholders})"
+                f") WHERE rn <= ? ORDER BY deal_id, recorded_at"
+            )
             rows = self._conn.execute(query, (*deal_ids, limit)).fetchall()
             result: dict[str, list[int]] = {}
             for row in rows:
@@ -429,7 +444,9 @@ class SQLiteStorage:
         try:
             placeholders = ",".join("?" for _ in deal_ids)
             rows = self._conn.execute(
-                f"SELECT deal_id, MIN(price) as lowest FROM price_history WHERE deal_id IN ({placeholders}) GROUP BY deal_id",  # noqa: S608
+                f"SELECT deal_id, MIN(price) as lowest"  # noqa: S608
+                f" FROM price_history WHERE deal_id IN ({placeholders})"
+                f" GROUP BY deal_id",
                 deal_ids,
             ).fetchall()
             for row in rows:
@@ -442,7 +459,8 @@ class SQLiteStorage:
         """Get the most recent price before the current one."""
         try:
             rows = self._conn.execute(
-                "SELECT price FROM price_history WHERE deal_id = ? ORDER BY recorded_at DESC LIMIT 2",
+                "SELECT price FROM price_history"
+                " WHERE deal_id = ? ORDER BY recorded_at DESC LIMIT 2",
                 (deal_id,),
             ).fetchall()
             # rows[0] is current, rows[1] is previous
@@ -572,7 +590,9 @@ class SQLiteStorage:
         now = datetime.now().isoformat()
         try:
             self._conn.execute(
-                "INSERT INTO alert_queue (profile, alert_type, payload, created_at) VALUES (?, ?, ?, ?)",
+                "INSERT INTO alert_queue"
+                " (profile, alert_type, payload, created_at)"
+                " VALUES (?, ?, ?, ?)",
                 (profile, alert_type, payload_json, now),
             )
             self._conn.commit()
@@ -666,7 +686,8 @@ class SQLiteStorage:
         """Check if a deal's current price meets the watchlist target.
         Returns the watchlist entry if triggered, None otherwise."""
         cursor = self._conn.execute(
-            "SELECT deal_id, target_price FROM watchlist WHERE deal_id = ? AND triggered_at IS NULL",
+            "SELECT deal_id, target_price FROM watchlist"
+            " WHERE deal_id = ? AND triggered_at IS NULL",
             (deal_id,),
         )
         row = cursor.fetchone()

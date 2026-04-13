@@ -171,7 +171,10 @@ class TestCheckPriceChanges:
         assert result["diff_pln"] == 300
 
     def test_small_drop_below_thresholds(self, profile_with_tracking):
-        """Drop of 100 PLN (1%) should NOT trigger with min_drop_amount=200 and min_drop_percent=15."""
+        """Drop of 100 PLN (1%) should NOT trigger.
+
+        min_drop_amount=200 and min_drop_percent=15.
+        """
         deal = Deal(
             id="test:1",
             title="Some Bike",

@@ -164,7 +164,8 @@ async def cmd_target(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         )
     else:
         await update.message.reply_html(
-            f"\u26a0\ufe0f Deal <code>{html.escape(deal_id)}</code> jest już na liście obserwowanych."
+            f"\u26a0\ufe0f Deal <code>{html.escape(deal_id)}</code>"
+            f" jest już na liście obserwowanych."
         )
 
 

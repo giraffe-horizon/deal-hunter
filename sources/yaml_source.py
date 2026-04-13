@@ -6,6 +6,7 @@ Loads store definitions from stores/*.yaml and scrapes using configured strategi
 - GTM dataLayer (data-gtm-impression attributes)
 """
 
+import contextlib
 import html as html_lib
 import json
 import logging
@@ -28,7 +29,7 @@ def load_store_definition(name: str) -> dict | None:
     path = STORES_DIR / f"{name}.yaml"
     if not path.exists():
         return None
-    with open(path, encoding="utf-8") as f:
+    with path.open(encoding="utf-8") as f:
         return dict(yaml.safe_load(f))
 
 
@@ -39,7 +40,7 @@ def load_all_store_definitions() -> dict[str, dict]:
         return stores
     for path in sorted(STORES_DIR.glob("*.yaml")):
         try:
-            with open(path, encoding="utf-8") as f:
+            with path.open(encoding="utf-8") as f:
                 store_def = yaml.safe_load(f)
             if isinstance(store_def, dict) and "name" in store_def:
                 strategies = store_def.get("strategies", ["css"])
@@ -370,10 +371,8 @@ class YamlSource(Source):
             regular_price = 0
             discount = data.get("discount", data.get("metric4", 0))
             if discount and price:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     regular_price = price + int(float(discount))
-                except (ValueError, TypeError):
-                    pass
 
             # Description from GTM metadata
             desc_parts = []

@@ -112,9 +112,11 @@ class TestRssSource:
             ]
         }
 
-        with patch.object(source, "_fetch_page", side_effect=mock_fetch):
-            with patch.object(source, "_rate_limit"):
-                deals = source.fetch_deals(config)
+        with (
+            patch.object(source, "_fetch_page", side_effect=mock_fetch),
+            patch.object(source, "_rate_limit"),
+        ):
+            deals = source.fetch_deals(config)
 
         assert len(deals) == 5
         assert call_count == 2
@@ -146,9 +148,11 @@ class TestRssSource:
 
         config = {"feeds": [{"url": "https://example.com/feed.xml"}]}
 
-        with patch.object(source, "_fetch_page", return_value=xml_content):
-            with patch.object(source, "_rate_limit"):
-                deals = source.fetch_deals(config)
+        with (
+            patch.object(source, "_fetch_page", return_value=xml_content),
+            patch.object(source, "_rate_limit"),
+        ):
+            deals = source.fetch_deals(config)
 
         assert all(d.source == "rss" for d in deals)
 
@@ -158,8 +162,10 @@ class TestRssSource:
         source = RssSource()
         config = {"feeds": [{"url": "https://example.com/broken"}]}
 
-        with patch.object(source, "_fetch_page", return_value=None):
-            with patch.object(source, "_rate_limit"):
-                deals = source.fetch_deals(config)
+        with (
+            patch.object(source, "_fetch_page", return_value=None),
+            patch.object(source, "_rate_limit"),
+        ):
+            deals = source.fetch_deals(config)
 
         assert deals == []

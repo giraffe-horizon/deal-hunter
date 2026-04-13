@@ -167,8 +167,7 @@ class BikeFilter(BaseFilter):
             if re.search(rf"\b{re.escape(brand)}\b", text, re.IGNORECASE):
                 if any(sz in [s.lower() for s in target_sizes] for sz in found_sizes):
                     return "good"
-                else:
-                    return "wrong"
+                return "wrong"
 
         # Generic check
         generic_lower = [s.lower() for s in self.generic_good_sizes]

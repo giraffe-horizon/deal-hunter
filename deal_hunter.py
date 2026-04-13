@@ -5,6 +5,7 @@ Profiles define products, sources, scoring rules, and notification targets.
 """
 
 import argparse
+import contextlib
 import html
 import importlib.metadata
 import json
@@ -33,10 +34,8 @@ from health import (
 from storage.sqlite import SQLiteStorage
 
 __version__ = "0.12.2"  # maintained by semantic-release
-try:
+with contextlib.suppress(importlib.metadata.PackageNotFoundError):
     __version__ = importlib.metadata.version("deal-hunter")
-except importlib.metadata.PackageNotFoundError:
-    pass  # use the version above when not installed as package
 from filters.base import BaseFilter
 from notifiers.telegram import TelegramNotifier
 from sources import SOURCE_REGISTRY
@@ -82,9 +81,8 @@ def is_quiet_hours(profile: dict) -> bool:
     if start_minutes <= end_minutes:
         # Same day range (e.g., 13:00-15:00)
         return start_minutes <= current_minutes < end_minutes
-    else:
-        # Overnight range (e.g., 22:00-07:00)
-        return current_minutes >= start_minutes or current_minutes < end_minutes
+    # Overnight range (e.g., 22:00-07:00)
+    return current_minutes >= start_minutes or current_minutes < end_minutes
 
 
 load_dotenv(BASE_DIR / ".env")
@@ -148,7 +146,7 @@ def load_state(profile_name: str) -> dict:
     if not path.exists():
         return {"seen": {}, "prices": {}}
     try:
-        with open(path, encoding="utf-8") as f:
+        with path.open(encoding="utf-8") as f:
             state = json.load(f)
 
         # Backwards compat: old format was flat list
@@ -175,7 +173,7 @@ def save_state(profile_name: str, state: dict) -> None:
     """Save state to disk."""
     path = _state_path(profile_name)
     try:
-        with open(path, "w", encoding="utf-8") as f:
+        with path.open("w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
     except Exception as e:
         logger.error(f"Error saving state for {profile_name}: {e}")
@@ -334,7 +332,7 @@ def load_profile(name: str) -> dict:
     if not path.exists():
         logger.error(f"Profile not found: {name}")
         sys.exit(1)
-    with open(path, encoding="utf-8") as f:
+    with path.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if data is None:
         logger.error(f"Profile is empty: {name}")
@@ -349,7 +347,7 @@ def list_profiles(include_disabled: bool = True) -> list[str]:
         return names
     for p in PROFILES_DIR.glob("*.yaml"):
         if not include_disabled:
-            with open(p, encoding="utf-8") as f:
+            with p.open(encoding="utf-8") as f:
                 prof = yaml.safe_load(f)
             if isinstance(prof, dict) and not prof.get("enabled", True):
                 continue
@@ -487,7 +485,10 @@ def run_profile(
     verbose: bool = False,
     top: int | None = None,
 ) -> dict | None:
-    """Run a single profile. Returns profile result dict for health tracking (None in verify/validate mode)."""
+    """Run a single profile.
+
+    Returns profile result dict for health tracking (None in verify/validate mode).
+    """
     profile = load_profile(profile_name)
 
     # Validate profile
@@ -594,7 +595,8 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                     telegram.send_text(
                         f"\U0001f514 Zakolejkowany spadek ceny:\n"
                         f"<b>{html.escape(payload.get('title', ''))}</b>\n"
-                        f"{payload.get('old_price', 0):,} \u2192 {payload.get('new_price', 0):,} PLN",
+                        f"{payload.get('old_price', 0):,}"
+                        f" \u2192 {payload.get('new_price', 0):,} PLN",
                         topic_id=tg_topic,
                     )
             db.mark_alerts_sent([p["id"] for p in pending[:flush_count]])
@@ -684,9 +686,8 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                         }
                     )
                     db.queue_alert(profile_name, "price_drop", payload)
-                logger.info(
-                    f"Queued {min(len(price_drop_alerts), max_alerts)} price drop alerts (quiet hours)"
-                )
+                queued = min(len(price_drop_alerts), max_alerts)
+                logger.info(f"Queued {queued} price drop alerts (quiet hours)")
         else:
             for pda in price_drop_alerts[:max_alerts]:
                 telegram.send_price_drop_alert(
@@ -696,9 +697,8 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
                     emoji=emoji,
                     currency=currency,
                 )
-            logger.info(
-                f"Sent {min(len(price_drop_alerts), max_alerts)} price drop alerts for {profile_name}"
-            )
+            sent = min(len(price_drop_alerts), max_alerts)
+            logger.info(f"Sent {sent} price drop alerts for {profile_name}")
 
     # Console output for price drops
     for pda in price_drop_alerts:
@@ -788,9 +788,9 @@ def _run_normal(deals: list, deal_filter: BaseFilter, profile: dict, profile_nam
         print()
 
     total_alerts = len(alerts) + len(price_drop_alerts)
-    logger.info(
-        f"Profile {profile_name}: {len(alerts)} new deal alerts, {len(price_drop_alerts)} price drop alerts"
-    )
+    n_deals = len(alerts)
+    n_drops = len(price_drop_alerts)
+    logger.info(f"Profile {profile_name}: {n_deals} new deal alerts, {n_drops} price drop alerts")
     return total_alerts
 
 
@@ -975,9 +975,8 @@ def _run_verify(
     profile_name = profile.get("name", "unknown")
 
     print(f"\n{'=' * 60}")
-    print(
-        f"  {emoji} DEAL ANALYSIS \u2014 {profile_name.upper()} \u2014 {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-    )
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    print(f"  {emoji} DEAL ANALYSIS \u2014 {profile_name.upper()} \u2014 {now_str}")
     print(f"  Found {len(deals)} deals")
     print(f"{'=' * 60}\n")
 
@@ -1069,9 +1068,9 @@ def run_digest() -> None:
         old_str = f"{d['old_price']:,} PLN".replace(",", " ")
         new_str = f"{d['new_price']:,} PLN".replace(",", " ")
         lowest = " \U0001f525" if d.get("is_lowest_ever") else ""
-        print(
-            f"  \U0001f4c9 {d['title'][:60]}: {old_str} -> {new_str} (-{d['diff_percent']}%){lowest}"
-        )
+        title = d["title"][:60]
+        pct = d["diff_percent"]
+        print(f"  \U0001f4c9 {title}: {old_str} -> {new_str} (-{pct}%){lowest}")
 
     # Send Telegram digest
     topic_id = _parse_topic_id()

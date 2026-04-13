@@ -58,11 +58,10 @@ class RssSource(Source):
 
         if root.tag == "rss":
             return self._parse_rss2(root, source_name)
-        elif root.tag == f"{{{ATOM_NS}}}feed" or root.tag == "feed":
+        if root.tag == f"{{{ATOM_NS}}}feed" or root.tag == "feed":
             return self._parse_atom(root, source_name)
-        else:
-            logger.warning(f"Unknown feed format: root tag is '{root.tag}'")
-            return []
+        logger.warning(f"Unknown feed format: root tag is '{root.tag}'")
+        return []
 
     def _parse_rss2(self, root: ET.Element, source_name: str) -> list[Deal]:
         """Parse RSS 2.0 format."""

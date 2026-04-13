@@ -1,4 +1,7 @@
-"""Tests for verbose scoring breakdown — ScoreResult.breakdown, BikeFilter entries, output format."""
+"""Tests for verbose scoring breakdown.
+
+ScoreResult.breakdown, BikeFilter entries, output format.
+"""
 
 import sys
 from io import StringIO
