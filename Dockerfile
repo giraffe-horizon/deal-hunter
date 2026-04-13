@@ -16,7 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY deal_hunter.py .
 COPY feedback_bot.py .
-COPY health.py .
+COPY cli/ cli/
+COPY services/ services/
 COPY dashboard/ dashboard/
 COPY sources/ sources/
 COPY filters/ filters/
