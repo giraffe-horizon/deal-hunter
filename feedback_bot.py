@@ -10,7 +10,6 @@ import logging
 import os
 import signal
 import sys
-from pathlib import Path
 
 from dotenv import load_dotenv
 from telegram import Update
@@ -21,7 +20,12 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from storage.sqlite import SQLiteStorage
+from storage.database import get_session
+from storage.repositories import (
+    DealRepository,
+    FeedbackRepository,
+    WatchlistRepository,
+)
 
 load_dotenv()
 
@@ -30,13 +34,6 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger("feedback_bot")
-
-DB_PATH = Path("state/deals.db")
-
-
-def get_storage() -> SQLiteStorage:
-    """Get a SQLiteStorage instance."""
-    return SQLiteStorage(DB_PATH)
 
 
 # ── Callback query handler ──────────────────────────────────────────
@@ -59,14 +56,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.answer("Nieznana akcja")
         return
 
-    with get_storage() as storage:
+    with get_session() as session:
         status = "watching" if action == "watch" else "rejected"
-        found = storage.update_deal_status(deal_id, status)
+        found = DealRepository(session).update_status(deal_id, status)
         if not found:
             await query.answer("Nie znaleziono oferty w bazie")
             return
 
-        storage.record_feedback(deal_id, action)
+        FeedbackRepository(session).record(deal_id, action)
 
         if action == "watch":
             await query.answer("\u2b50 Dodano do obserwowanych")
@@ -84,12 +81,12 @@ async def cmd_watch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     deal_id = context.args[0]
-    with get_storage() as storage:
-        found = storage.update_deal_status(deal_id, "watching")
+    with get_session() as session:
+        found = DealRepository(session).update_status(deal_id, "watching")
         if not found:
             await update.message.reply_text(f"Nie znaleziono oferty: {html.escape(deal_id)}")
             return
-        storage.record_feedback(deal_id, "watch")
+        FeedbackRepository(session).record(deal_id, "watch")
         await update.message.reply_text(
             f"\u2b50 Oferta {html.escape(deal_id)} dodana do obserwowanych"
         )
@@ -102,22 +99,23 @@ async def cmd_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     deal_id = context.args[0]
-    with get_storage() as storage:
-        found = storage.update_deal_status(deal_id, "rejected")
+    with get_session() as session:
+        found = DealRepository(session).update_status(deal_id, "rejected")
         if not found:
             await update.message.reply_text(f"Nie znaleziono oferty: {html.escape(deal_id)}")
             return
-        storage.record_feedback(deal_id, "skip")
+        FeedbackRepository(session).record(deal_id, "skip")
         await update.message.reply_text(f"\U0001f44e Oferta {html.escape(deal_id)} pominięta")
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/status — show feedback summary."""
-    with get_storage() as storage:
-        stats = storage.get_feedback_stats()
-        watching = len(storage.get_deals_by_status("watching", limit=10000))
-        rejected = len(storage.get_deals_by_status("rejected", limit=10000))
-        total = len(storage.get_deals())
+    with get_session() as session:
+        deal_repo = DealRepository(session)
+        stats = FeedbackRepository(session).get_stats()
+        watching = len(deal_repo.get_by_status("watching", limit=10000))
+        rejected = len(deal_repo.get_by_status("rejected", limit=10000))
+        total = len(deal_repo.get_filtered())
 
         msg = "\U0001f4ca <b>Status bazy ofert</b>\n\n"
         msg += f"\u2b50 Obserwowane: <b>{watching}</b>\n"
@@ -152,8 +150,8 @@ async def cmd_target(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_html("❌ Cena musi być większa od 0.")
         return
 
-    with get_storage() as db:
-        result = db.add_to_watchlist(deal_id, target_price)
+    with get_session() as session:
+        result = WatchlistRepository(session).add(deal_id, target_price)
 
     if result:
         price_str = f"{target_price:,} PLN".replace(",", " ")
@@ -171,8 +169,8 @@ async def cmd_target(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def cmd_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/watchlist — show all deals with status='watching'."""
-    with get_storage() as storage:
-        deals = storage.get_deals_by_status("watching", limit=20)
+    with get_session() as session:
+        deals = DealRepository(session).get_by_status("watching", limit=20)
         if not deals:
             await update.message.reply_text("Brak obserwowanych ofert.")
             return
