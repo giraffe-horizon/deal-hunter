@@ -70,7 +70,7 @@ Update `pyproject.toml`:
 
 ### 2a. ORM Models (`storage/models.py`, ~100 lines)
 
-Six models mapping to existing tables plus one new table:
+Five models mapping to existing tables, plus one new table:
 
 ```python
 class Deal(Base):
@@ -178,9 +178,24 @@ class PriceRepository:
     def count_drops(self, days: int) -> int: ...
     def get_histories_batch(self, deal_ids: list[str]) -> dict[str, list]: ...
 
-class WatchlistRepository: ...
-class AlertQueueRepository: ...
-class FeedbackRepository: ...
+class WatchlistRepository:
+    def __init__(self, session: Session): ...
+    def add(self, deal_id: str, target_price: int) -> WatchlistItem: ...
+    def remove(self, deal_id: str) -> bool: ...
+    def get_all(self) -> list[WatchlistItem]: ...
+    def check_triggers(self, deal_id: str, current_price: int) -> bool: ...
+    def mark_triggered(self, deal_id: str) -> None: ...
+
+class AlertQueueRepository:
+    def __init__(self, session: Session): ...
+    def queue(self, deal_id: str, profile: str, message: str, topic_id: str | None) -> None: ...
+    def get_pending(self, profile: str | None) -> list[AlertQueue]: ...
+    def mark_sent(self, alert_ids: list[int]) -> None: ...
+
+class FeedbackRepository:
+    def __init__(self, session: Session): ...
+    def record(self, deal_id: str, action: str) -> None: ...
+    def get_stats(self) -> dict[str, int]: ...
 
 class SeenDealRepository:
     def mark_seen(self, deal_id, profile, dedup_key): ...
@@ -234,7 +249,7 @@ Total: ~430 lines, with proper transactions and no N+1 patterns.
 
 ### Scope
 
-Storage layer fully rewritten. `deal_hunter.py` state functions updated. Dashboard `get_db()` updated. All tests touching `SQLiteStorage` rewritten for session-based repos. This is the biggest phase.
+Storage layer fully rewritten. `deal_hunter.py` state functions updated. Dashboard `get_db()` updated. `feedback_bot.py` updated to use repositories/sessions instead of `SQLiteStorage`. `visualization/charts.py` updated to use `PriceRepository` batch query (fixes N+1). All tests touching `SQLiteStorage` rewritten for session-based repos. This is the biggest phase.
 
 ---
 
@@ -247,13 +262,70 @@ Storage layer fully rewritten. `deal_hunter.py` state functions updated. Dashboa
 ```
 services/
 ├── __init__.py
-├── types.py              # Shared dataclasses
+├── types.py              # Shared typed dataclasses (~80 lines, created first)
 ├── fetcher.py            # Deal fetching & deduplication (~120 lines)
 ├── scorer.py             # Scoring orchestration (~60 lines)
 ├── price_tracker.py      # Price change detection (~100 lines)
 ├── alerter.py            # Notification dispatch (~130 lines)
 ├── profile_manager.py    # Profile loading, validation, CRUD (~80 lines)
 └── health_tracker.py     # Health state & watchdog (~80 lines)
+```
+
+### 3a-1. `services/types.py` (created first — other services depend on these)
+
+Typed dataclasses replacing raw `dict` passing between services:
+
+```python
+@dataclass
+class FetchResult:
+    deals: list[Deal]
+    source_results: dict[str, SourceResult]
+    errors: list[str]
+
+@dataclass
+class ScoredDeal:
+    deal: Deal
+    result: ScoreResult
+    category: str
+
+@dataclass
+class PriceChange:
+    deal_id: str
+    type: Literal["drop", "increase"]
+    old_price: int
+    new_price: int
+    diff_pln: int
+    diff_percent: float
+    is_lowest_ever: bool
+
+@dataclass
+class PriceTrackingConfig:
+    enabled: bool
+    min_drop_percent: int
+    min_drop_amount: int
+    track_increases: bool
+
+@dataclass
+class HealthStatus:
+    overall: str              # "ok" / "partial" / "error"
+    last_run: datetime | None
+    profile_results: dict
+    failing_sources: list[str]
+
+@dataclass
+class DealDetailData:
+    deal: Deal
+    price_history: list[PriceHistory]
+    lowest_price: int | None
+    previous_price: int | None
+    score_data: ScoreResult | None
+
+@dataclass
+class DashboardStats:
+    total_deals: int
+    high_score_pct: float
+    new_today: int
+    drops_count: int
 ```
 
 ### 3b. `services/fetcher.py`
@@ -342,19 +414,20 @@ Becomes a thin CLI entrypoint that wires dependencies and delegates:
 ```python
 def main():
     args = parse_args()
-    session = get_session()
     profile_mgr = ProfileManager(PROFILES_DIR)
-    fetcher = DealFetcher(SOURCE_REGISTRY)
-    scorer = ScoringService(FILTER_REGISTRY)
-    price_tracker = PriceTracker(PriceRepository(session), SeenDealRepository(session))
-    alerter = AlertService(TelegramNotifier(...), AlertQueueRepository(session))
-    health = HealthTracker(HEALTH_PATH)
 
-    if args.health: health.print_status()
-    elif args.watchdog: health.check_and_alert(alerter)
-    elif args.digest: alerter.send_digest(args.profile)
-    elif args.validate: profile_mgr.validate_and_print(args.profile)
-    else: run_profiles(args, profile_mgr, fetcher, scorer, price_tracker, alerter, health)
+    with get_session() as session:
+        fetcher = DealFetcher(SOURCE_REGISTRY)
+        scorer = ScoringService(FILTER_REGISTRY)
+        price_tracker = PriceTracker(PriceRepository(session), SeenDealRepository(session))
+        alerter = AlertService(TelegramNotifier(...), AlertQueueRepository(session))
+        health = HealthTracker(HEALTH_PATH)
+
+        if args.health: health.print_status()
+        elif args.watchdog: health.check_and_alert(alerter)
+        elif args.digest: alerter.send_digest(args.profile)
+        elif args.validate: profile_mgr.validate_and_print(args.profile)
+        else: run_profiles(args, profile_mgr, fetcher, scorer, price_tracker, alerter, health)
 ```
 
 ### 3i. `--verify` Mode
@@ -519,61 +592,7 @@ Templates pass data via `data-*` attributes:
 
 **Goal:** Complete type coverage, remove dead code, strict linting across the codebase.
 
-### 6a. Route Handler Return Types
-
-All 31 route functions get proper return type annotations.
-
-### 6b. Typed Dataclasses for Service Boundaries (`services/types.py`)
-
-Replace raw `dict` passing with typed objects:
-
-```python
-@dataclass
-class FetchResult:
-    deals: list[Deal]
-    source_results: dict[str, SourceResult]
-    errors: list[str]
-
-@dataclass
-class ScoredDeal:
-    deal: Deal
-    result: ScoreResult
-    category: str
-
-@dataclass
-class PriceChange:
-    deal_id: str
-    type: Literal["drop", "increase"]
-    old_price: int
-    new_price: int
-    diff_pln: int
-    diff_percent: float
-    is_lowest_ever: bool
-
-@dataclass
-class PriceTrackingConfig:
-    enabled: bool
-    min_drop_percent: int
-    min_drop_amount: int
-    track_increases: bool
-
-@dataclass
-class DealDetailData:
-    deal: Deal
-    price_history: list[PriceHistory]
-    lowest_price: int | None
-    previous_price: int | None
-    score_data: ScoreResult | None
-
-@dataclass
-class DashboardStats:
-    total_deals: int
-    high_score_pct: float
-    new_today: int
-    drops_count: int
-```
-
-### 6c. Pydantic Models for API Validation (`dashboard/schemas.py`)
+### 6a. Pydantic Models for API Validation (`dashboard/schemas.py`)
 
 ```python
 class StatusUpdate(BaseModel):
@@ -587,7 +606,7 @@ class ProfileCreate(BaseModel):
     content: dict
 ```
 
-### 6d. Dead Code Removal
+### 6b. Dead Code Removal
 
 Files deleted after all phases:
 - `storage/sqlite.py` (replaced by models + repos)
@@ -599,7 +618,7 @@ Files deleted after all phases:
 Functions removed from `deal_hunter.py`:
 - `load_state()`, `save_state()`, `check_price_changes()`, `get_price_tracking_config()`, `deduplicate()`, `fetch_all_deals()`, `get_filter()`, `_detect_category()`, `_run_normal()`, `_run_verify()`, `_print_verbose_plain()`, `_print_verbose_rich()`, `_run_with_health_tracking()`, `_send_source_failure_alert()`
 
-### 6e. Mypy Strict Mode
+### 6c. Mypy Strict Mode
 
 ```toml
 [tool.mypy]
@@ -608,7 +627,7 @@ strict = true
 plugins = ["sqlalchemy.ext.mypy.plugin", "pydantic.mypy"]
 ```
 
-### 6f. Final Ruff Pass
+### 6d. Final Ruff Pass
 
 `ruff check --fix` + `ruff format` with `ANN` rules enforced and `E501` no longer ignored.
 
@@ -623,7 +642,7 @@ plugins = ["sqlalchemy.ext.mypy.plugin", "pydantic.mypy"]
 ```
 deal_hunter/
 ├── deal_hunter.py              # Thin CLI entrypoint (~150 lines)
-├── feedback_bot.py             # Telegram bot (unchanged)
+├── feedback_bot.py             # Telegram bot (updated to use repositories)
 │
 ├── services/                   # Business logic layer
 │   ├── __init__.py
@@ -702,7 +721,7 @@ deal_hunter/
 │       └── partials/
 │
 ├── notifiers/                  # (unchanged)
-├── visualization/              # (unchanged)
+├── visualization/              # (updated: batch query for trend chart)
 ├── utils/                      # (unchanged)
 ├── stores/                     # YAML store definitions (unchanged)
 ├── profiles/                   # User profiles (gitignored)
