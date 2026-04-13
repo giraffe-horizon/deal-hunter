@@ -12,7 +12,7 @@ router = APIRouter()
 
 
 @router.get("/tuner", response_class=HTMLResponse)
-def tuner_index(request: Request):
+def tuner_index(request: Request) -> HTMLResponse:
     """Scoring Tuner index — profile selector."""
     profiles = get_profiles()
     return templates.TemplateResponse(
@@ -29,13 +29,15 @@ def tuner_index(request: Request):
 
 
 @router.get("/tuner/{profile}", response_class=HTMLResponse)
-def tuner_profile(request: Request, profile: str):
+def tuner_profile(request: Request, profile: str) -> RedirectResponse:
     """Redirect to unified profile page tuner tab."""
     return RedirectResponse(f"/profiles/{profile}?tab=tuner", status_code=302)
 
 
 @router.post("/api/tuner/{profile}/simulate")
-async def tuner_simulate(request: Request, profile: str, session: Session = Depends(get_db)):
+async def tuner_simulate(
+    request: Request, profile: str, session: Session = Depends(get_db)
+) -> JSONResponse:
     """Re-score deals with modified rules and return JSON results."""
     safe_profile_path(profile)
     profile_data = safe_load_profile(profile)
@@ -47,7 +49,7 @@ async def tuner_simulate(request: Request, profile: str, session: Session = Depe
 
 
 @router.post("/api/tuner/{profile}/save")
-async def tuner_save(request: Request, profile: str):
+async def tuner_save(request: Request, profile: str) -> JSONResponse:
     """Save modified scoring rules to the profile YAML file."""
     profile_path = safe_profile_path(profile)
     profile_data = safe_load_profile(profile)

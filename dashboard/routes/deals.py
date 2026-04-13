@@ -3,7 +3,7 @@
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from dashboard import templates
@@ -26,7 +26,7 @@ def deals_page(
     page: int = 1,
     days: int = 7,
     session: Session = Depends(get_db),
-):
+) -> HTMLResponse:
     svc = DealService(session)
 
     # Price Drops view
@@ -89,7 +89,7 @@ def deals_page(
     )
 
 
-def _price_drops_view(request: Request, svc: DealService, days: int):
+def _price_drops_view(request: Request, svc: DealService, days: int) -> HTMLResponse:
     """Build the price drops view (shared by /deals?view=drops and redirect)."""
     data = svc.get_price_drops(days=days)
     context = {**asdict(data), "view": "drops"}
@@ -105,7 +105,7 @@ def deal_detail_page(
     request: Request,
     deal_id: str,
     session: Session = Depends(get_db),
-):
+) -> HTMLResponse:
     deal = DealRepository(session).get_by_id(deal_id)
     if not deal:
         return HTMLResponse(content="Deal not found", status_code=404)
@@ -129,7 +129,9 @@ def deal_detail_page(
 
 
 @router.get("/compare", response_class=HTMLResponse)
-def compare_deals(request: Request, ids: str = "", session: Session = Depends(get_db)):
+def compare_deals(
+    request: Request, ids: str = "", session: Session = Depends(get_db)
+) -> HTMLResponse:
     deal_ids = [i.strip() for i in ids.split(",") if i.strip()] if ids else []
     data = DealService(session).get_comparison_data(deal_ids)
     return templates.TemplateResponse(
@@ -140,7 +142,7 @@ def compare_deals(request: Request, ids: str = "", session: Session = Depends(ge
 
 
 @router.get("/api/price-history/{deal_id}")
-def api_price_history(deal_id: str, session: Session = Depends(get_db)):
+def api_price_history(deal_id: str, session: Session = Depends(get_db)) -> dict:
     history = PriceRepository(session).get_history(deal_id)
     if not history:
         return {"labels": [], "prices": [], "lowest": None, "highest": None}
@@ -163,7 +165,7 @@ def api_update_deal_status(
     status: str = Form(...),
     inline: str = Form(""),
     session: Session = Depends(get_db),
-):
+) -> Response:
     if status not in ("watching", "rejected", "active"):
         return JSONResponse({"error": "Invalid status"}, status_code=400)
     ok = DealRepository(session).update_status(deal_id, status)
@@ -200,7 +202,7 @@ def api_deals(
     category: str | None = None,
     status: str | None = None,
     session: Session = Depends(get_db),
-):
+) -> list:
     return DealRepository(session).get_filtered(
         profile=profile or None,
         source=source or None,
@@ -211,5 +213,5 @@ def api_deals(
 
 
 @router.get("/api/stats")
-def api_stats(session: Session = Depends(get_db)):
+def api_stats(session: Session = Depends(get_db)) -> dict:
     return DealService(session).get_stats(score_threshold=SCORE_THRESHOLD)

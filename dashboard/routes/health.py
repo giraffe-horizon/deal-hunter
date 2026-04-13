@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from dashboard import templates
 from services.health_tracker import HealthTracker
@@ -17,7 +17,7 @@ _tracker = HealthTracker(_state_dir / "health.json")
 
 
 @router.get("/health")
-def health_page(request: Request):
+def health_page(request: Request) -> HTMLResponse:
     health = _tracker.load()
 
     # Compute summary metrics from health data
@@ -44,7 +44,7 @@ def health_page(request: Request):
 
 
 @router.get("/api/health-status")
-def api_health_status(request: Request):
+def api_health_status(request: Request) -> HTMLResponse:
     """Compact health status for sidebar indicator."""
     from datetime import datetime
 
@@ -72,6 +72,6 @@ def api_health_status(request: Request):
 
 
 @router.get("/price-trends")
-def price_trends_redirect(days: int = 7):
+def price_trends_redirect(days: int = 7) -> RedirectResponse:
     """Redirect old Price Trends page to Deals Explorer drops view."""
     return RedirectResponse(f"/deals?view=drops&days={days}", status_code=302)

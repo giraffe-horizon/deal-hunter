@@ -27,7 +27,7 @@ def _get_profile_service() -> ProfileService:
 
 
 @router.get("/profiles", response_class=HTMLResponse)
-def profiles_page(request: Request):
+def profiles_page(request: Request) -> HTMLResponse:
     """Profile list page."""
     svc = _get_profile_service()
     profiles = svc.get_profile_summaries()
@@ -39,7 +39,7 @@ def profiles_page(request: Request):
 
 
 @router.get("/profiles/new", response_class=HTMLResponse)
-def profile_create_page(request: Request):
+def profile_create_page(request: Request) -> HTMLResponse:
     """Profile create page."""
     from sources import SOURCE_REGISTRY
 
@@ -54,7 +54,7 @@ def profile_create_page(request: Request):
 @router.get("/profiles/{name}", response_class=HTMLResponse)
 def profile_detail_page(
     request: Request, name: str, tab: str = "overview", session: Session = Depends(get_db)
-):
+) -> HTMLResponse:
     """Unified profile page with tabs."""
     safe_profile_path(name)
     profile = safe_load_profile(name)
@@ -100,19 +100,19 @@ def profile_detail_page(
 
 
 @router.get("/profiles/{name}/edit", response_class=HTMLResponse)
-def profile_edit_redirect(name: str):
+def profile_edit_redirect(name: str) -> RedirectResponse:
     """Redirect old edit URL to unified profile page edit tab."""
     return RedirectResponse(f"/profiles/{name}?tab=edit", status_code=302)
 
 
 @router.get("/profiles/{name}/edit/yaml", response_class=HTMLResponse)
-def profile_yaml_redirect(name: str):
+def profile_yaml_redirect(name: str) -> RedirectResponse:
     """Redirect old YAML editor URL to unified profile page yaml tab."""
     return RedirectResponse(f"/profiles/{name}?tab=yaml", status_code=302)
 
 
 @router.put("/api/profiles/{name}/yaml")
-async def api_update_profile_yaml(request: Request, name: str):
+async def api_update_profile_yaml(request: Request, name: str) -> JSONResponse:
     """Update a profile from raw YAML text."""
     profile_path = safe_profile_path(name)
     if not profile_path.exists():
@@ -130,7 +130,7 @@ async def api_update_profile_yaml(request: Request, name: str):
 
 
 @router.post("/api/profiles")
-async def api_create_profile(request: Request):
+async def api_create_profile(request: Request) -> JSONResponse:
     """Create a new profile."""
     body = await request.json()
     name = body.get("name", "")
@@ -159,7 +159,7 @@ async def api_create_profile(request: Request):
 
 
 @router.put("/api/profiles/{name}")
-async def api_update_profile(request: Request, name: str):
+async def api_update_profile(request: Request, name: str) -> JSONResponse:
     """Update a profile from form data (JSON body)."""
     safe_profile_path(name)
     body = await request.json()
@@ -187,7 +187,7 @@ async def api_update_profile(request: Request, name: str):
 
 
 @router.delete("/api/profiles/{name}")
-def api_delete_profile(name: str):
+def api_delete_profile(name: str) -> JSONResponse:
     """Delete a profile YAML file."""
     profile_path = safe_profile_path(name)
     if not profile_path.exists():
@@ -197,7 +197,7 @@ def api_delete_profile(name: str):
 
 
 @router.patch("/api/profiles/{name}/toggle")
-def api_toggle_profile(name: str):
+def api_toggle_profile(name: str) -> JSONResponse:
     """Toggle a profile's enabled state."""
     profile_path = safe_profile_path(name)
     if not profile_path.exists():
@@ -210,7 +210,7 @@ def api_toggle_profile(name: str):
 
 
 @router.post("/api/profiles/{name}/run")
-def api_run_profile(name: str):
+def api_run_profile(name: str) -> HTMLResponse:
     """Trigger a profile run (dry-run with --verify)."""
     profile_path = safe_profile_path(name)
     if not profile_path.exists():
@@ -233,7 +233,7 @@ def api_run_profile(name: str):
 
 
 @router.get("/api/profiles")
-def api_profiles_list():
+def api_profiles_list() -> JSONResponse:
     """JSON list of profiles."""
     svc = _get_profile_service()
     profiles = svc.get_profile_summaries()

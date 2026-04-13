@@ -1,7 +1,7 @@
 """Watchlist routes: view, add, remove, update target price."""
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from dashboard import templates
@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.get("/watchlist", response_class=HTMLResponse)
-def watchlist_page(request: Request, session: Session = Depends(get_db)):
+def watchlist_page(request: Request, session: Session = Depends(get_db)) -> HTMLResponse:
     """Watchlist page — deals with target price alerts."""
     items = WatchlistRepository(session).get_all()
     sparklines = DealService(session).get_sparklines(items)
@@ -28,7 +28,7 @@ def watchlist_page(request: Request, session: Session = Depends(get_db)):
 async def add_to_watchlist_api(
     request: Request,
     session: Session = Depends(get_db),
-):
+) -> HTMLResponse:
     """Add a deal to the watchlist."""
     form = await request.form()
     deal_id = form.get("deal_id", "")
@@ -42,7 +42,7 @@ async def add_to_watchlist_api(
 def remove_from_watchlist_api(
     deal_id: str,
     session: Session = Depends(get_db),
-):
+) -> HTMLResponse:
     """Remove a deal from the watchlist."""
     WatchlistRepository(session).remove(deal_id)
     return HTMLResponse("")
@@ -54,7 +54,7 @@ async def update_watchlist_api(
     deal_id: str,
     target_price: int = Form(...),
     session: Session = Depends(get_db),
-):
+) -> Response:
     """Update target price for a watchlist item."""
     if target_price <= 0:
         return JSONResponse({"error": "Target price must be positive"}, status_code=400)
