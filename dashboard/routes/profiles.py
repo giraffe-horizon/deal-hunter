@@ -82,9 +82,9 @@ def profile_detail_page(
     # Tuner tab needs scored deals
     if tab == "tuner":
         from dashboard.services import DealService
-        from storage.repositories import DealRepository
+        from storage.repositories import OfferRepository
 
-        deals = DealRepository(session).get_filtered(profile=name, limit=50)
+        deals = OfferRepository(session).get_filtered(profile=name, limit=50)
         scored = DealService(session).score_deals_with_profile(deals, profile)
         context["deals"] = scored
         context["profile_data"] = profile

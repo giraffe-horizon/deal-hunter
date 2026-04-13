@@ -22,8 +22,8 @@ from telegram.ext import (
 
 from storage.database import get_session
 from storage.repositories import (
-    DealRepository,
     FeedbackRepository,
+    OfferRepository,
     WatchlistRepository,
 )
 
@@ -58,7 +58,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     with get_session() as session:
         status = "watching" if action == "watch" else "rejected"
-        found = DealRepository(session).update_status(deal_id, status)
+        found = OfferRepository(session).update_status(deal_id, status)
         if not found:
             await query.answer("Nie znaleziono oferty w bazie")
             return
@@ -82,7 +82,7 @@ async def cmd_watch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     deal_id = context.args[0]
     with get_session() as session:
-        found = DealRepository(session).update_status(deal_id, "watching")
+        found = OfferRepository(session).update_status(deal_id, "watching")
         if not found:
             await update.message.reply_text(f"Nie znaleziono oferty: {html.escape(deal_id)}")
             return
@@ -100,7 +100,7 @@ async def cmd_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     deal_id = context.args[0]
     with get_session() as session:
-        found = DealRepository(session).update_status(deal_id, "rejected")
+        found = OfferRepository(session).update_status(deal_id, "rejected")
         if not found:
             await update.message.reply_text(f"Nie znaleziono oferty: {html.escape(deal_id)}")
             return
@@ -111,7 +111,7 @@ async def cmd_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/status — show feedback summary."""
     with get_session() as session:
-        deal_repo = DealRepository(session)
+        deal_repo = OfferRepository(session)
         stats = FeedbackRepository(session).get_stats()
         watching = len(deal_repo.get_by_status("watching", limit=10000))
         rejected = len(deal_repo.get_by_status("rejected", limit=10000))
@@ -170,7 +170,7 @@ async def cmd_target(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def cmd_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/watchlist — show all deals with status='watching'."""
     with get_session() as session:
-        deals = DealRepository(session).get_by_status("watching", limit=20)
+        deals = OfferRepository(session).get_by_status("watching", limit=20)
         if not deals:
             await update.message.reply_text("Brak obserwowanych ofert.")
             return

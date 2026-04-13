@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from sources.base import Deal
 from storage.models import Base
-from storage.repositories import DealRepository
+from storage.repositories import OfferRepository
 
 
 @pytest.fixture
@@ -83,7 +83,7 @@ def dashboard_session(tmp_path):
     session = Session(eng)
 
     today = datetime.now().isoformat()
-    deal_repo = DealRepository(session)
+    deal_repo = OfferRepository(session)
 
     # Deal 1: high-score bike, active (set first_seen/last_seen early so price history
     # manual inserts come after the upsert's initial price)
@@ -152,14 +152,14 @@ def dashboard_session(tmp_path):
     # Price history for deal1 (two prices — enables drop detection)
     session.execute(
         text(
-            "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"
+            "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
             " VALUES (:deal_id, :price, :recorded_at)"
         ),
         {"deal_id": "pepper:99999", "price": 9500, "recorded_at": "2026-03-20T10:00:00"},
     )
     session.execute(
         text(
-            "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"
+            "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
             " VALUES (:deal_id, :price, :recorded_at)"
         ),
         {"deal_id": "pepper:99999", "price": 8500, "recorded_at": "2026-03-25T10:00:00"},

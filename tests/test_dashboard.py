@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from dashboard import _get_profiles, format_pln, safe_load_profile
-from storage.repositories import DealRepository
+from storage.repositories import OfferRepository as DealRepository
 
 # ──────────────── Unit tests: format_pln ────────────────
 

@@ -10,7 +10,7 @@ from dashboard import templates
 from dashboard.dependencies import get_db, get_profiles
 from dashboard.schemas import StatusUpdate
 from dashboard.services import DEALS_PER_PAGE, SCORE_THRESHOLD, DealService
-from storage.repositories import DealRepository, PriceRepository
+from storage.repositories import OfferRepository, PriceRepository
 
 router = APIRouter()
 
@@ -107,7 +107,7 @@ def deal_detail_page(
     deal_id: str,
     session: Session = Depends(get_db),
 ) -> HTMLResponse:
-    deal = DealRepository(session).get_by_id(deal_id)
+    deal = OfferRepository(session).get_by_id(deal_id)
     if not deal:
         return HTMLResponse(content="Deal not found", status_code=404)
 
@@ -171,7 +171,7 @@ def api_update_deal_status(
         validated = StatusUpdate(status=status)
     except Exception:
         return JSONResponse({"error": "Invalid status"}, status_code=400)
-    ok = DealRepository(session).update_status(deal_id, validated.status)
+    ok = OfferRepository(session).update_status(deal_id, validated.status)
     if not ok:
         return JSONResponse({"error": "Deal not found"}, status_code=404)
     if inline:
@@ -182,7 +182,7 @@ def api_update_deal_status(
         )
     # Return HTML fragment for HTMX swap — must include full action buttons
     # so the user can change status again
-    deal = DealRepository(session).get_by_id(deal_id)
+    deal = OfferRepository(session).get_by_id(deal_id)
     link = deal["link"] if deal else "#"
     encoded_id = deal_id.replace(":", "%3A")
 
@@ -206,7 +206,7 @@ def api_deals(
     status: str | None = None,
     session: Session = Depends(get_db),
 ) -> list:
-    return DealRepository(session).get_filtered(
+    return OfferRepository(session).get_filtered(
         profile=profile or None,
         source=source or None,
         min_score=min_score,

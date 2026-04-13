@@ -7,11 +7,15 @@ from sqlalchemy.orm import Session
 from storage.models import (
     AlertQueue,
     Base,
-    Deal,
     Feedback,
-    PriceHistory,
     SeenDeal,
     WatchlistItem,
+)
+from storage.models import (
+    Offer as Deal,
+)
+from storage.models import (
+    PricePoint as PriceHistory,
 )
 
 
@@ -32,8 +36,8 @@ class TestTableCreation:
     def test_all_tables_created(self, engine):
         tables = inspect(engine).get_table_names()
         assert set(tables) == {
-            "deals",
-            "price_history",
+            "offers",
+            "price_points",
             "feedback",
             "alert_queue",
             "watchlist",
@@ -41,7 +45,7 @@ class TestTableCreation:
         }
 
     def test_deals_columns(self, engine):
-        cols = {c["name"] for c in inspect(engine).get_columns("deals")}
+        cols = {c["name"] for c in inspect(engine).get_columns("offers")}
         assert cols == {
             "id",
             "title",
@@ -420,12 +424,12 @@ class TestWatchlistItemModel:
 
 class TestIndexes:
     def test_deals_index_exists(self, engine):
-        indexes = {idx["name"] for idx in inspect(engine).get_indexes("deals")}
-        assert "idx_deals_profile_score" in indexes
+        indexes = {idx["name"] for idx in inspect(engine).get_indexes("offers")}
+        assert "idx_offers_profile_score" in indexes
 
     def test_deals_index_columns(self, engine):
-        indexes = inspect(engine).get_indexes("deals")
-        idx = next(i for i in indexes if i["name"] == "idx_deals_profile_score")
+        indexes = inspect(engine).get_indexes("offers")
+        idx = next(i for i in indexes if i["name"] == "idx_offers_profile_score")
         assert set(idx["column_names"]) == {"profile", "score"}
 
     def test_seen_deals_index_exists(self, engine):

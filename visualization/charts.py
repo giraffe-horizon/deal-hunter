@@ -41,11 +41,11 @@ def generate_price_chart(deal_id: str, session: Session, output_path: str | None
     Returns:
         Path to the generated PNG file.
     """
-    from storage.repositories import DealRepository, PriceRepository
+    from storage.repositories import OfferRepository, PriceRepository
 
     plt, mdates = _import_matplotlib()
 
-    deal_repo = DealRepository(session)
+    deal_repo = OfferRepository(session)
     price_repo = PriceRepository(session)
 
     deal = deal_repo.get_by_id(deal_id)
@@ -192,13 +192,13 @@ def generate_trend_chart(
     Returns:
         Path to the generated PNG file.
     """
-    from storage.repositories import DealRepository, PriceRepository
+    from storage.repositories import OfferRepository, PriceRepository
 
     plt, mdates = _import_matplotlib()
 
     cutoff = (datetime.now() - timedelta(days=days)).isoformat()
 
-    deal_repo = DealRepository(session)
+    deal_repo = OfferRepository(session)
     price_repo = PriceRepository(session)
 
     # Get all deals for this profile

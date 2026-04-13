@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 
 from services.price_tracker import PriceTracker
 from sources.base import Deal
-from storage.models import Base, PriceHistory
-from storage.models import Deal as DealModel
+from storage.models import Base
+from storage.models import Offer as DealModel
+from storage.models import PricePoint as PriceHistory
 from storage.repositories import PriceRepository
 
 

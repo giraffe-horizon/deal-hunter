@@ -8,8 +8,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from storage.models import Base, PriceHistory
-from storage.models import Deal as DealModel
+from storage.models import Base
+from storage.models import Offer as DealModel
+from storage.models import PricePoint as PriceHistory
 
 # ── Fixtures ──
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from storage.repositories import DealRepository, PriceRepository
+from storage.repositories import OfferRepository, PriceRepository
 
 
 @dataclass
@@ -46,7 +46,7 @@ class DealService:
 
     def __init__(self, session: Session) -> None:
         self.session = session
-        self.deals = DealRepository(session)
+        self.deals = OfferRepository(session)
         self.prices = PriceRepository(session)
 
     # ── Deals listing page ──────────────────────────────────

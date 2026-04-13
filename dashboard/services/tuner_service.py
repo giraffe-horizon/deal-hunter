@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from dashboard.services.deal_service import DealService
-from storage.repositories import DealRepository
+from storage.repositories import OfferRepository
 from utils.validation import validate_profile
 
 # Keys that the tuner UI is allowed to override.
@@ -46,7 +46,7 @@ class TunerService:
         rejected, reject_reason, breakdown.
         """
         modified = self._merge_overrides(profile_data, overrides)
-        deals = DealRepository(self.session).get_filtered(profile=profile_name, limit=50)
+        deals = OfferRepository(self.session).get_filtered(profile=profile_name, limit=50)
         scored = DealService(self.session).score_deals_with_profile(deals, modified)
         return [
             {

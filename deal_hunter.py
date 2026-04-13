@@ -20,7 +20,7 @@ from filters import FILTER_REGISTRY
 from storage.database import get_session
 from storage.repositories import (
     AlertQueueRepository,
-    DealRepository,
+    OfferRepository,
     PriceRepository,
     SeenDealRepository,
     WatchlistRepository,
@@ -188,7 +188,7 @@ def run_profile(
 
     with get_session() as session:
         seen_repo = SeenDealRepository(session)
-        deal_repo = DealRepository(session)
+        deal_repo = OfferRepository(session)
         price_repo = PriceRepository(session)
         watchlist_repo = WatchlistRepository(session)
         alert_repo = AlertQueueRepository(session)

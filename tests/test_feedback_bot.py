@@ -9,7 +9,13 @@ from sqlalchemy.orm import Session
 from notifiers.telegram import build_deal_keyboard
 from sources.base import Deal
 from storage.models import Base
-from storage.repositories import DealRepository, FeedbackRepository, WatchlistRepository
+from storage.repositories import (
+    FeedbackRepository,
+    WatchlistRepository,
+)
+from storage.repositories import (
+    OfferRepository as DealRepository,
+)
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 

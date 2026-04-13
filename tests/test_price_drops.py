@@ -10,9 +10,11 @@ from sqlalchemy.orm import Session
 from notifiers.telegram import TelegramNotifier
 from services.price_tracker import PriceTracker
 from sources.base import Deal
-from storage.models import Base, PriceHistory
-from storage.models import Deal as DealModel
-from storage.repositories import DealRepository, PriceRepository
+from storage.models import Base
+from storage.models import Offer as DealModel
+from storage.models import PricePoint as PriceHistory
+from storage.repositories import OfferRepository as DealRepository
+from storage.repositories import PriceRepository
 
 # ──────────────── FIXTURES ────────────────
 
@@ -371,13 +373,13 @@ class TestPriceRepoGetPriceDrops:
         # Add price history: old high price, then current lower price
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 12999, "ts": (now - timedelta(days=3)).isoformat()},
         )
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 10499, "ts": (now - timedelta(hours=1)).isoformat()},
         )
@@ -399,14 +401,14 @@ class TestPriceRepoGetPriceDrops:
         for d in [deal, deal2]:
             session.execute(
                 text(
-                    "INSERT INTO price_history (deal_id, price, recorded_at)"
+                    "INSERT INTO price_points (deal_id, price, recorded_at)"
                     " VALUES (:id, :price, :ts)"
                 ),
                 {"id": d.id, "price": d.price + 2000, "ts": (now - timedelta(days=2)).isoformat()},
             )
             session.execute(
                 text(
-                    "INSERT INTO price_history (deal_id, price, recorded_at)"
+                    "INSERT INTO price_points (deal_id, price, recorded_at)"
                     " VALUES (:id, :price, :ts)"
                 ),
                 {"id": d.id, "price": d.price, "ts": (now - timedelta(hours=1)).isoformat()},
@@ -423,13 +425,13 @@ class TestPriceRepoGetPriceDrops:
         # Small drop: 10600 -> 10499 (~1%)
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 10600, "ts": (now - timedelta(days=2)).isoformat()},
         )
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 10499, "ts": (now - timedelta(hours=1)).isoformat()},
         )
@@ -450,13 +452,13 @@ class TestPriceRepoGetPriceDrops:
         # Old drop (10+ days ago)
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 15000, "ts": (now - timedelta(days=15)).isoformat()},
         )
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 10499, "ts": (now - timedelta(days=10)).isoformat()},
         )

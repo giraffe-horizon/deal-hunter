@@ -7,7 +7,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from storage.models import Base
-from storage.repositories import DealRepository, WatchlistRepository
+from storage.repositories import OfferRepository as DealRepository
+from storage.repositories import WatchlistRepository
 
 
 @pytest.fixture
