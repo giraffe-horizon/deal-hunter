@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Changed
+
+- **Database**: renamed tables `deals` → `offers` and `price_history` → `price_points` (Alembic `003`). Column names, PK values, and FK relationships preserved. Python classes renamed: `Deal` → `Offer`, `PriceHistory` → `PricePoint`, `DealRepository` → `OfferRepository`. First step of products-and-offers migration.
 
 ## v0.14.1 (2026-04-13)
 

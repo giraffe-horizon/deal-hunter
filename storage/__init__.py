@@ -13,7 +13,6 @@ from storage.models import (
 )
 from storage.repositories import (
     AlertQueueRepository,
-    DealRepository,
     FeedbackRepository,
     OfferRepository,
     PriceRepository,
@@ -25,7 +24,6 @@ __all__ = [
     "AlertQueue",
     "AlertQueueRepository",
     "Base",
-    "DealRepository",
     "Feedback",
     "FeedbackRepository",
     "Offer",

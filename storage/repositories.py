@@ -689,7 +689,3 @@ class SeenDealRepository:
             {"cutoff": cutoff},
         )
         return int(result.rowcount)  # type: ignore[attr-defined]
-
-
-# Backward-compat alias — removed in Task 2 after all external callers migrate.
-DealRepository = OfferRepository
