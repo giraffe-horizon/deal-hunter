@@ -116,7 +116,7 @@ def generate_digest_chart(drops: list[dict], output_path: str | None = None) -> 
     """Generate a bar chart of the biggest price drops from the last week.
 
     Args:
-        drops: List of price drop dicts (from SQLiteStorage.get_price_drops).
+        drops: List of price drop dicts (from PriceRepository.get_drops).
         output_path: Optional path for the output PNG.
 
     Returns:

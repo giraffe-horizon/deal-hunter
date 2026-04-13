@@ -34,7 +34,10 @@ dashboard.py            Web dashboard: FastAPI app, routes, API endpoints (deals
 dashboard/templates/    Jinja2 templates (base, deals, deal_detail, health, price_trends, profiles, watchlist, tuner, compare)
 notifiers/telegram.py   Telegram Bot API with retry + rate limiting + photo upload
 visualization/charts.py Price history charts (matplotlib, lazy-imported)
-storage/sqlite.py       SQLite persistence layer (deals, price history, feedback, alert queue, watchlist)
+storage/models.py       SQLAlchemy ORM models (Deal, PriceHistory, Feedback, AlertQueue, WatchlistItem, SeenDeal)
+storage/database.py     Engine, session management (WAL, foreign_keys), get_session() context manager
+storage/repositories.py Domain repositories (DealRepository, PriceRepository, WatchlistRepository, etc.)
+storage/migrations/     Alembic migrations (001_baseline, 002_seen_deals)
 health.py               Health monitoring (state tracking, --health, --watchdog)
 utils/validation.py     YAML profile validation (types, required fields, sanity checks)
 profiles/*.yaml         Product profiles (gitignored, see docs/creating-profiles.md)
@@ -42,7 +45,7 @@ docs/creating-profiles.md  Profile creation guide
 state/*.json            Persistent state per profile (what's been seen, 14-day TTL)
 state/health.json       Health monitoring state (last run, per-source/profile results)
 state/deals.db          SQLite database (deals, price_history, feedback tables)
-scripts/migrate_state_to_sqlite.py  One-time migration from state/*.json to SQLite
+scripts/migrate_json_state.py  One-time migration from state/*.json to SQLite (seen_deals + price_history)
 scripts/systemd/        Systemd user timer units + bot service + install script
 Dockerfile              Docker image (python:3.12-slim + supercronic + tini)
 docker-compose.yml      Three services: deal-hunter (cron) + deal-hunter-bot (polling) + deal-hunter-web (dashboard)
@@ -314,10 +317,10 @@ python feedback_bot.py
 
 **Inline keyboards:** `notifiers/telegram.py` → `build_deal_keyboard(deal_link, deal_id)` generates the InlineKeyboardMarkup dict. Added to `send_alert()` and `send_price_drop_alert()`.
 
-**SQLite methods** (in `storage/sqlite.py`):
-- `update_deal_status(deal_id, status) -> bool`
-- `get_deals_by_status(status, limit=20) -> list[dict]`
-- `get_feedback_stats() -> dict`
+**Repository methods** (in `storage/repositories.py`):
+- `DealRepository.update_status(deal_id, status) -> bool`
+- `DealRepository.get_by_status(status, limit=20) -> list[dict]`
+- `FeedbackRepository.get_stats() -> dict`
 
 ## Profile Validation
 
@@ -340,8 +343,8 @@ Test modules:
 - `test_pepper_parser.py` — Pepper parser (Vue3 + HTML)
 - `test_scoring.py`, `test_bike_filter.py` — scoring engine
 - `test_extract_price.py` — price parser
-- `test_deal.py`, `test_dedup.py`, `test_state.py`, `test_validation.py` — core logic
-- `test_sqlite_storage.py` — SQLite persistence layer (CRUD, upsert, price history, filtering)
+- `test_deal.py`, `test_dedup.py`, `test_validation.py` — core logic
+- `test_repositories.py` — SQLAlchemy repository layer (CRUD, upsert, price history, filtering, batch queries)
 - `test_health.py` — health monitoring (health.json, --health, --watchdog, source tracking)
 - `test_price_drops.py` — price drop detection, thresholds, digest, Telegram formatting, validation
 - `test_verbose_scoring.py` — verbose scoring breakdown, ScoreResult.breakdown, BikeFilter entries, output format, rich fallback
