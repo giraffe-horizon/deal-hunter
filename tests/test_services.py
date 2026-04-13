@@ -1,5 +1,7 @@
 """Tests for service layer."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from filters.base import BaseFilter
@@ -147,3 +149,70 @@ class TestScoringService:
 
         deal = _make_deal(title="Anything")
         assert ScoringService.detect_category(deal, {}, "myprofile") == "myprofile"
+
+
+class TestPriceTracker:
+    def test_get_config_defaults(self):
+        from services.price_tracker import PriceTracker
+
+        config = PriceTracker.get_config({})
+        assert config.enabled is True
+        assert config.min_drop_percent == 10
+
+    def test_get_config_custom(self):
+        from services.price_tracker import PriceTracker
+
+        config = PriceTracker.get_config(
+            {"price_tracking": {"min_drop_percent": 20, "track_increases": True}}
+        )
+        assert config.min_drop_percent == 20
+        assert config.track_increases is True
+
+    def test_no_change_returns_none(self):
+        from services.price_tracker import PriceTracker
+
+        repo = MagicMock()
+        repo.get_previous_price.return_value = 1000
+        tracker = PriceTracker(repo)
+        deal = _make_deal(price=1000)
+        assert tracker.check_price_change(deal) is None
+
+    def test_small_drop_below_threshold(self):
+        from services.price_tracker import PriceTracker
+
+        repo = MagicMock()
+        repo.get_previous_price.return_value = 1000
+        tracker = PriceTracker(repo)
+        deal = _make_deal(price=950)  # 5% drop, below 10% threshold and 200 PLN
+        assert tracker.check_price_change(deal) is None
+
+    def test_significant_drop_returns_price_change(self):
+        from services.price_tracker import PriceTracker
+
+        repo = MagicMock()
+        repo.get_previous_price.return_value = 5000
+        repo.get_lowest.return_value = 4500
+        tracker = PriceTracker(repo)
+        deal = _make_deal(price=4000)  # 20% drop, 1000 PLN
+        result = tracker.check_price_change(deal)
+        assert result is not None
+        assert result.type == "drop"
+        assert result.diff_pln == 1000
+        assert result.is_lowest_ever is True
+
+    def test_increase_not_reported_by_default(self):
+        from services.price_tracker import PriceTracker
+
+        repo = MagicMock()
+        repo.get_previous_price.return_value = 1000
+        tracker = PriceTracker(repo)
+        deal = _make_deal(price=2000)
+        assert tracker.check_price_change(deal) is None
+
+    def test_zero_price_returns_none(self):
+        from services.price_tracker import PriceTracker
+
+        repo = MagicMock()
+        tracker = PriceTracker(repo)
+        deal = _make_deal(price=0)
+        assert tracker.check_price_change(deal) is None
