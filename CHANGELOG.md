@@ -5,6 +5,10 @@
 ### Changed
 
 - **Database**: renamed tables `deals` → `offers` and `price_history` → `price_points` (Alembic `003`). Column names, PK values, and FK relationships preserved. Python classes renamed: `Deal` → `Offer`, `PriceHistory` → `PricePoint`, `DealRepository` → `OfferRepository`. First step of products-and-offers migration.
+- **Database**: Alembic `004` — renamed `offers.title/price/link/first_seen/last_seen` to `raw_title/current_price_pln/url/first_seen_at/last_seen_at`; renamed `price_points.deal_id/price` to `offer_id/price_pln`; added product-model columns (`product_id`, `source_native_id`, `currency_original`, `fx_rate_used`, `availability`, `attributes_hint`, `is_active`) and parallel columns on `price_points`. Backfilled `source_native_id` from existing `id` values.
+- **New schema**: `products`, `product_aliases`, `offer_payload_history` (FIFO N=10 per offer), `deal_events` (append-only event log), `match_reviews`, `match_decisions`, `fx_rates`.
+- **Ingest**: every upsert now appends to `offer_payload_history` and emits a `DealEvent` (`new_listing` / `price_drop` / `price_increase` / `back_in_stock`) via `DealFetcher.ingest_one`.
+- **Compat**: dashboard, Telegram, feedback bot, and Jinja templates continue to use legacy dict keys (`title`, `price`, `link`, `first_seen`, `last_seen`) via `OfferRepository._to_dict`'s dual-key output — no external contract change.
 
 ## v0.14.1 (2026-04-13)
 
