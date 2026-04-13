@@ -13,6 +13,7 @@
 - **python-dotenv** — environment variables from `.env`
 - **python-telegram-bot** v21+ — async Telegram bot for feedback (polling)
 - **matplotlib** >= 3.8 — optional, price history charts (lazy-imported)
+- **pydantic** v2 — API request validation (dashboard schemas)
 - **fastapi** + **uvicorn** + **jinja2** — web dashboard (read-only UI for deals, health, price trends)
 - **HTMX** + **Chart.js** + **Tailwind CSS** — frontend via CDN (no build step)
 
@@ -38,7 +39,8 @@ stores/*.yaml           Declarative store definitions (auto-discovered, no Pytho
 stores/README.md        Guide: "How to add a new store in 5 minutes"
 filters/base.py         Base scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
-dashboard.py            Web dashboard: FastAPI app, routes, API endpoints (deals, profiles CRUD, watchlist, scoring tuner, comparator)
+dashboard/__init__.py   Web dashboard: FastAPI app, routes, API endpoints (deals, profiles CRUD, watchlist, scoring tuner, comparator)
+dashboard/schemas.py    Pydantic models for API validation (StatusUpdate, WatchlistAdd, ProfileCreate)
 dashboard/services/     Dashboard service layer (DealService, ProfileService, TunerService)
 dashboard/templates/    Jinja2 templates with macros (base, deals, health, profiles, watchlist, tuner, compare, partials)
 dashboard/static/js/    Frontend JS modules (charts, compare, price-chart, sparklines, profile-form, sidebar, tuner)
