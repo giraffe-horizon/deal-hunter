@@ -46,6 +46,7 @@ with contextlib.suppress(importlib.metadata.PackageNotFoundError):
 from filters.base import BaseFilter
 from notifiers.telegram import TelegramNotifier
 from sources import SOURCE_REGISTRY
+from sources.base import Deal
 from utils.validation import validate_profile
 
 # ──────────────── SETUP ────────────────
@@ -159,7 +160,7 @@ def get_price_tracking_config(profile: dict) -> dict:
 
 
 def check_price_changes(
-    deal,
+    deal: Deal,
     price_repo: PriceRepository,
     profile: dict | None = None,
 ) -> dict | None:
@@ -257,7 +258,7 @@ def get_filter(profile: dict) -> BaseFilter:
     return BaseFilter(profile)
 
 
-def _detect_category(deal, profile: dict, profile_name: str = "") -> str:
+def _detect_category(deal: Deal, profile: dict, profile_name: str = "") -> str:
     """Detect product category from deal title+description using profile's categories mapping."""
     categories = profile.get("categories", {})
     if not categories:

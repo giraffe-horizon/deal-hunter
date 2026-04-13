@@ -12,6 +12,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, quote_plus, urlencode, urljoin, urlparse, urlunparse
 
 import yaml
@@ -213,7 +214,7 @@ class YamlSource(Source):
                 deals.append(deal)
         return deals
 
-    def _extract_deal_css(self, prod, url: str, selectors: dict) -> Deal | None:
+    def _extract_deal_css(self, prod: Any, url: str, selectors: dict) -> Deal | None:
         try:
             title = self._extract_field(prod, selectors.get("title", ""))
             if not title:
@@ -358,7 +359,7 @@ class YamlSource(Source):
 
         return deals
 
-    def _gtm_to_deal(self, data: dict, el, url: str) -> Deal | None:
+    def _gtm_to_deal(self, data: dict, el: Any, url: str) -> Deal | None:
         try:
             name = data.get("name", "").strip()
             if not name:
@@ -422,7 +423,7 @@ class YamlSource(Source):
     # ── Field extraction helpers ──
 
     @staticmethod
-    def _extract_field(container, selector: str) -> str:
+    def _extract_field(container: Any, selector: str) -> str:
         """Extract text or attribute from a container using CSS selectors.
 
         Supports:
@@ -471,7 +472,7 @@ class YamlSource(Source):
         return urljoin(base, url)
 
     @staticmethod
-    def _extract_native_id(prod, link: str, title: str, selectors: dict) -> str:
+    def _extract_native_id(prod: Any, link: str, title: str, selectors: dict) -> str:
         """Extract a native product ID using selector, link, or title fallback."""
         # Try ID selector (e.g., @data-pid)
         id_sel = selectors.get("id", "")

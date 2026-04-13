@@ -1,6 +1,7 @@
 """Domain-organized repository classes for Deal Hunter."""
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
@@ -40,7 +41,7 @@ class DealRepository:
     ) -> Deal:
         """Insert a new deal or update last_seen, score, and price if changed."""
         now = last_seen or datetime.now().isoformat()
-        existing = self.session.get(Deal, id)
+        existing: Deal | None = self.session.get(Deal, id)
 
         if existing:
             old_price = existing.price
@@ -224,7 +225,16 @@ class DealRepository:
         )
         return [{"day": r["day"], "avg_price": round(r["avg_price"])} for r in rows]
 
-    def _apply_filters(self, stmt, *, profile, source, min_score, category, status):
+    def _apply_filters(
+        self,
+        stmt: Any,
+        *,
+        profile: str | None,
+        source: str | None,
+        min_score: int | None,
+        category: str | None,
+        status: str | None,
+    ) -> Any:
         """Apply optional WHERE clauses to a statement."""
         if profile is not None:
             stmt = stmt.where(Deal.profile == profile)
@@ -344,7 +354,7 @@ class PriceRepository:
         if not deal_ids:
             return {}
         placeholders = ",".join(f":id_{i}" for i in range(len(deal_ids)))
-        params = {f"id_{i}": did for i, did in enumerate(deal_ids)}
+        params: dict[str, Any] = {f"id_{i}": did for i, did in enumerate(deal_ids)}
         params["limit"] = limit
         rows = self.session.execute(
             text(
@@ -677,4 +687,4 @@ class SeenDealRepository:
             text("DELETE FROM seen_deals WHERE first_seen_at <= :cutoff"),
             {"cutoff": cutoff},
         )
-        return result.rowcount
+        return int(result.rowcount)  # type: ignore[attr-defined]

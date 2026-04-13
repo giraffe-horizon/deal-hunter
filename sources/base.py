@@ -42,7 +42,7 @@ class Deal:
         default_factory=list
     )  # [{"source": "...", "link": "...", "price": N}]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.title or not self.title.strip():
             raise ValueError(f"Deal has empty title: {self.id}")
         if self.price < 0:

@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from datetime import datetime, timedelta
+from typing import Any
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -53,7 +54,7 @@ class PepperSource(Source):
                 deals.append(deal)
         return deals
 
-    def _parse_vue3(self, art) -> Deal | None:
+    def _parse_vue3(self, art: Any) -> Deal | None:
         """Try to extract data from Vue3 data attribute."""
         vue_div = art.find("div", class_="js-vue3")
         if not vue_div or not vue_div.get("data-vue3"):
@@ -140,7 +141,7 @@ class PepperSource(Source):
             logger.debug(f"Pepper Vue3 parse error: {e}")
             return None
 
-    def _parse_html(self, art, base_url: str) -> Deal | None:
+    def _parse_html(self, art: Any, base_url: str) -> Deal | None:
         """Fallback — parse deal from HTML tags."""
         art_classes = " ".join(art.get("class", []))
         if re.search(r"thread--expired|thread--hide|expired", art_classes):

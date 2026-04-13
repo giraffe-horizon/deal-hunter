@@ -5,10 +5,12 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
 logger = logging.getLogger(__name__)
 
 
-def _import_matplotlib():
+def _import_matplotlib() -> tuple:  # type: ignore[type-arg]
     """Lazy-import matplotlib with Agg backend.
 
     Raises ImportError with a helpful message if matplotlib is not installed.
@@ -28,7 +30,7 @@ def _import_matplotlib():
         ) from err
 
 
-def generate_price_chart(deal_id: str, session, output_path: str | None = None) -> Path:
+def generate_price_chart(deal_id: str, session: Session, output_path: str | None = None) -> Path:
     """Generate a price history line chart for a specific deal.
 
     Args:
@@ -177,7 +179,7 @@ def generate_digest_chart(drops: list[dict], output_path: str | None = None) -> 
 
 
 def generate_trend_chart(
-    profile: str, session, days: int = 30, output_path: str | None = None
+    profile: str, session: Session, days: int = 30, output_path: str | None = None
 ) -> Path:
     """Generate a line chart showing average prices in a profile over the last N days.
 

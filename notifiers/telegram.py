@@ -1,12 +1,18 @@
 """Telegram notifier with retry and rate limiting."""
 
+from __future__ import annotations
+
 import html
 import json
 import logging
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import requests
+
+if TYPE_CHECKING:
+    from sources.base import Deal
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +43,7 @@ class TelegramNotifier:
 
     def send_alert(
         self,
-        deal,
+        deal: Deal,
         score: int,
         tier: str,
         plus: list[str],
@@ -140,7 +146,7 @@ class TelegramNotifier:
 
     def send_price_drop_alert(
         self,
-        deal,
+        deal: Deal,
         price_change: dict,
         topic_id: int | None = None,
         emoji: str = "\U0001f50d",
@@ -187,7 +193,7 @@ class TelegramNotifier:
 
     def send_watchlist_alert(
         self,
-        deal,
+        deal: Deal,
         target_price: int,
         current_price: int,
         topic_id: int | None = None,

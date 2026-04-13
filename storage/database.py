@@ -4,6 +4,7 @@ import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
@@ -21,7 +22,7 @@ engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
 
 
 @event.listens_for(engine, "connect")
-def _set_sqlite_pragma(dbapi_conn, connection_record):
+def _set_sqlite_pragma(dbapi_conn: Any, connection_record: Any) -> None:
     """Enable WAL mode and foreign keys for every new SQLite connection."""
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
