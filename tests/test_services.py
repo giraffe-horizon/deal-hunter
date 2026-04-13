@@ -2,6 +2,7 @@
 
 import pytest
 
+from filters.base import BaseFilter
 from services.types import PriceChange, PriceTrackingConfig
 from sources.base import Deal
 
@@ -116,3 +117,33 @@ class TestDealFetcher:
         from services.fetcher import DealFetcher
 
         assert DealFetcher._normalize_title("  Hello, World!  ") == "hello world"
+
+
+class TestScoringService:
+    def test_get_filter_default(self):
+        from services.scorer import ScoringService
+
+        svc = ScoringService({})
+        profile = {"score_rules": {"test": 10}, "budget": {"min": 0, "max": 10000}}
+        f = svc.get_filter(profile)
+        assert isinstance(f, BaseFilter)
+
+    def test_detect_category_match(self):
+        from services.scorer import ScoringService
+
+        deal = _make_deal(title="Giant Defy Advanced", description="road bike")
+        profile = {"categories": {"bikes": ["bike", "rower"], "parts": ["pedal"]}}
+        assert ScoringService.detect_category(deal, profile, "default") == "bikes"
+
+    def test_detect_category_no_match(self):
+        from services.scorer import ScoringService
+
+        deal = _make_deal(title="Something else", description="no match")
+        profile = {"categories": {"bikes": ["bike"]}}
+        assert ScoringService.detect_category(deal, profile, "fallback") == "fallback"
+
+    def test_detect_category_no_categories(self):
+        from services.scorer import ScoringService
+
+        deal = _make_deal(title="Anything")
+        assert ScoringService.detect_category(deal, {}, "myprofile") == "myprofile"
