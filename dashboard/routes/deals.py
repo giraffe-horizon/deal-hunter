@@ -92,7 +92,7 @@ def deals_page(
     total_deals = stats["total"]
     high_score_pct = round(stats["high_score"] / total_deals * 100) if total_deals else 0
     new_today = stats["new_today"]
-    drops_count = len(PriceRepository(session).get_drops(days=7))
+    drops_count = PriceRepository(session).count_drops(days=7)
 
     # Filter dropdown options via SQL
     filter_opts = DealRepository(session).get_filter_options()
