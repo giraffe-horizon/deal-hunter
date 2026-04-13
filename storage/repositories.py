@@ -554,9 +554,7 @@ class AlertQueueRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def queue(
-        self, profile: str, alert_type: str, payload_json: str, topic_id: str | None = None
-    ) -> None:
+    def queue(self, profile: str, alert_type: str, payload_json: str) -> None:
         """Queue an alert for later sending."""
         alert = AlertQueue(
             profile=profile,
