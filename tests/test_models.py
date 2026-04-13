@@ -42,6 +42,13 @@ class TestTableCreation:
             "alert_queue",
             "watchlist",
             "seen_deals",
+            "products",
+            "product_aliases",
+            "offer_payload_history",
+            "deal_events",
+            "match_reviews",
+            "match_decisions",
+            "fx_rates",
         }
 
     def test_deals_columns(self, engine):

@@ -3,14 +3,21 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.orm import Session
 
 from storage.models import (
     AlertQueue,
+    DealEvent,
     Feedback,
+    FxRate,
+    MatchDecision,
+    MatchReview,
     Offer,
+    OfferPayloadHistory,
     PricePoint,
+    Product,
+    ProductAlias,
     SeenDeal,
     WatchlistItem,
 )
@@ -725,3 +732,244 @@ class SeenDealRepository:
             {"cutoff": cutoff},
         )
         return int(result.rowcount)  # type: ignore[attr-defined]
+
+
+class ProductRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def create(
+        self,
+        *,
+        id: str,  # noqa: A002
+        canonical_title: str,
+        category: str,
+        attributes: dict,
+        brand: str | None = None,
+        model: str | None = None,
+        review_status: str = "auto",
+        confidence_score: float | None = None,
+    ) -> Product:
+        now = datetime.now().isoformat()
+        p = Product(
+            id=id,
+            canonical_title=canonical_title,
+            category=category,
+            attributes=attributes,
+            brand=brand,
+            model=model,
+            review_status=review_status,
+            confidence_score=confidence_score,
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(p)
+        return p
+
+    def get(self, product_id: str) -> Product | None:
+        return self.session.get(Product, product_id)
+
+
+class ProductAliasRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def add(
+        self,
+        *,
+        product_id: str,
+        identifier_type: str,
+        identifier_value: str,
+        confidence: float,
+        source: str | None = None,
+        created_by: str = "auto",
+    ) -> ProductAlias:
+        now = datetime.now().isoformat()
+        alias = ProductAlias(
+            product_id=product_id,
+            identifier_type=identifier_type,
+            identifier_value=identifier_value,
+            source=source,
+            confidence=confidence,
+            created_by=created_by,
+            created_at=now,
+        )
+        self.session.add(alias)
+        return alias
+
+    def find(
+        self,
+        *,
+        identifier_type: str,
+        identifier_value: str,
+        source: str | None = None,
+    ) -> ProductAlias | None:
+        q = select(ProductAlias).where(
+            ProductAlias.identifier_type == identifier_type,
+            ProductAlias.identifier_value == identifier_value,
+        )
+        if source is not None:
+            q = q.where(ProductAlias.source == source)
+        else:
+            q = q.where(ProductAlias.source.is_(None))
+        return self.session.execute(q).scalars().first()
+
+
+OFFER_PAYLOAD_HISTORY_MAX = 10
+
+
+class OfferPayloadHistoryRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def append(self, *, offer_id: str, raw_payload: dict, captured_at: str) -> OfferPayloadHistory:
+        row = OfferPayloadHistory(
+            offer_id=offer_id, raw_payload=raw_payload, captured_at=captured_at
+        )
+        self.session.add(row)
+        self.session.flush()
+        self._evict_beyond_limit(offer_id)
+        return row
+
+    def _evict_beyond_limit(self, offer_id: str) -> None:
+        subq = (
+            select(OfferPayloadHistory.id)
+            .where(OfferPayloadHistory.offer_id == offer_id)
+            .order_by(OfferPayloadHistory.captured_at.desc())
+            .offset(OFFER_PAYLOAD_HISTORY_MAX)
+        )
+        ids_to_delete = list(self.session.execute(subq).scalars().all())
+        if ids_to_delete:
+            self.session.execute(
+                delete(OfferPayloadHistory).where(OfferPayloadHistory.id.in_(ids_to_delete))
+            )
+
+
+class DealEventRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def emit(
+        self,
+        *,
+        offer_id: str,
+        event_type: str,
+        price_at_event: int | None = None,
+        payload: dict | None = None,
+        product_id: str | None = None,
+        created_at: str | None = None,
+    ) -> DealEvent:
+        evt = DealEvent(
+            offer_id=offer_id,
+            product_id=product_id,
+            event_type=event_type,
+            price_at_event=price_at_event,
+            payload=payload,
+            created_at=created_at or datetime.now().isoformat(),
+        )
+        self.session.add(evt)
+        self.session.flush()
+        return evt
+
+    def get_unnotified(self, limit: int = 50) -> list[DealEvent]:
+        return list(
+            self.session.execute(
+                select(DealEvent)
+                .where(DealEvent.notified == 0)
+                .order_by(DealEvent.created_at.asc())
+                .limit(limit)
+            ).scalars()
+        )
+
+    def mark_notified(self, ids: list[int]) -> None:
+        if not ids:
+            return
+        self.session.execute(update(DealEvent).where(DealEvent.id.in_(ids)).values(notified=1))
+
+
+class MatchReviewRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def enqueue(
+        self,
+        *,
+        offer_id: str,
+        candidate_product_id: str | None = None,
+        suggested_products: list | None = None,
+        best_confidence: float | None = None,
+        reason: str | None = None,
+        priority: int = 0,
+    ) -> MatchReview:
+        review = MatchReview(
+            offer_id=offer_id,
+            candidate_product_id=candidate_product_id,
+            suggested_products=suggested_products,
+            best_confidence=best_confidence,
+            reason=reason,
+            priority=priority,
+            status="pending",
+            created_at=datetime.now().isoformat(),
+        )
+        self.session.add(review)
+        return review
+
+
+class MatchDecisionRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def record(
+        self,
+        *,
+        decision_type: str,
+        actor: str,
+        offer_id: str | None = None,
+        product_id: str | None = None,
+        confidence: float | None = None,
+        signals: dict | None = None,
+        undo_snapshot: dict | None = None,
+    ) -> MatchDecision:
+        decision = MatchDecision(
+            offer_id=offer_id,
+            product_id=product_id,
+            decision_type=decision_type,
+            confidence=confidence,
+            signals=signals,
+            actor=actor,
+            created_at=datetime.now().isoformat(),
+            undo_snapshot=undo_snapshot,
+        )
+        self.session.add(decision)
+        return decision
+
+
+class FxRateRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def get(self, currency: str) -> FxRate | None:
+        return self.session.get(FxRate, currency)
+
+    def upsert(
+        self,
+        *,
+        currency: str,
+        rate_to_pln: float,
+        fetched_at: str,
+        table_no: str | None = None,
+    ) -> FxRate:
+        existing = self.session.get(FxRate, currency)
+        if existing:
+            existing.rate_to_pln = rate_to_pln
+            existing.fetched_at = fetched_at
+            existing.table_no = table_no
+            return existing
+        row = FxRate(
+            currency=currency,
+            rate_to_pln=rate_to_pln,
+            fetched_at=fetched_at,
+            table_no=table_no,
+        )
+        self.session.add(row)
+        return row
