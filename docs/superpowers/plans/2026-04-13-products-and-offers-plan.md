@@ -27,6 +27,37 @@
 
 ---
 
+## Execution Status (updated 2026-04-13)
+
+| Task | Status | Commit(s) |
+| --- | --- | --- |
+| 1. Finish A1 rename — `OfferRepository` + caller sweep | ✅ done | `c3caf8f`, `a740229` |
+| 2. Drop the `DealRepository` alias + A1 checkpoint | ✅ done | `725cce9` |
+| 3. Alembic 004 round-trip test — schema shape only | ✅ done | folded into `ec92d8c` |
+| 4. Alembic 004 migration — implementation | ✅ done | `ec92d8c` |
+| 5. Update ORM models — rename columns + add new columns | ✅ done | `526962d` |
+| 6. Migrate repository + caller layer to new attribute names | ✅ done | `a3049ee` |
+| 7. New ORM models — `Product`, `ProductAlias` | ✅ done | `ef14a2f` (bundled with 8/9/10 models+repos) |
+| 8. `OfferPayloadHistory` — model, FIFO repository, tests | ✅ done | model+repo in `ef14a2f`; tests in `8593437` |
+| 9. `DealEvent` — model, repository, tests | ✅ done | model+repo in `ef14a2f`; tests in `f2109fe` |
+| 10. `MatchReview`, `MatchDecision`, `FxRate` — models + repos | ✅ done | folded into `ef14a2f` |
+| 11. Wire `OfferPayloadHistory` + `DealEvent` into ingest | ✅ done | `7951515` (`ingest_one` + 3 tests), `c6b249f` (live wiring + score/category kwargs) |
+| 12. End-to-end validation + A2 changelog | ✅ done | `105ae85` (CHANGELOG); validation steps run inline (smoke, migration round-trip, FK check, full suite) |
+
+**Worktree state:** `/home/liske/Projects/deal-hunter-phase-a1` on branch `phase-a1-rename`, head `105ae85`, **698 tests passing** (baseline 685 + 13 new across A2). Migration round-trip `003 → 004 → 003 → 004` clean; `PRAGMA foreign_key_check` empty.
+
+**Deviations from plan as written:**
+- Tasks 7–10 were dispatched as one implementer batch due to forward-reference dependencies between the new ORM classes (e.g. `Offer.product` relationship can't exist until `Product` is in metadata). All seven new models + their repositories landed in `ef14a2f`; subsequent commits `8593437` and `f2109fe` added the FIFO and event-emit tests respectively. Resulting state matches the plan; only the commit granularity differs.
+- Task 5 declared `Offer.product_id` and `PricePoint.product_id` as plain `mapped_column(String)` (no `ForeignKey`) to keep `Base.metadata.create_all` working in tests before `Product` was registered. Task 7 restored the ORM-level `ForeignKey("products.id")` on both columns.
+- Task 5 added `server_default="PLN"` (`currency_original`) and `server_default="1"` (`is_active`) so raw-SQL insert tests don't trip the NOT NULL constraint.
+- Task 11 split into two commits: `7951515` added `DealFetcher.ingest_one(session, dto, profile)` + 3 integration tests but deferred the `deal_hunter.py` live-call wiring because the existing call passes `score` and `category` (computed mid-loop) which `ingest_one` did not yet accept. `c6b249f` extended `ingest_one` with `score: int = 0`, `category: str = ""` kwargs and replaced the live call site in `deal_hunter.py:236` with `_fetcher.ingest_one(...)` inside the existing `result.score >= threshold` gate (preserves prior persistence behavior — only score-above-threshold deals reach the offers table; ingest of all observed deals for full audit coverage is a separate product decision, out of scope).
+- Task 11 wiring sets `_fetcher.profile_name = profile_name` per-run on a module-level `_fetcher` instance. Safe today (CLI runs profiles sequentially via `--all`); revisit if concurrent profile execution is ever added.
+
+**Known follow-ups (out of scope for this plan):**
+- DB-level FK on `offers.product_id` and `price_points.product_id`. Migration 004 adds these columns without `sa.ForeignKey("products.id")`; the FK exists at the ORM layer only. Schedule a follow-up Alembic migration once the matching pipeline (Phase C) actually populates `product_id`.
+
+---
+
 ## File Structure
 
 **Files created in this plan:**
@@ -59,7 +90,7 @@
 
 ---
 
-## Task 1: Finish A1 rename — `OfferRepository` + raw SQL + caller sweep
+## Task 1: Finish A1 rename — `OfferRepository` + raw SQL + caller sweep ✅ done (`c3caf8f`, `a740229`)
 
 **Files:**
 - Modify: [storage/repositories.py](storage/repositories.py)
@@ -211,7 +242,7 @@ git commit -m "refactor(repos): rename DealRepository->OfferRepository, update a
 
 ---
 
-## Task 2: Drop the `DealRepository` alias + A1 checkpoint
+## Task 2: Drop the `DealRepository` alias + A1 checkpoint ✅ done (`725cce9`)
 
 **Files:**
 - Modify: [storage/repositories.py](storage/repositories.py)
@@ -263,7 +294,7 @@ At this point A1 is fully shipped on the branch. A2 begins.
 
 ---
 
-## Task 3: Alembic 004 round-trip test — schema shape only
+## Task 3: Alembic 004 round-trip test — schema shape only ✅ done (folded into `ec92d8c`)
 
 **Files:**
 - Create: [tests/test_migration_004_products_schema.py](tests/test_migration_004_products_schema.py)
@@ -434,7 +465,7 @@ No commit — Task 4 makes these green.
 
 ---
 
-## Task 4: Alembic 004 migration — implementation
+## Task 4: Alembic 004 migration — implementation ✅ done (`ec92d8c`)
 
 **Files:**
 - Create: `storage/migrations/versions/004_products_schema.py`
@@ -737,7 +768,7 @@ git commit -m "feat(db): add alembic 004 — column renames, new product schema,
 
 ---
 
-## Task 5: Update ORM models — rename columns + add new columns
+## Task 5: Update ORM models — rename columns + add new columns ✅ done (`526962d`)
 
 **Files:**
 - Modify: [storage/models.py](storage/models.py)
@@ -837,7 +868,7 @@ At this point the suite is **broken again** in the caller layer — any code tha
 
 ---
 
-## Task 6: Migrate repository + caller layer to new attribute names
+## Task 6: Migrate repository + caller layer to new attribute names ✅ done (`a3049ee`)
 
 **Files:**
 - Modify: [storage/repositories.py](storage/repositories.py)
@@ -986,7 +1017,7 @@ git commit -m "refactor: migrate callers to renamed offer/price_point columns, k
 
 ---
 
-## Task 7: New ORM models — `Product`, `ProductAlias`
+## Task 7: New ORM models — `Product`, `ProductAlias` ✅ done (`ef14a2f` — bundled with Tasks 8/9/10 models+repos)
 
 **Files:**
 - Modify: [storage/models.py](storage/models.py)
@@ -1212,7 +1243,7 @@ git commit -m "feat(products): add Product + ProductAlias models + minimal repos
 
 ---
 
-## Task 8: `OfferPayloadHistory` — model, FIFO repository, tests
+## Task 8: `OfferPayloadHistory` — model, FIFO repository, tests ✅ done (model+repo in `ef14a2f`; tests in `8593437`)
 
 **Files:**
 - Modify: [storage/models.py](storage/models.py), [storage/repositories.py](storage/repositories.py)
@@ -1405,7 +1436,7 @@ git commit -m "feat(events): OfferPayloadHistory model + FIFO N=10 repository"
 
 ---
 
-## Task 9: `DealEvent` — model, repository, tests
+## Task 9: `DealEvent` — model, repository, tests ✅ done (model+repo in `ef14a2f`; tests in `f2109fe`)
 
 **Files:**
 - Modify: [storage/models.py](storage/models.py), [storage/repositories.py](storage/repositories.py)
@@ -1575,7 +1606,7 @@ git commit -m "feat(events): DealEvent model + repository"
 
 ---
 
-## Task 10: `MatchReview`, `MatchDecision`, `FxRate` — models + thin repositories
+## Task 10: `MatchReview`, `MatchDecision`, `FxRate` — models + thin repositories ✅ done (folded into `ef14a2f`)
 
 **Files:**
 - Modify: [storage/models.py](storage/models.py), [storage/repositories.py](storage/repositories.py)
@@ -1803,7 +1834,7 @@ git commit -m "feat(matching): add MatchReview/MatchDecision/FxRate models + thi
 
 ---
 
-## Task 11: Wire `OfferPayloadHistory` into `services/fetcher.py`
+## Task 11: Wire `OfferPayloadHistory` into `services/fetcher.py` ✅ done (`7951515`, `c6b249f`)
 
 **Files:**
 - Modify: [services/fetcher.py](services/fetcher.py)
@@ -2086,7 +2117,7 @@ git commit -m "feat(fetcher): emit DealEvent + append OfferPayloadHistory on ing
 
 ---
 
-## Task 12: End-to-end validation + A2 changelog
+## Task 12: End-to-end validation + A2 changelog ✅ done (`105ae85`)
 
 **Files:**
 - Modify: `CHANGELOG.md`
