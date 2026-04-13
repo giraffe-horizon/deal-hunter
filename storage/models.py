@@ -32,11 +32,11 @@ class Offer(Base):
     product_id: Mapped[str | None] = mapped_column(String, default=None)
     source_native_id: Mapped[str | None] = mapped_column(String, default=None)
     current_price_original: Mapped[int | None] = mapped_column(default=None)
-    currency_original: Mapped[str] = mapped_column(String, default="PLN")
+    currency_original: Mapped[str] = mapped_column(String, default="PLN", server_default="PLN")
     fx_rate_used: Mapped[float | None] = mapped_column(default=None)
     availability: Mapped[str | None] = mapped_column(String, default=None)
     attributes_hint: Mapped[dict | None] = mapped_column(JSON, default=None)
-    is_active: Mapped[int] = mapped_column(default=1)
+    is_active: Mapped[int] = mapped_column(default=1, server_default="1")
 
     prices: Mapped[list["PricePoint"]] = relationship(back_populates="offer")
     feedback_entries: Mapped[list["Feedback"]] = relationship(back_populates="offer")
@@ -56,7 +56,7 @@ class PricePoint(Base):
     # NOTE: product_id FK is omitted here (see Offer.product_id note above).
     product_id: Mapped[str | None] = mapped_column(String, default=None)
     price_original: Mapped[int | None] = mapped_column(default=None)
-    currency_original: Mapped[str] = mapped_column(String, default="PLN")
+    currency_original: Mapped[str] = mapped_column(String, default="PLN", server_default="PLN")
     fx_rate_used: Mapped[float | None] = mapped_column(default=None)
     availability: Mapped[str | None] = mapped_column(String, default=None)
 

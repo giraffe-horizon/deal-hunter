@@ -31,34 +31,34 @@ def chart_session(engine):
         # Deal with price history
         deal = DealModel(
             id="pepper:12345",
-            title="Canyon Endurace CF 8 Di2",
-            price=10499,
-            link="https://example.com/deal",
+            raw_title="Canyon Endurace CF 8 Di2",
+            current_price_pln=10499,
+            url="https://example.com/deal",
             source="pepper",
             description="",
             image_url="",
             profile="bikes",
             score=80,
             status="active",
-            first_seen=now.isoformat(),
-            last_seen=now.isoformat(),
+            first_seen_at=now.isoformat(),
+            last_seen_at=now.isoformat(),
         )
         session.add(deal)
 
         # Second deal for trend chart
         deal2 = DealModel(
             id="pepper:67890",
-            title="Giant Defy Advanced 2",
-            price=8999,
-            link="https://example.com/deal2",
+            raw_title="Giant Defy Advanced 2",
+            current_price_pln=8999,
+            url="https://example.com/deal2",
             source="pepper",
             description="",
             image_url="",
             profile="bikes",
             score=75,
             status="active",
-            first_seen=now.isoformat(),
-            last_seen=now.isoformat(),
+            first_seen_at=now.isoformat(),
+            last_seen_at=now.isoformat(),
         )
         session.add(deal2)
         session.flush()
@@ -73,8 +73,8 @@ def chart_session(engine):
         for price, ts in prices:
             session.add(
                 PriceHistory(
-                    deal_id="pepper:12345",
-                    price=price,
+                    offer_id="pepper:12345",
+                    price_pln=price,
                     recorded_at=ts.isoformat(),
                 )
             )
@@ -82,8 +82,8 @@ def chart_session(engine):
         # Price history for second deal
         session.add(
             PriceHistory(
-                deal_id="pepper:67890",
-                price=8999,
+                offer_id="pepper:67890",
+                price_pln=8999,
                 recorded_at=(now - timedelta(days=5)).isoformat(),
             )
         )
@@ -173,16 +173,16 @@ class TestGeneratePriceChart:
         with Session(engine) as session:
             deal = DealModel(
                 id="pepper:noprice",
-                title="No Price Deal",
-                price=1000,
+                raw_title="No Price Deal",
+                current_price_pln=1000,
                 source="pepper",
                 description="",
                 image_url="",
                 profile="bikes",
                 score=50,
                 status="active",
-                first_seen=datetime.now().isoformat(),
-                last_seen=datetime.now().isoformat(),
+                first_seen_at=datetime.now().isoformat(),
+                last_seen_at=datetime.now().isoformat(),
             )
             session.add(deal)
             session.flush()
@@ -248,16 +248,16 @@ class TestGenerateTrendChart:
         with Session(engine) as session:
             deal = DealModel(
                 id="pepper:noprice",
-                title="No Price Deal",
-                price=1000,
+                raw_title="No Price Deal",
+                current_price_pln=1000,
                 source="pepper",
                 description="",
                 image_url="",
                 profile="test_profile",
                 score=50,
                 status="active",
-                first_seen=datetime.now().isoformat(),
-                last_seen=datetime.now().isoformat(),
+                first_seen_at=datetime.now().isoformat(),
+                last_seen_at=datetime.now().isoformat(),
             )
             session.add(deal)
             session.flush()

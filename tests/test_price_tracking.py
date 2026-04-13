@@ -53,23 +53,23 @@ def _seed_deal_with_prices(session, deal_id="test:1", prices=None):
     now = datetime.now().isoformat()
     deal = DealModel(
         id=deal_id,
-        title="Test Deal",
-        price=prices[-1] if prices else 0,
+        raw_title="Test Deal",
+        current_price_pln=prices[-1] if prices else 0,
         source="pepper",
         description="",
         image_url="",
         profile="test",
         score=80,
         status="active",
-        first_seen=now,
-        last_seen=now,
+        first_seen_at=now,
+        last_seen_at=now,
     )
     session.add(deal)
     session.flush()
     if prices:
         for i, p in enumerate(prices):
             ts = f"2026-04-{10 + i:02d}T10:00:00"
-            ph = PriceHistory(deal_id=deal_id, price=p, recorded_at=ts)
+            ph = PriceHistory(offer_id=deal_id, price_pln=p, recorded_at=ts)
             session.add(ph)
     session.flush()
 

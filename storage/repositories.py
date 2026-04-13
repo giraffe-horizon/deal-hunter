@@ -26,9 +26,12 @@ class OfferRepository:
         self,
         *,
         id: str,  # noqa: A002
-        title: str,
-        price: int,
-        link: str = "",
+        raw_title: str | None = None,
+        title: str | None = None,  # legacy
+        current_price_pln: int | None = None,
+        price: int | None = None,  # legacy
+        url: str = "",
+        link: str = "",  # legacy
         source: str = "",
         description: str = "",
         image_url: str = "",
@@ -36,28 +39,39 @@ class OfferRepository:
         score: int = 0,
         category: str = "",
         status: str = "active",
-        first_seen: str = "",
-        last_seen: str = "",
+        first_seen_at: str = "",
+        first_seen: str = "",  # legacy
+        last_seen_at: str = "",
+        last_seen: str = "",  # legacy
     ) -> Offer:
-        """Insert a new offer or update last_seen, score, and price if changed."""
-        now = last_seen or datetime.now().isoformat()
+        """Insert a new offer or update last_seen_at, score, and price if changed."""
+        # Normalize legacy kwarg aliases to canonical names
+        raw_title = raw_title if raw_title is not None else title
+        current_price_pln = current_price_pln if current_price_pln is not None else price
+        url = url or link
+        first_seen_at = first_seen_at or first_seen
+        last_seen_at = last_seen_at or last_seen
+        if raw_title is None:
+            raise TypeError("OfferRepository.upsert requires raw_title or title")
+
+        now = last_seen_at or datetime.now().isoformat()
         existing: Offer | None = self.session.get(Offer, id)
 
         if existing:
-            old_price = existing.price
-            existing.last_seen = now
+            old_price = existing.current_price_pln
+            existing.last_seen_at = now
             existing.score = score
-            existing.price = price
+            existing.current_price_pln = current_price_pln
             # Do NOT reset status — preserve user-set status (watching, rejected, etc.)
-            if old_price and price and old_price != price:
-                self._record_price(id, price, now)
+            if old_price and current_price_pln and old_price != current_price_pln:
+                self._record_price(id, current_price_pln, now)
             return existing
 
         offer = Offer(
             id=id,
-            title=title,
-            price=price,
-            link=link,
+            raw_title=raw_title,
+            current_price_pln=current_price_pln,
+            url=url,
             source=source,
             description=description,
             image_url=image_url,
@@ -65,12 +79,12 @@ class OfferRepository:
             score=score,
             category=category,
             status=status,
-            first_seen=first_seen or now,
-            last_seen=now,
+            first_seen_at=first_seen_at or now,
+            last_seen_at=now,
         )
         self.session.add(offer)
-        if price:
-            self._record_price(id, price, now)
+        if current_price_pln:
+            self._record_price(id, current_price_pln, now)
         return offer
 
     def _record_price(self, deal_id: str, price: int, recorded_at: str) -> None:
@@ -78,10 +92,10 @@ class OfferRepository:
         self.session.flush()  # ensure offer row exists before FK insert
         self.session.execute(
             text(
-                "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
-                " VALUES (:deal_id, :price, :recorded_at)"
+                "INSERT OR IGNORE INTO price_points (offer_id, price_pln, recorded_at)"
+                " VALUES (:offer_id, :price_pln, :recorded_at)"
             ),
-            {"deal_id": deal_id, "price": price, "recorded_at": recorded_at},
+            {"offer_id": deal_id, "price_pln": price, "recorded_at": recorded_at},
         )
 
     def get_by_id(self, deal_id: str) -> dict | None:
@@ -155,7 +169,7 @@ class OfferRepository:
                     COUNT(*) as total,
                     COALESCE(SUM(CASE WHEN score >= :threshold THEN 1 ELSE 0 END), 0)
                         as high_score,
-                    COALESCE(SUM(CASE WHEN first_seen LIKE :today THEN 1 ELSE 0 END), 0)
+                    COALESCE(SUM(CASE WHEN first_seen_at LIKE :today THEN 1 ELSE 0 END), 0)
                         as new_today
                 FROM offers"""
                 ),
@@ -175,11 +189,11 @@ class OfferRepository:
         return True
 
     def get_by_status(self, status: str, limit: int = 20) -> list[dict]:
-        """Get offers filtered by status, ordered by last_seen descending."""
+        """Get offers filtered by status, ordered by last_seen_at descending."""
         stmt = (
             select(Offer)
             .where(Offer.status == status)
-            .order_by(Offer.last_seen.desc())
+            .order_by(Offer.last_seen_at.desc())
             .limit(limit)
         )
         return [self._to_dict(d) for d in self.session.scalars(stmt)]
@@ -214,9 +228,9 @@ class OfferRepository:
         rows = (
             self.session.execute(
                 text(
-                    """SELECT DATE(ph.recorded_at) as day, AVG(ph.price) as avg_price
+                    """SELECT DATE(ph.recorded_at) as day, AVG(ph.price_pln) as avg_price
                 FROM price_points ph
-                JOIN offers d ON ph.deal_id = d.id
+                JOIN offers d ON ph.offer_id = d.id
                 WHERE d.category = :category AND ph.recorded_at >= :cutoff
                 GROUP BY DATE(ph.recorded_at)
                 ORDER BY day"""
@@ -254,10 +268,11 @@ class OfferRepository:
     @staticmethod
     def _to_dict(offer: Offer) -> dict:
         return {
+            # Legacy keys — preserved for template/Telegram/bot contract:
             "id": offer.id,
-            "title": offer.title,
-            "price": offer.price,
-            "link": offer.link,
+            "title": offer.raw_title,
+            "price": offer.current_price_pln,
+            "link": offer.url,
             "source": offer.source,
             "description": offer.description,
             "image_url": offer.image_url,
@@ -265,8 +280,21 @@ class OfferRepository:
             "score": offer.score,
             "category": offer.category,
             "status": offer.status,
-            "first_seen": offer.first_seen,
-            "last_seen": offer.last_seen,
+            "first_seen": offer.first_seen_at,
+            "last_seen": offer.last_seen_at,
+            # New keys — surfaced for product-aware callers:
+            "raw_title": offer.raw_title,
+            "current_price_pln": offer.current_price_pln,
+            "url": offer.url,
+            "first_seen_at": offer.first_seen_at,
+            "last_seen_at": offer.last_seen_at,
+            "product_id": offer.product_id,
+            "source_native_id": offer.source_native_id,
+            "currency_original": offer.currency_original,
+            "current_price_original": offer.current_price_original,
+            "fx_rate_used": offer.fx_rate_used,
+            "availability": offer.availability,
+            "is_active": offer.is_active,
         }
 
 
@@ -281,26 +309,28 @@ class PriceRepository:
         now = datetime.now().isoformat()
         self.session.execute(
             text(
-                "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
-                " VALUES (:deal_id, :price, :recorded_at)"
+                "INSERT OR IGNORE INTO price_points (offer_id, price_pln, recorded_at)"
+                " VALUES (:offer_id, :price_pln, :recorded_at)"
             ),
-            {"deal_id": deal_id, "price": price, "recorded_at": now},
+            {"offer_id": deal_id, "price_pln": price, "recorded_at": now},
         )
 
     def get_history(self, deal_id: str) -> list[dict]:
         """Get price history ordered chronologically."""
         stmt = (
-            select(PricePoint).where(PricePoint.deal_id == deal_id).order_by(PricePoint.recorded_at)
+            select(PricePoint)
+            .where(PricePoint.offer_id == deal_id)
+            .order_by(PricePoint.recorded_at)
         )
         return [
-            {"deal_id": p.deal_id, "price": p.price, "recorded_at": p.recorded_at}
+            {"deal_id": p.offer_id, "price": p.price_pln, "recorded_at": p.recorded_at}
             for p in self.session.scalars(stmt)
         ]
 
     def get_lowest(self, deal_id: str) -> int | None:
         """Get lowest price ever recorded for a deal."""
         result = self.session.execute(
-            select(func.min(PricePoint.price)).where(PricePoint.deal_id == deal_id)
+            select(func.min(PricePoint.price_pln)).where(PricePoint.offer_id == deal_id)
         ).scalar()
         return int(result) if result is not None else None
 
@@ -308,8 +338,8 @@ class PriceRepository:
         """Get the most recent price before the current one."""
         rows = (
             self.session.execute(
-                select(PricePoint.price)
-                .where(PricePoint.deal_id == deal_id)
+                select(PricePoint.price_pln)
+                .where(PricePoint.offer_id == deal_id)
                 .order_by(PricePoint.recorded_at.desc())
                 .limit(2)
             )
@@ -325,12 +355,12 @@ class PriceRepository:
         result: dict[str, list[dict]] = {did: [] for did in deal_ids}
         stmt = (
             select(PricePoint)
-            .where(PricePoint.deal_id.in_(deal_ids))
+            .where(PricePoint.offer_id.in_(deal_ids))
             .order_by(PricePoint.recorded_at)
         )
         for p in self.session.scalars(stmt):
-            result[p.deal_id].append(
-                {"deal_id": p.deal_id, "price": p.price, "recorded_at": p.recorded_at}
+            result[p.offer_id].append(
+                {"deal_id": p.offer_id, "price": p.price_pln, "recorded_at": p.recorded_at}
             )
         return result
 
@@ -340,9 +370,9 @@ class PriceRepository:
             return {}
         result: dict[str, int | None] = {did: None for did in deal_ids}
         rows = self.session.execute(
-            select(PricePoint.deal_id, func.min(PricePoint.price).label("lowest"))
-            .where(PricePoint.deal_id.in_(deal_ids))
-            .group_by(PricePoint.deal_id)
+            select(PricePoint.offer_id, func.min(PricePoint.price_pln).label("lowest"))
+            .where(PricePoint.offer_id.in_(deal_ids))
+            .group_by(PricePoint.offer_id)
         ).all()
         for row in rows:
             result[row[0]] = int(row[1])
@@ -359,12 +389,12 @@ class PriceRepository:
         params["limit"] = limit
         rows = self.session.execute(
             text(
-                f"SELECT deal_id, price FROM ("  # noqa: S608
-                f" SELECT deal_id, price, recorded_at,"
-                f" ROW_NUMBER() OVER (PARTITION BY deal_id ORDER BY recorded_at DESC) as rn"
+                f"SELECT offer_id, price_pln FROM ("  # noqa: S608
+                f" SELECT offer_id, price_pln, recorded_at,"
+                f" ROW_NUMBER() OVER (PARTITION BY offer_id ORDER BY recorded_at DESC) as rn"
                 f" FROM price_points"
-                f" WHERE deal_id IN ({placeholders})"
-                f") WHERE rn <= :limit ORDER BY deal_id, recorded_at"
+                f" WHERE offer_id IN ({placeholders})"
+                f") WHERE rn <= :limit ORDER BY offer_id, recorded_at"
             ),
             params,
         ).all()
@@ -393,18 +423,22 @@ class PriceRepository:
             params["profile"] = profile
 
         sql = (  # noqa: S608
-            "WITH ranked AS ( SELECT ph.deal_id, ph.price, ph.recorded_at,"  # noqa: S608
-            " LAG(ph.price) OVER (PARTITION BY ph.deal_id ORDER BY ph.recorded_at)"
+            "WITH ranked AS ( SELECT ph.offer_id, ph.price_pln, ph.recorded_at,"  # noqa: S608
+            " LAG(ph.price_pln) OVER (PARTITION BY ph.offer_id ORDER BY ph.recorded_at)"
             " as prev_price,"
-            " MIN(ph.price) OVER (PARTITION BY ph.deal_id) as lowest_price,"
-            " ROW_NUMBER() OVER (PARTITION BY ph.deal_id ORDER BY ph.recorded_at DESC)"
-            " as rn FROM price_points ph JOIN offers d ON ph.deal_id = d.id"
+            " MIN(ph.price_pln) OVER (PARTITION BY ph.offer_id) as lowest_price,"
+            " ROW_NUMBER() OVER (PARTITION BY ph.offer_id ORDER BY ph.recorded_at DESC)"
+            " as rn FROM price_points ph JOIN offers d ON ph.offer_id = d.id"
             f" WHERE 1=1 {profile_filter}"
-            ") SELECT d.*, ranked.price as new_price, ranked.prev_price,"
+            ") SELECT d.id, d.raw_title AS title, d.current_price_pln AS price,"
+            " d.url AS link, d.source, d.description, d.image_url, d.profile,"
+            " d.score, d.category, d.status,"
+            " d.first_seen_at AS first_seen, d.last_seen_at AS last_seen,"
+            " ranked.price_pln as new_price, ranked.prev_price,"
             " ranked.lowest_price, ranked.recorded_at as drop_date"
-            " FROM ranked JOIN offers d ON d.id = ranked.deal_id"
+            " FROM ranked JOIN offers d ON d.id = ranked.offer_id"
             " WHERE ranked.prev_price IS NOT NULL"
-            " AND ranked.price < ranked.prev_price"
+            " AND ranked.price_pln < ranked.prev_price"
             " AND ranked.recorded_at >= :cutoff"
             " AND ranked.rn = 1 ORDER BY ranked.recorded_at DESC"
         )
@@ -453,17 +487,17 @@ class PriceRepository:
         result = self.session.execute(
             text(
                 """WITH ranked AS (
-                    SELECT ph.deal_id, ph.price, ph.recorded_at,
-                           LAG(ph.price) OVER (
-                               PARTITION BY ph.deal_id ORDER BY ph.recorded_at
+                    SELECT ph.offer_id, ph.price_pln, ph.recorded_at,
+                           LAG(ph.price_pln) OVER (
+                               PARTITION BY ph.offer_id ORDER BY ph.recorded_at
                            ) as prev_price,
                            ROW_NUMBER() OVER (
-                               PARTITION BY ph.deal_id ORDER BY ph.recorded_at DESC
+                               PARTITION BY ph.offer_id ORDER BY ph.recorded_at DESC
                            ) as rn
                     FROM price_points ph
                 )
                 SELECT COUNT(*) FROM ranked
-                WHERE prev_price IS NOT NULL AND price < prev_price AND rn = 1
+                WHERE prev_price IS NOT NULL AND price_pln < prev_price AND rn = 1
                   AND recorded_at >= :cutoff"""
             ),
             {"cutoff": cutoff},
@@ -504,7 +538,8 @@ class WatchlistRepository:
             self.session.execute(
                 text(
                     """SELECT w.deal_id, w.target_price, w.created_at, w.triggered_at,
-                          d.title, d.price as current_price, d.link, d.source
+                          d.raw_title AS title, d.current_price_pln AS current_price,
+                          d.url AS link, d.source
                    FROM watchlist w
                    LEFT JOIN offers d ON w.deal_id = d.id
                    ORDER BY w.created_at DESC"""
@@ -521,7 +556,8 @@ class WatchlistRepository:
             self.session.execute(
                 text(
                     """SELECT w.deal_id, w.target_price, w.created_at, w.triggered_at,
-                          d.title, d.price as current_price, d.link, d.source
+                          d.raw_title AS title, d.current_price_pln AS current_price,
+                          d.url AS link, d.source
                    FROM watchlist w
                    LEFT JOIN offers d ON w.deal_id = d.id
                    WHERE w.deal_id = :deal_id"""

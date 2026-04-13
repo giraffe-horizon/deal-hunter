@@ -83,10 +83,10 @@ def migrate_file(path: Path, session, dry_run: bool = False) -> dict:
                 continue
             session.execute(
                 text(
-                    "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
-                    " VALUES (:deal_id, :price, :ts)"
+                    "INSERT OR IGNORE INTO price_points (offer_id, price_pln, recorded_at)"
+                    " VALUES (:offer_id, :price_pln, :ts)"
                 ),
-                {"deal_id": deal_id, "price": price, "ts": ts},
+                {"offer_id": deal_id, "price_pln": price, "ts": ts},
             )
             counts["prices"] += 1
 

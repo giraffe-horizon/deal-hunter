@@ -66,7 +66,7 @@ class TestDealRepositoryUpsert:
         session.flush()
         loaded = session.get(Deal, "pepper:123")
         assert loaded is not None
-        assert loaded.title == "Test Bike"
+        assert loaded.raw_title == "Test Bike"
         assert loaded.score == 80
 
     def test_update_existing_deal(self, session, deal_repo):
@@ -76,7 +76,7 @@ class TestDealRepositoryUpsert:
         session.flush()
         loaded = session.get(Deal, "pepper:123")
         assert loaded.score == 90
-        assert loaded.price == 4500
+        assert loaded.current_price_pln == 4500
 
     def test_upsert_preserves_status(self, session, deal_repo):
         """Upsert must NOT reset status to 'active' on update."""
@@ -93,22 +93,22 @@ class TestDealRepositoryUpsert:
     def test_upsert_records_initial_price(self, session, deal_repo):
         deal_repo.upsert(**_make_deal(price=5000))
         session.flush()
-        prices = session.query(PriceHistory).filter_by(deal_id="pepper:123").all()
+        prices = session.query(PriceHistory).filter_by(offer_id="pepper:123").all()
         assert len(prices) == 1
-        assert prices[0].price == 5000
+        assert prices[0].price_pln == 5000
 
     def test_upsert_records_price_change(self, session, deal_repo):
         deal_repo.upsert(**_make_deal(price=5000))
         session.flush()
         deal_repo.upsert(**_make_deal(price=4500))
         session.flush()
-        prices = session.query(PriceHistory).filter_by(deal_id="pepper:123").all()
+        prices = session.query(PriceHistory).filter_by(offer_id="pepper:123").all()
         assert len(prices) == 2
 
     def test_upsert_no_price_no_history(self, session, deal_repo):
         deal_repo.upsert(**_make_deal(price=0))
         session.flush()
-        prices = session.query(PriceHistory).filter_by(deal_id="pepper:123").all()
+        prices = session.query(PriceHistory).filter_by(offer_id="pepper:123").all()
         assert len(prices) == 0
 
 
@@ -228,8 +228,8 @@ def _seed_deal_with_prices(session, deal_id="pepper:100", prices=None):
     now = datetime.now().isoformat()
     deal = Deal(
         id=deal_id,
-        title="Price Test",
-        price=prices[-1] if prices else 1000,
+        raw_title="Price Test",
+        current_price_pln=prices[-1] if prices else 1000,
         source="pepper",
         description="",
         image_url="",
@@ -237,15 +237,15 @@ def _seed_deal_with_prices(session, deal_id="pepper:100", prices=None):
         score=80,
         category="road",
         status="active",
-        first_seen=now,
-        last_seen=now,
+        first_seen_at=now,
+        last_seen_at=now,
     )
     session.add(deal)
     session.flush()
     if prices:
         for i, p in enumerate(prices):
             ts = f"2026-04-{10 + i:02d}T10:00:00"
-            ph = PriceHistory(deal_id=deal_id, price=p, recorded_at=ts)
+            ph = PriceHistory(offer_id=deal_id, price_pln=p, recorded_at=ts)
             session.add(ph)
     session.flush()
 
@@ -354,8 +354,8 @@ def _seed_deal(session, deal_id="pepper:w1"):
     """Insert a deal for FK reference in watchlist tests."""
     deal = Deal(
         id=deal_id,
-        title="Watchlist Test",
-        price=5000,
+        raw_title="Watchlist Test",
+        current_price_pln=5000,
         source="pepper",
         description="",
         image_url="",
@@ -363,8 +363,8 @@ def _seed_deal(session, deal_id="pepper:w1"):
         score=80,
         category="road",
         status="active",
-        first_seen=datetime.now().isoformat(),
-        last_seen=datetime.now().isoformat(),
+        first_seen_at=datetime.now().isoformat(),
+        last_seen_at=datetime.now().isoformat(),
     )
     session.add(deal)
     session.flush()

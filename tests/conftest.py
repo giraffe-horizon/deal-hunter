@@ -152,17 +152,17 @@ def dashboard_session(tmp_path):
     # Price history for deal1 (two prices — enables drop detection)
     session.execute(
         text(
-            "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
-            " VALUES (:deal_id, :price, :recorded_at)"
+            "INSERT OR IGNORE INTO price_points (offer_id, price_pln, recorded_at)"
+            " VALUES (:offer_id, :price_pln, :recorded_at)"
         ),
-        {"deal_id": "pepper:99999", "price": 9500, "recorded_at": "2026-03-20T10:00:00"},
+        {"offer_id": "pepper:99999", "price_pln": 9500, "recorded_at": "2026-03-20T10:00:00"},
     )
     session.execute(
         text(
-            "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
-            " VALUES (:deal_id, :price, :recorded_at)"
+            "INSERT OR IGNORE INTO price_points (offer_id, price_pln, recorded_at)"
+            " VALUES (:offer_id, :price_pln, :recorded_at)"
         ),
-        {"deal_id": "pepper:99999", "price": 8500, "recorded_at": "2026-03-25T10:00:00"},
+        {"offer_id": "pepper:99999", "price_pln": 8500, "recorded_at": "2026-03-25T10:00:00"},
     )
 
     session.commit()

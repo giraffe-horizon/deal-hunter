@@ -49,7 +49,7 @@ def test_migrate_new_format(tmp_path, session, monkeypatch):
     seen = session.query(SeenDeal).all()
     assert len(seen) == 2
 
-    prices = session.query(PriceHistory).filter_by(deal_id="pepper:1").all()
+    prices = session.query(PriceHistory).filter_by(offer_id="pepper:1").all()
     assert len(prices) == 1
 
 
