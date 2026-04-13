@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from storage.models import Base, Deal, PriceHistory
-from storage.repositories import DealRepository
+from storage.repositories import DealRepository, PriceRepository
 
 
 @pytest.fixture
@@ -205,3 +205,130 @@ class TestDealRepositoryQuery:
         result = deal_repo.get_by_status("watching")
         assert len(result) == 1
         assert result[0]["id"] == "pepper:1"
+
+
+@pytest.fixture
+def price_repo(session):
+    return PriceRepository(session)
+
+
+def _seed_deal_with_prices(session, deal_id="pepper:100", prices=None):
+    """Insert a deal and its price history for testing."""
+    now = datetime.now().isoformat()
+    deal = Deal(
+        id=deal_id,
+        title="Price Test",
+        price=prices[-1] if prices else 1000,
+        source="pepper",
+        description="",
+        image_url="",
+        profile="bikes",
+        score=80,
+        category="road",
+        status="active",
+        first_seen=now,
+        last_seen=now,
+    )
+    session.add(deal)
+    session.flush()
+    if prices:
+        for i, p in enumerate(prices):
+            ts = f"2026-04-{10 + i:02d}T10:00:00"
+            ph = PriceHistory(deal_id=deal_id, price=p, recorded_at=ts)
+            session.add(ph)
+    session.flush()
+
+
+class TestPriceRepositoryBasic:
+    def test_record_price(self, session, price_repo):
+        _seed_deal_with_prices(session, prices=[])
+        price_repo.record("pepper:100", 5000)
+        session.flush()
+        history = price_repo.get_history("pepper:100")
+        assert len(history) == 1
+        assert history[0]["price"] == 5000
+
+    def test_get_history_chronological(self, session, price_repo):
+        _seed_deal_with_prices(session, prices=[5000, 4500, 4000])
+        history = price_repo.get_history("pepper:100")
+        assert [h["price"] for h in history] == [5000, 4500, 4000]
+
+    def test_get_lowest(self, session, price_repo):
+        _seed_deal_with_prices(session, prices=[5000, 3000, 4000])
+        assert price_repo.get_lowest("pepper:100") == 3000
+
+    def test_get_lowest_nonexistent(self, price_repo):
+        assert price_repo.get_lowest("nope:0") is None
+
+    def test_get_previous_price(self, session, price_repo):
+        _seed_deal_with_prices(session, prices=[5000, 4500, 4000])
+        assert price_repo.get_previous_price("pepper:100") == 4500
+
+    def test_get_previous_price_single_entry(self, session, price_repo):
+        _seed_deal_with_prices(session, prices=[5000])
+        assert price_repo.get_previous_price("pepper:100") is None
+
+
+class TestPriceRepositoryBatch:
+    def test_get_histories_batch(self, session, price_repo):
+        _seed_deal_with_prices(session, deal_id="p:1", prices=[100, 200])
+        _seed_deal_with_prices(session, deal_id="p:2", prices=[300])
+        result = price_repo.get_histories_batch(["p:1", "p:2"])
+        assert len(result["p:1"]) == 2
+        assert len(result["p:2"]) == 1
+
+    def test_get_histories_batch_empty(self, price_repo):
+        assert price_repo.get_histories_batch([]) == {}
+
+    def test_get_lowest_prices_batch(self, session, price_repo):
+        _seed_deal_with_prices(session, deal_id="p:1", prices=[100, 50])
+        _seed_deal_with_prices(session, deal_id="p:2", prices=[300, 200])
+        result = price_repo.get_lowest_prices_batch(["p:1", "p:2"])
+        assert result["p:1"] == 50
+        assert result["p:2"] == 200
+
+    def test_get_sparkline_data_batch(self, session, price_repo):
+        _seed_deal_with_prices(session, deal_id="p:1", prices=[100, 200, 300, 400, 500])
+        result = price_repo.get_sparkline_data_batch(["p:1"], limit=3)
+        assert len(result["p:1"]) == 3
+
+
+class TestPriceRepositoryDrops:
+    """Tests for get_drops() — the N+1 fix using window functions."""
+
+    @pytest.fixture(autouse=True)
+    def _seed(self, session):
+        # Deal with price drop: 5000 -> 4000
+        _seed_deal_with_prices(session, deal_id="p:drop", prices=[5000, 4000])
+        # Deal with price increase: 3000 -> 4000
+        _seed_deal_with_prices(session, deal_id="p:up", prices=[3000, 4000])
+        # Deal with single price (no change)
+        _seed_deal_with_prices(session, deal_id="p:flat", prices=[2000])
+
+    def test_finds_drops(self, price_repo):
+        drops = price_repo.get_drops(days=30)
+        drop_ids = [d["id"] for d in drops]
+        assert "p:drop" in drop_ids
+        assert "p:up" not in drop_ids
+        assert "p:flat" not in drop_ids
+
+    def test_drop_fields(self, price_repo):
+        drops = price_repo.get_drops(days=30)
+        drop = next(d for d in drops if d["id"] == "p:drop")
+        assert drop["old_price"] == 5000
+        assert drop["new_price"] == 4000
+        assert drop["diff_pln"] == 1000
+        assert drop["diff_percent"] == 20.0
+        assert "is_lowest_ever" in drop
+
+    def test_count_drops(self, price_repo):
+        assert price_repo.count_drops(days=30) >= 1
+
+    def test_drops_with_profile_filter(self, price_repo):
+        drops = price_repo.get_drops(days=30, profile="bikes")
+        # All seeded deals have profile "bikes"
+        assert len(drops) >= 1
+
+    def test_drops_with_min_percent_filter(self, price_repo):
+        drops = price_repo.get_drops(days=30, min_drop_percent=50)
+        assert len(drops) == 0  # 20% drop doesn't meet 50% threshold
