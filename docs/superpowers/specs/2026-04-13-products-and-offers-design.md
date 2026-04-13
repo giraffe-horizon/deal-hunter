@@ -1,142 +1,142 @@
-# Products & Offers — przejście z modelu "feed okazji" na "produkty + oferty"
+# Products & Offers — migrating from "deal feed" to "products with pinned offers"
 
-**Data:** 2026-04-13
-**Status:** design (zatwierdzony przez usera po dialogu pytanie-po-pytaniu)
-**Cel:** ewolucyjne przekształcenie deal-huntera z dashboardu okazji (per-Deal) w dashboard produktowy (per-Product) z historią cen cross-source i pinowanymi ofertami.
+**Date:** 2026-04-13
+**Status:** design (approved by user through Q&A dialog)
+**Goal:** evolutionary transformation of deal-hunter from a per-Deal feed dashboard into a per-Product dashboard with cross-source price history and pinned offers.
 
-## Kontekst
+## Context
 
-Obecnie deal-hunter zbiera okazje głównie z Peppera, Ceneo i kilku sklepów YAML (proshop, x-kom, morele) oraz RSS Allegro. Każda okazja to rekord `Deal` z unikalnym `id = "{source}:{native_id}"`. Dashboard pokazuje listę tych dealów jako feed.
+Deal-hunter currently collects deals mainly from Pepper, Ceneo, and a few YAML-based stores (proshop, x-kom, morele) plus Allegro RSS. Each deal is a `Deal` record with unique `id = "{source}:{native_id}"`. The dashboard shows a feed of these deals.
 
-Docelowy model:
-- ten sam produkt z różnych źródeł jest zgrupowany,
-- produkt ma swoją historię ceny cross-source,
-- produkt ma wiele aktywnych ofert z linkami,
-- obecne "deals" stają się **eventami** (new_listing, price_drop, back_in_stock) podpiętymi do produktu.
+Target model:
+- the same product from different sources is grouped,
+- a product has its own cross-source price history,
+- a product has multiple active offers with links,
+- existing "deals" become **events** (new_listing, price_drop, back_in_stock) pinned to products.
 
-**Główne ryzyko projektowe:** entity resolution. False merge (scalenie dwóch różnych produktów w jeden) jest gorszy niż brak merge (pozostawienie osobno). Matching musi być konserwatywny i warstwowy.
+**Primary design risk:** entity resolution. A false merge (combining two different products into one) is worse than a missing merge (leaving them separate). Matching must be conservative and layered.
 
-## Zasady
+## Principles
 
-- Ewolucja, nie rewrite. Strangler pattern z feature flagą `PRODUCT_MODEL_ENABLED`.
-- False merge > brak merge: progi auto-merge wysokie (0.90+ dla L2), `required_match_attrs` per kategoria jako twarda blokada.
-- Rozdzielamy **raw/source-specific title** (w Offer/Deal, nigdy nie nadpisywane) od **normalized title** (w Product, generowany przez normalizer).
-- Wariant = osobny Product. Family odkładamy (tylko string-field `attributes.family_key`).
-- Matching ograniczony do jednej `category` (jedna twarda bariera cross-profile).
+- Evolution, not rewrite. Strangler pattern with feature flag `PRODUCT_MODEL_ENABLED`.
+- False merge > missing merge: high auto-merge thresholds (0.90+ for L2), `required_match_attrs` per category as a hard blocker.
+- Keep **raw/source-specific title** (in Offer/Deal, never overwritten) separate from **normalized title** (in Product, produced by the normalizer).
+- Variant = separate Product. Family deferred (only `attributes.family_key` string).
+- Matching limited to a single `category` (hard cross-profile barrier).
 
 ---
 
-## 1. Architektura domenowa
+## 1. Domain architecture
 
-### Encje
+### Entities
 
-- **Product** — kanoniczna reprezentacja konkretnego wariantu/SKU (jeden rozmiar roweru, jedna pojemność HDD). Nosi znormalizowany tytuł, markę, model, atrybuty strukturalne, status review, confidence ostatniego matchu, metadane audytowe. Primary key: UUID. Bez slugów, URL w dashboardzie to `/products/{uuid}`.
-- **ProductAlias** — każdy znany identyfikator zewnętrzny mapujący na Product (EAN, ASIN, MPN, SKU sklepu, canonical URL, `ceneo_group_id`, `manual_merge_key`). Główny nośnik pewności — matcher woli dokleić alias niż przeciągać tytuł.
-- **Offer** — aktywna oferta z jednego źródła, tożsamościowo stabilna w czasie. Jeden URL/`source_native_id` przez cały cykl życia, zmienia się `current_price` i `availability`. Trzyma `raw_title`, extracted `attributes_hint`, metadane czasowe.
-- **OfferPayloadHistory** — osobna tabela z ostatnimi N=10 snapshotami raw_payload per Offer (FIFO). Do debugowania i forensyki przy false merge.
-- **Deal** (istniejąca encja, ewolucja semantyczna) — zdarzenie punktowe/alert: `new_listing`, `price_drop`, `price_increase`, `back_in_stock`, `expiring`. Ma FK do Offer i denormalizowane FK do Product (dla szybkich query). Format `id = "{source}:{native_id}"` **zachowany** (wymagane przez feedback_bot callback_data i systemd).
-- **PricePoint** — punkt ceny per Offer z cross-source agregacją przez `product_id`. Przechowuje `price_pln`, `price_original`, `currency_original`, `fx_rate_used`, `recorded_at`, `availability`.
-- **MatchReview** — element kolejki ręcznej weryfikacji: offer bez pewnego matchu + top-N kandydatów z confidence + reason + priority.
-- **MatchDecision** — log audytowy każdej decyzji matchera (auto L1/L2/L3, manual approve/reject/split/merge) z sygnałami które zadecydowały.
+- **Product** — canonical representation of a specific variant/SKU (one bike size, one HDD capacity). Carries normalized title, brand, model, structural attributes, review status, last match confidence, audit metadata. Primary key: UUID. No slugs — dashboard URL is `/products/{uuid}`.
+- **ProductAlias** — any known external identifier mapping to a Product (EAN, ASIN, MPN, store SKU, canonical URL, `ceneo_group_id`, `manual_merge_key`). Primary carrier of certainty — matcher prefers attaching an alias over dragging title similarity.
+- **Offer** — active offer from a single source, identity-stable over time. One URL/`source_native_id` lives for its whole lifecycle; `current_price` and `availability` change. Holds `raw_title`, extracted `attributes_hint`, time metadata.
+- **OfferPayloadHistory** — separate table with the last N=10 raw_payload snapshots per Offer (FIFO). Used for debugging and forensics on false merges.
+- **Deal** (existing entity, semantic evolution) — point-in-time event/alert: `new_listing`, `price_drop`, `price_increase`, `back_in_stock`, `expiring`. Has FK to Offer and denormalized FK to Product (for fast queries). Format `id = "{source}:{native_id}"` **preserved** (required by feedback_bot callback_data and systemd units).
+- **PricePoint** — price point per Offer with cross-source aggregation via `product_id`. Stores `price_pln`, `price_original`, `currency_original`, `fx_rate_used`, `recorded_at`, `availability`.
+- **MatchReview** — manual review queue entry: offer without confident match + top-N candidates with confidence + reason + priority.
+- **MatchDecision** — audit log of every matcher decision (auto L1/L2/L3, manual approve/reject/split/merge) with the signals that drove it.
 
-### Relacje
+### Relationships
 
 - Product 1:N ProductAlias, 1:N Offer, 1:N PricePoint, 1:N Deal
-- Offer 1:N Deal (eventy w czasie), 1:N PricePoint, 1:N OfferPayloadHistory
+- Offer 1:N Deal (events over time), 1:N PricePoint, 1:N OfferPayloadHistory
 - MatchReview N:1 Offer, M:N (suggested) Product
 
-### Historia cen
+### Price history
 
 - Source of truth: PricePoint per Offer.
-- Denormalizacja `product_id` w PricePoint → jednym query składamy cross-source timeline produktu.
-- "Najniższa cena kiedykolwiek" = MIN(price_pln) WHERE product_id = X.
-- Cena **nie jest** sygnałem matchu (różna z definicji).
-- Przy różnych walutach oryginalnych: próg alertu (`min_drop_percent`, `min_drop_amount`) liczymy na `price_original` gdy waluta się nie zmieniła — unikamy false alertów z ruchu kursu FX.
+- `product_id` denormalized in PricePoint → single query to assemble a cross-source product timeline.
+- "Lowest price ever" = MIN(price_pln) WHERE product_id = X.
+- Price is **not** a match signal (differs by definition).
+- With different original currencies: alert threshold (`min_drop_percent`, `min_drop_amount`) computed on `price_original` when currency has not changed — avoids false alerts driven by FX movement.
 
 ---
 
-## 2. Model danych (SQLite)
+## 2. Data model (SQLite)
 
 ### products
 
-| pole | typ | uwagi |
+| column | type | notes |
 |---|---|---|
 | id | TEXT PK | UUID v4 |
-| canonical_title | TEXT NOT NULL | znormalizowany |
+| canonical_title | TEXT NOT NULL | normalized |
 | brand | TEXT | nullable, indexed |
 | model | TEXT | nullable, indexed |
-| category | TEXT NOT NULL | spójne z profile (bikes, nas_hdd, ...) |
+| category | TEXT NOT NULL | aligned with profile (bikes, nas_hdd, ...) |
 | attributes | JSON NOT NULL | {size, frame_color, year, capacity_tb, form_factor, family_key, ...} |
 | canonical_image_url | TEXT | |
 | review_status | TEXT NOT NULL | enum: `auto` \| `confirmed` \| `needs_review` \| `rejected` |
-| confidence_score | REAL | ostatni score matchu który to utworzył |
-| merged_from | JSON | lista id produktów zmerge'owanych w ten (audit) |
+| confidence_score | REAL | last match score that produced this row |
+| merged_from | JSON | list of product ids merged into this one (audit) |
 | archived | INTEGER NOT NULL DEFAULT 0 | soft-delete |
 | created_at | TEXT NOT NULL | ISO |
 | updated_at | TEXT NOT NULL | ISO |
 
-Indeksy: `(brand, model)`, `(category)`, FTS5 na `canonical_title`, `(archived, updated_at)`.
+Indexes: `(brand, model)`, `(category)`, FTS5 on `canonical_title`, `(archived, updated_at)`.
 
 ### product_aliases
 
-| pole | typ | uwagi |
+| column | type | notes |
 |---|---|---|
 | id | INTEGER PK | |
 | product_id | TEXT FK NOT NULL | ON DELETE CASCADE |
 | identifier_type | TEXT NOT NULL | enum: `ean` \| `asin` \| `mpn` \| `sku` \| `canonical_url` \| `source_native_id` \| `ceneo_group_id` \| `manual_merge_key` |
 | identifier_value | TEXT NOT NULL | |
-| source | TEXT | NULL dla globalnych (ean/asin/mpn) |
+| source | TEXT | NULL for global (ean/asin/mpn) |
 | confidence | REAL NOT NULL | |
 | created_by | TEXT NOT NULL | `auto` \| `manual` |
 | created_at | TEXT NOT NULL | |
 
-Unikalność: `UNIQUE (identifier_type, identifier_value, COALESCE(source, ''))`. Indeks na `product_id`.
+Uniqueness: `UNIQUE (identifier_type, identifier_value, COALESCE(source, ''))`. Index on `product_id`.
 
 ### offers
 
-| pole | typ | uwagi |
+| column | type | notes |
 |---|---|---|
 | id | INTEGER PK | |
-| product_id | TEXT FK | NULL dozwolone (przed matchem) |
+| product_id | TEXT FK | NULL allowed (before match) |
 | source | TEXT NOT NULL | |
-| source_native_id | TEXT NOT NULL | id ze źródła, dla wariantów z suffixem `#size=54` |
+| source_native_id | TEXT NOT NULL | source id; variants use suffix `#size=54` |
 | url | TEXT NOT NULL | |
-| raw_title | TEXT NOT NULL | nigdy nie nadpisywane |
-| current_price_pln | INTEGER | grosze, konwersja z NBP |
-| current_price_original | INTEGER | grosze/centów w oryginalnej walucie |
+| raw_title | TEXT NOT NULL | never overwritten |
+| current_price_pln | INTEGER | smallest unit (grosz), converted via NBP |
+| current_price_original | INTEGER | smallest unit in original currency |
 | currency_original | TEXT NOT NULL DEFAULT 'PLN' | |
-| fx_rate_used | REAL | NULL dla PLN |
+| fx_rate_used | REAL | NULL for PLN |
 | availability | TEXT | `in_stock` \| `out_of_stock` \| `unknown` |
-| attributes_hint | JSON | wyekstraktowane przed matchem |
+| attributes_hint | JSON | extracted pre-match |
 | first_seen_at | TEXT NOT NULL | |
 | last_seen_at | TEXT NOT NULL | |
 | is_active | INTEGER NOT NULL | 0/1 |
 
-Unikalność: `UNIQUE (source, source_native_id)`, `UNIQUE (source, url)`. Indeksy: `product_id`, `last_seen_at`, `(source, is_active)`.
+Uniqueness: `UNIQUE (source, source_native_id)`, `UNIQUE (source, url)`. Indexes: `product_id`, `last_seen_at`, `(source, is_active)`.
 
 ### offer_payload_history
 
-| pole | typ | uwagi |
+| column | type | notes |
 |---|---|---|
 | id | INTEGER PK | |
 | offer_id | INTEGER FK NOT NULL | ON DELETE CASCADE |
-| raw_payload | JSON NOT NULL | snapshot scrape'a |
+| raw_payload | JSON NOT NULL | scrape snapshot |
 | captured_at | TEXT NOT NULL | ISO |
 
-Retencja: max 10 rekordów per `offer_id`, FIFO. Cleanup inline przy każdym `touch_offer` lub w cron.
+Retention: max 10 rows per `offer_id`, FIFO. Cleanup inline on every `touch_offer` or via cron.
 
-### deals (rozszerzenie istniejącej)
+### deals (extension of existing)
 
-Dodawane kolumny (wszystkie `NULL` dozwolone dla backward compat):
+Added columns (all `NULL`-allowed for backward compat):
 - `offer_id` INTEGER FK
 - `product_id` TEXT FK
 - `event_type` TEXT DEFAULT `'new_listing'` — enum: `new_listing` \| `price_drop` \| `price_increase` \| `back_in_stock` \| `expiring`
 
-**Format `id = "{source}:{native_id}"` zachowany** (callback_data feedback_bota, systemd, CLI).
+**Format `id = "{source}:{native_id}"` preserved** (feedback_bot callback_data, systemd, CLI).
 
-### price_history (rozszerzenie istniejącej)
+### price_history (extension of existing)
 
-Dodawane kolumny:
+Added columns:
 - `offer_id` INTEGER FK
 - `product_id` TEXT FK
 - `price_pln` INTEGER
@@ -145,409 +145,409 @@ Dodawane kolumny:
 - `fx_rate_used` REAL
 - `availability` TEXT
 
-Indeksy: `(offer_id, recorded_at DESC)`, `(product_id, recorded_at DESC)`.
+Indexes: `(offer_id, recorded_at DESC)`, `(product_id, recorded_at DESC)`.
 
 ### match_reviews
 
-| pole | typ | uwagi |
+| column | type | notes |
 |---|---|---|
 | id | INTEGER PK | |
 | offer_id | INTEGER FK NOT NULL | |
-| candidate_product_id | TEXT FK | NULL gdy brak kandydata |
-| suggested_products | JSON | top-N kandydatów z confidence |
+| candidate_product_id | TEXT FK | NULL when no candidate |
+| suggested_products | JSON | top-N candidates with confidence |
 | best_confidence | REAL | |
-| reason | TEXT | np. `"fuzzy_only:brand_unknown"`, `"L2_borderline:size_null_on_candidate"` |
+| reason | TEXT | e.g. `"fuzzy_only:brand_unknown"`, `"L2_borderline:size_null_on_candidate"` |
 | status | TEXT NOT NULL | `pending` \| `approved` \| `rejected` \| `auto_resolved` \| `superseded` \| `audit_sample` |
-| priority | INTEGER NOT NULL | wyliczony: `score + (temp/20 jeśli Pepper) + (5 jeśli w budżecie)` |
+| priority | INTEGER NOT NULL | computed: `score + (temp/20 if Pepper) + (5 if within budget)` |
 | decided_by | TEXT | |
 | decided_at | TEXT | |
 | created_at | TEXT NOT NULL | |
 
-Indeksy: `(status, priority DESC)`, `offer_id`.
+Indexes: `(status, priority DESC)`, `offer_id`.
 
 ### match_decisions (audit log)
 
-| pole | typ | uwagi |
+| column | type | notes |
 |---|---|---|
 | id | INTEGER PK | |
 | offer_id | INTEGER FK | |
 | product_id | TEXT FK | |
 | decision_type | TEXT NOT NULL | `auto_hard_id` \| `auto_strong` \| `auto_fuzzy` \| `manual_approve` \| `manual_reject` \| `manual_split` \| `manual_merge` |
 | confidence | REAL | |
-| signals | JSON | sygnały które zadecydowały (co matchnęło, co odrzuciło) |
-| actor | TEXT NOT NULL | `auto` \| nazwa użytkownika (na razie `"local"`) |
+| signals | JSON | signals that drove the decision (what matched, what rejected) |
+| actor | TEXT NOT NULL | `auto` \| user name (for now `"local"`) |
 | created_at | TEXT NOT NULL | |
-| undo_snapshot | JSON | snapshot pre-change dla undo w oknie 7 dni |
+| undo_snapshot | JSON | pre-change snapshot for 7-day undo window |
 
-Indeksy: `(offer_id)`, `(product_id)`, `(created_at)`.
+Indexes: `(offer_id)`, `(product_id)`, `(created_at)`.
 
 ### fx_rates
 
-| pole | typ | uwagi |
+| column | type | notes |
 |---|---|---|
-| currency | TEXT PK | kod waluty (EUR, USD, ...) |
-| rate_to_pln | REAL NOT NULL | kurs |
+| currency | TEXT PK | currency code (EUR, USD, ...) |
+| rate_to_pln | REAL NOT NULL | rate |
 | fetched_at | TEXT NOT NULL | ISO |
-| table_no | TEXT | numer tabeli NBP (audit) |
+| table_no | TEXT | NBP table number (audit) |
 
-Aktualizacja: cron `scripts/fetch_fx_rates.py` raz dziennie. Fallback przy downtime: używamy ostatniego rekordu z logiem ostrzeżenia gdy `fetched_at` > 48h.
+Refresh: cron `scripts/fetch_fx_rates.py` once daily. Fallback on downtime: reuse last row and emit warning log when `fetched_at` > 48h.
 
-### Pola obowiązkowe (walidacja wejściowa)
+### Required fields (input validation)
 
 - Product: `id, canonical_title, category, attributes, review_status, created_at, updated_at`.
 - Offer: `source, source_native_id, url, raw_title, currency_original, first_seen_at, last_seen_at, is_active`.
 - ProductAlias: `product_id, identifier_type, identifier_value, confidence, created_by, created_at`.
-- MatchDecision: `decision_type, actor, created_at` (oraz jeden z `offer_id`/`product_id`).
+- MatchDecision: `decision_type, actor, created_at` (plus one of `offer_id`/`product_id`).
 
 ---
 
-## 3. Strategia matchowania
+## 3. Matching strategy
 
 ### Pipeline
 
-Idzie od najsilniejszego do najsłabszego, zatrzymuje się na pierwszej decyzji.
+Runs from strongest to weakest signal; stops at the first decision.
 
-**L1 — Twarde identyfikatory (confidence = 1.0, auto-match, bez review)**
-- Offer ma EAN/ASIN/MPN, istnieje ProductAlias o takiej wartości → match.
-- Canonical URL offer'a pasuje do `canonical_url` w ProductAlias (per source) → match.
-- `(source, source_native_id)` już znane → match idempotentny (kolejny refresh).
-- Brak manualnego `manual_reject` w match_decisions dla tej pary (negative evidence).
+**L1 — Hard identifiers (confidence = 1.0, auto-match, no review)**
+- Offer has EAN/ASIN/MPN and a matching ProductAlias → match.
+- Offer canonical URL matches `canonical_url` in ProductAlias (per source) → match.
+- `(source, source_native_id)` already known → idempotent match (subsequent refresh).
+- No manual `manual_reject` in match_decisions for this pair (negative evidence).
 
-**L2 — Mocne dopasowanie (confidence 0.85–0.98)**
-- Wymaga niepustego `brand` i `model` w `attributes_hint`.
-- Wymaga 100% zgodności `required_match_attrs` dla kategorii (patrz poniżej).
-- Klucz blokujący: `(brand, model, category)` — zawęża kandydatów.
-- Metryka: `token_set_ratio` znormalizowanego tytułu (rapidfuzz) ≥ 0.90.
-- **`ceneo_group_id` jako sygnał L2** (nie L1) — jeśli Ceneo zgrupowało X z grupą Y, traktujemy to jak mocny sygnał, ale nadal wymaga zgodności `required_match_attrs`. Confidence bazowa 0.92.
-- Próg auto: ≥ 0.90 i zero sprzeczności → auto-match.
-- 0.85–0.90 → kolejka review.
-- Sprzeczność wartości w `required_match_attrs` (obie strony wypełnione i różne) → **brak matchu, nie review** — tworzymy nowy Product.
-- Null po jednej stronie `required_match_attrs` → **brak matchu, nie review** (nie rozluźniamy dla atrybutów obligatoryjnych).
+**L2 — Strong match (confidence 0.85–0.98)**
+- Requires non-empty `brand` and `model` in `attributes_hint`.
+- Requires 100% agreement on `required_match_attrs` for the category (see below).
+- Blocking key: `(brand, model, category)` — narrows candidates.
+- Metric: `token_set_ratio` of normalized title (rapidfuzz) ≥ 0.90.
+- **`ceneo_group_id` as an L2 signal** (not L1) — if Ceneo groups offer X with group Y, treat as a strong signal but still require `required_match_attrs` agreement. Base confidence 0.92.
+- Auto threshold: ≥ 0.90 and zero contradictions → auto-match.
+- 0.85–0.90 → review queue.
+- Contradiction on `required_match_attrs` (both sides populated and different) → **no match, no review** — create a new Product.
+- Null on one side of `required_match_attrs` → **no match, no review** (we do not relax obligatory attributes).
 
-**L3 — Słabe dopasowanie (confidence 0.60–0.84)**
-- FTS5 + rapidfuzz na korpusie, brak pewnego brand/model.
-- Zawsze kolejka review, nigdy auto-merge.
-- Zapisujemy top-3 kandydatów w `suggested_products`.
+**L3 — Weak match (confidence 0.60–0.84)**
+- FTS5 + rapidfuzz across the corpus, no confident brand/model.
+- Always routes to review queue, never auto-merges.
+- Top-3 candidates stored in `suggested_products`.
 
-**L4 — Brak matchu (confidence < 0.60)**
-- Tworzymy nowy Product z `attributes_hint`, `review_status = auto`.
-- Post-MVP: background sweep okresowo re-matchuje te produkty.
+**L4 — No match (confidence < 0.60)**
+- Create a new Product from `attributes_hint`, `review_status = auto`.
+- Post-MVP: background sweep periodically re-matches these.
 
-### required_match_attrs per kategoria
+### required_match_attrs per category
 
-Deklaratywne w profile YAML jako `required_match_attrs:`:
+Declared in profile YAML as `required_match_attrs:`:
 
 - **bikes**: `size`, `frame_color`, `year`
 - **nas_hdd**: `capacity_tb`, `form_factor`
 
-Dla innych profili (nieustalone w tym momencie) — ustalane per profil przy implementacji. Walidator `utils/validation.py` wymaga zdefiniowania listy (może być pusta — ale świadomie).
+For other profiles (not decided at this time) — defined per profile during implementation. `utils/validation.py` must require an explicit list (empty allowed — but conscious).
 
-### Reguły merge vs no-merge
+### Merge vs no-merge rules
 
-- Sprzeczność `required_match_attrs` **zawsze blokuje** merge (nawet przy token_set_ratio 1.0).
-- Auto-merge wymaga confidence ≥ 0.90; auto-split nie istnieje (tylko manualny).
-- Negative evidence ("sticky no"): para `(offer_id, product_id)` z manualnym `reject` nie jest więcej proponowana.
-- Cena i source nie są sygnałami matchu.
-- Cross-category matching zablokowany (twarda bariera).
+- A contradiction on `required_match_attrs` **always blocks** a merge (even at token_set_ratio 1.0).
+- Auto-merge requires confidence ≥ 0.90; auto-split does not exist (manual only).
+- Negative evidence ("sticky no"): a pair `(offer_id, product_id)` with manual `reject` is never proposed again.
+- Price and source are not match signals.
+- Cross-category matching is blocked (hard barrier).
 
-### Warianty
+### Variants
 
-- Wariant = osobny Product. Konserwatywnie.
-- N Offerów per wariant gdy strona sklepu ma jeden URL z selectorem rozmiaru. Suffix w `source_native_id`: `proshop:12345#size=54`, `proshop:12345#size=56`.
-- Grupowanie rodziny: `attributes.family_key` (string wyliczany z brand+model+year). Encja `ProductFamily` poza MVP.
+- Variant = separate Product. Conservative by default.
+- N Offers per variant when a store page exposes a single URL with a size selector. Suffix in `source_native_id`: `proshop:12345#size=54`, `proshop:12345#size=56`.
+- Family grouping: `attributes.family_key` (string computed from brand+model+year). `ProductFamily` entity is out of MVP scope.
 
-### Obrona przed false merge
+### Defenses against false merge
 
-- Wysokie progi auto (L2 ≥ 0.90 + 100% required attrs).
-- Canary audit: co tydzień sampluj 20 auto-L2 matchów do `match_reviews` ze statusem `audit_sample` do manualnego przeglądu. Metryka `precision@L2`.
-- Alert tygodniowy gdy `false_merge_rate > 0.5%` → gate na cutover.
-- Undo dla każdej decyzji w oknie 7 dni — `match_decisions.undo_snapshot` przywraca stan products + aliases.
+- High auto thresholds (L2 ≥ 0.90 + 100% required attrs agreement).
+- Canary audit: each week sample 20 auto-L2 matches into `match_reviews` with status `audit_sample` for manual review. Metric: `precision@L2`.
+- Weekly alert when `false_merge_rate > 0.5%` → cutover gate.
+- Undo per decision within a 7-day window — `match_decisions.undo_snapshot` restores products + aliases state.
 
 ### Manual review queue
 
-- Widok `/review` sortowany po `priority DESC`.
-- Priority = `deal_score + (temperature/20 jeśli Pepper) + (5 jeśli w budżecie)`.
-- Dla każdego wpisu: offer (raw_title, zdjęcie, cena, źródło) + top-3 kandydatów z confidence + akcje: `approve_as`, `reject_create_new`, `merge_products`, `skip`.
-- Każda decyzja → `match_decisions` + opcjonalne nowe `product_aliases` typu `manual_merge_key` (next time L1 match).
+- `/review` view sorted by `priority DESC`.
+- Priority = `deal_score + (temperature/20 if Pepper) + (5 if within budget)`.
+- Per row: offer (raw_title, image, price, source) + top-3 candidates with confidence + actions: `approve_as`, `reject_create_new`, `merge_products`, `skip`.
+- Every decision → `match_decisions` + optional new `product_aliases` of type `manual_merge_key` (next time L1 matches).
 
-### Konwersja walut (nowe w MVP)
+### Currency conversion (new in MVP)
 
-- Kurs NBP pobierany raz dziennie (endpoint `https://api.nbp.pl/api/exchangerates/tables/A/`).
-- Cache w SQLite: nowa tabela `fx_rates (currency TEXT PK, rate_to_pln REAL, fetched_at TEXT, table_no TEXT)`. Fallback: ostatni znany kurs gdy NBP down, z logiem ostrzeżenia.
-- PricePoint zapisuje `price_original` + `currency_original` + `price_pln` + `fx_rate_used`.
-- Alert price_drop liczony na `price_original` gdy waluta się nie zmieniła (uniknięcie false alertów z FX). Jeśli waluta się zmieniła (rzadkie) — liczymy na `price_pln` z notą w audit.
+- NBP rate fetched once daily (endpoint `https://api.nbp.pl/api/exchangerates/tables/A/`).
+- Cached in SQLite `fx_rates` table (see schema). Fallback: last known rate when NBP is down, with a warning log.
+- PricePoint stores `price_original` + `currency_original` + `price_pln` + `fx_rate_used`.
+- Price-drop alert computed on `price_original` when currency has not changed (prevents FX-driven false alerts). If currency changed (rare) — compute on `price_pln` with an audit note.
 
 ---
 
-## 4. Plan migracji
+## 4. Migration plan
 
 Strangler pattern, feature flag `PRODUCT_MODEL_ENABLED`, dual-write, single-read-old → dual-read → cutover.
 
-**Faza 0 — schema tylko**
-- `scripts/migrate_add_products_schema.py` — idempotentny: `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN` pojedynczo z try/except.
-- Zero zmian w kodzie pisania.
+**Phase 0 — schema only**
+- `scripts/migrate_add_products_schema.py` — idempotent: `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN` one at a time with try/except.
+- No write-path code changes.
 
-**Faza 1 — dual-write Offer**
-- Ingest tworzy/aktualizuje Offer i OfferPayloadHistory równolegle z Deal. Product = NULL.
-- User nic nie widzi.
+**Phase 1 — dual-write Offer**
+- Ingest creates/updates Offer and OfferPayloadHistory alongside Deal. Product = NULL.
+- User sees nothing.
 
-**Faza 2 — backfill Products**
-- `scripts/backfill_products.py` iteruje po Offer bez `product_id`, uruchamia L1+L2 pipeline, tworzy Product tam gdzie brak matchu.
-- Log do `match_decisions`. Skrypt wznawialny (checkpoint po batchach).
-- Po backfillu: `offers.product_id` wypełnione ≥ 95%.
+**Phase 2 — backfill Products**
+- `scripts/backfill_products.py` iterates Offers without `product_id`, runs L1+L2 pipeline, creates Product where no match exists.
+- Logs to `match_decisions`. Script is resumable (checkpointed per batch).
+- After backfill: `offers.product_id` populated ≥ 95%.
 
-**Faza 3 — dual-read dashboard**
-- `/products` za flagą (env / query `?view=products`). `/deals` nadal domyślny. User porównuje.
+**Phase 3 — dual-read dashboard**
+- `/products` behind a flag (env / query `?view=products`). `/deals` still default. User compares.
 
-**Faza 4 — cutover**
-- `PRODUCT_MODEL_ENABLED=true` default. `/deals` jako legacy/redirect do `/events`.
-- Telegram alert nadal per Deal (event), z dodatkowym przyciskiem "Produkt".
+**Phase 4 — cutover**
+- `PRODUCT_MODEL_ENABLED=true` becomes default. `/deals` becomes legacy / redirects to `/events`.
+- Telegram alerts still per Deal (event), with an extra "Product" button.
 
-**Faza 5 — cleanup (opcjonalne, po ~1 miesiącu)**
-- Usunięcie martwego kodu, legacy templatów.
+**Phase 5 — cleanup (optional, ~1 month later)**
+- Remove dead code, legacy templates.
 
-### Kompatybilność wsteczna (twarde gwarancje)
+### Backward compatibility (hard guarantees)
 
-- Format `Deal.id = "{source}:{native_id}"` zachowany — feedback_bot callback_data, CLI `--price-chart "pepper:12345"`, systemd timery — działają bez zmian.
-- Watchlista: migracja dopisuje `product_id` (gdzie znane), `deal_id` zostaje. Nowe obserwowanie na poziomie produktu, stare na poziomie deal_id nadal działa.
-- Stare deale bez `offer_id`/`product_id`: dalej widoczne jako "legacy, unmatched", nie ukrywane.
+- `Deal.id = "{source}:{native_id}"` format preserved — feedback_bot callback_data, CLI `--price-chart "pepper:12345"`, systemd timers — all work unchanged.
+- Watchlist: migration adds `product_id` where known, `deal_id` stays. New subscriptions use product level; existing deal-id subscriptions continue to work.
+- Old deals without `offer_id`/`product_id`: remain visible as "legacy, unmatched", not hidden.
 
-### Migracja danych historycznych
+### Historical data migration
 
-- Dla każdej oferty: Offer odtworzona z agregacji deals (`first_seen_at = min(deal.created_at)`, `last_seen_at = max(deal.created_at)`, `raw_title = najnowszy`).
-- Historia cen: zachowana tam gdzie była w `price_history`. Brak rekonstrukcji cen z dealów (akceptujemy).
+- For each offer: Offer reconstructed from deals aggregation (`first_seen_at = min(deal.created_at)`, `last_seen_at = max(deal.created_at)`, `raw_title = most recent`).
+- Price history: preserved where it existed in `price_history`. No reconstruction of prices from deals (accepted).
 
 ### Dual-write vs adapter
 
-Dual-write, bo zapis jest rzadki (crony co 30min), a spójność odczytu na obu modelach krytyczna dla pewności cutoveru.
+Dual-write, because writes are infrequent (crons every 30min) and read consistency on both models is critical for cutover confidence.
 
 ---
 
-## 5. Etapy implementacji
+## 5. Implementation phases
 
-### Faza A — Schema + dual-write Offer
+### Phase A — Schema + dual-write Offer
 
-- **Cel:** nowe tabele istnieją, każdy nowy ingest tworzy/odświeża Offer + OfferPayloadHistory.
-- **Zakres:** migracja schema; `storage/sqlite.py` (nowe metody `upsert_offer`, `touch_offer`, `append_payload_history`, cleanup N=10); hook w ingest pipeline w `deal_hunter.py`.
-- **Zależności:** brak.
-- **Ryzyka:** migracje SQLite (ALTER), integralność przy równoczesnych crony.
-- **DoD:** testy integracyjne: new deal → Offer record; `UNIQUE` constraints; stare flow niezmienione; rollback migracji przetestowany; OfferPayloadHistory ograniczona do N=10.
+- **Goal:** new tables exist; every new ingest creates/refreshes Offer + OfferPayloadHistory.
+- **Scope:** schema migration; `storage/sqlite.py` (new methods `upsert_offer`, `touch_offer`, `append_payload_history`, N=10 cleanup); hook in ingest pipeline in `deal_hunter.py`.
+- **Dependencies:** none.
+- **Risks:** SQLite migrations (ALTER), concurrent-cron write integrity.
+- **DoD:** integration tests: new deal → Offer row; `UNIQUE` constraints hold; old flow unchanged; migration rollback tested; OfferPayloadHistory capped at N=10.
 
-### Faza B — Extractor atrybutów + identyfikatorów + FX
+### Phase B — Attribute + identifier extractor + FX
 
-- **Cel:** dla każdej offery ekstraktujemy `brand, model, attributes_hint` i gdzie się da `ean, sku, canonical_url, mpn, ceneo_group_id`. NBP fetcher działa.
-- **Zakres:** nowy moduł `matching/extractor.py` + `matching/normalizer.py`. Rozszerzenie `stores/*.yaml` o sekcje `identifiers:` i `attributes:`. Walidacja w `utils/validation.py`. Moduł `fx/nbp.py` + `scripts/fetch_fx_rates.py` cron.
-- **Zależności:** A.
-- **Ryzyka:** niskie pokrycie EAN/SKU → L2 musi unieść ciężar; NBP API downtime → fallback na ostatni kurs.
-- **DoD:** testy per źródło na fixtureach; raport pokrycia identyfikatorami per source w logach; pokrycie `brand+model` ≥ 80% na tagged testset; NBP rate cache w DB, test fallback.
+- **Goal:** for every offer we extract `brand, model, attributes_hint` and where available `ean, sku, canonical_url, mpn, ceneo_group_id`. NBP fetcher works.
+- **Scope:** new module `matching/extractor.py` + `matching/normalizer.py`. Extend `stores/*.yaml` with `identifiers:` and `attributes:` sections. Validation in `utils/validation.py`. Module `fx/nbp.py` + cron `scripts/fetch_fx_rates.py`.
+- **Dependencies:** A.
+- **Risks:** low EAN/SKU coverage → L2 must carry the weight; NBP API downtime → fallback to last rate.
+- **DoD:** per-source tests on HTML/JSON fixtures; identifier coverage report per source in logs; `brand+model` coverage ≥ 80% on the tagged test set; NBP rate cached in DB, fallback tested.
 
-### Faza C — Pipeline matchowania + tworzenie Product
+### Phase C — Matching pipeline + Product creation
 
-- **Cel:** L1 i L2 auto z rygorem; L3/L4 → nowy Product (bez UI review jeszcze).
-- **Zakres:** `matching/pipeline.py`, `matching/scorer.py`, `matching/review_queue.py` (zapis bez UI). Golden set 200 par (bikes + nas_hdd). `scripts/eval_matching.py`. Backfill.
-- **Zależności:** B.
-- **Ryzyka:** **najwyższe w projekcie** — false merge. Gate przed DoD.
-- **DoD:** golden set: L1 precision = 1.0; L2 precision ≥ 0.98, recall ≥ 0.70; backfill idempotentny (drugi run = 0 zmian); zero orphanów; manual_review_rate < 30% na golden set.
+- **Goal:** L1 and L2 auto with rigor; L3/L4 → new Product (no review UI yet).
+- **Scope:** `matching/pipeline.py`, `matching/scorer.py`, `matching/review_queue.py` (write-only, no UI). Golden set of 200 pairs (bikes + nas_hdd). `scripts/eval_matching.py`. Backfill.
+- **Dependencies:** B.
+- **Risks:** **highest in the project** — false merge. DoD gates guard against it.
+- **DoD:** on golden set: L1 precision = 1.0; L2 precision ≥ 0.98, recall ≥ 0.70; backfill idempotent (second run = 0 changes); zero orphans; `manual_review_rate` < 30% on golden set.
 
-### Faza D — Dashboard produktowy (MVP)
+### Phase D — Product dashboard (MVP)
 
-- **Cel:** `/products` (lista) i `/products/{uuid}` (detail z cross-source timeline + aktywne oferty).
-- **Zakres:** routes w `dashboard.py`, templaty `products_list.html`, `product_detail.html`. Reuse + rozszerzenie `visualization/charts.py` o cross-source price chart. Stary `/deals` działa równolegle.
-- **Zależności:** C.
-- **Ryzyka:** performance przy wielu ofertach → indeksy na `(product_id, recorded_at)`.
-- **DoD:** E2E Playwright: `/products` → klik → product detail z ≥ 2 źródłami; aktywne oferty klikalne do zewnętrznych URLi; zero regresji w `/deals`.
+- **Goal:** `/products` (list) and `/products/{uuid}` (detail with cross-source timeline + active offers).
+- **Scope:** routes in `dashboard.py`, templates `products_list.html`, `product_detail.html`. Reuse + extend `visualization/charts.py` with a cross-source price chart. Old `/deals` runs in parallel.
+- **Dependencies:** C.
+- **Risks:** performance with many offers → indexes on `(product_id, recorded_at)`.
+- **DoD:** Playwright E2E: `/products` → click → product detail with ≥ 2 sources; active offers clickable to external URLs; no regressions in `/deals`.
 
-### Faza E — Manual review queue UI
+### Phase E — Manual review queue UI
 
-- **Cel:** obsługa L3 (i borderline L2) przez użytkownika; undo w 7-dniowym oknie.
-- **Zakres:** `/review` endpoint + templat + akcje POST; `match_decisions.undo_snapshot`; automatyczne dopisywanie `manual_merge_key` do `product_aliases` przy approve.
-- **Zależności:** D.
-- **Ryzyka:** destrukcyjne akcje usera → undo obowiązkowy.
-- **DoD:** flow integracyjny: propozycja → approve → alias → kolejny fetch w L1; undo przywraca stan; negative evidence blokuje powtórną propozycję.
+- **Goal:** handle L3 (and borderline L2) interactively; 7-day undo.
+- **Scope:** `/review` endpoint + template + POST actions; `match_decisions.undo_snapshot`; auto-append `manual_merge_key` to `product_aliases` on approve.
+- **Dependencies:** D.
+- **Risks:** destructive user actions → undo is mandatory.
+- **DoD:** integration flow: proposal → approve → alias → next fetch hits L1; undo restores state; negative evidence prevents re-proposal.
 
-### Faza F — Cutover
+### Phase F — Cutover
 
-- **Cel:** `/products` jako default, Telegram+bot+watchlista produktowa.
-- **Zakres:** routing, `notifiers/telegram.py` (przycisk "Produkt" z deeplinkiem), `feedback_bot.py` (`/product <id>`, `/watch` na product_id gdzie dostępne, fallback na deal_id), docs.
-- **Zależności:** D+E stabilne ≥ 7 dni, canary audit OK.
-- **Ryzyka:** regresje w alertach.
-- **DoD:** flag on na prod; feedback bot E2E; monitoring 48h bez nowych błędów; canary audit precision ≥ 0.98.
+- **Goal:** `/products` default; Telegram + bot + product-level watchlist.
+- **Scope:** routing, `notifiers/telegram.py` ("Product" deep-link button), `feedback_bot.py` (`/product <id>`, `/watch` uses product_id when available, falls back to deal_id), docs.
+- **Dependencies:** D+E stable ≥ 7 days, canary audit green.
+- **Risks:** alert regressions.
+- **DoD:** flag on in prod; feedback bot E2E; 48h of monitoring with no new errors; canary audit precision ≥ 0.98.
 
-### Faza G — Background merge sweep (post-MVP)
+### Phase G — Background merge sweep (post-MVP)
 
-- **Cel:** poprawa recall — re-match produktów gdy pojawiły się nowe aliasy.
-- **Zakres:** cron nightly `scripts/reindex_match_candidates.py`, limit merge/day (bezpieczeństwo), raport Telegram.
-- **Zależności:** F stabilne.
-- **DoD:** recall rośnie, precision utrzymana, zero incydentów false merge.
+- **Goal:** improve recall — re-match products when new aliases have appeared.
+- **Scope:** nightly cron `scripts/reindex_match_candidates.py`, merge/day safety cap, Telegram report.
+- **Dependencies:** F stable.
+- **DoD:** recall improves, precision holds, zero false-merge incidents.
 
 ---
 
-## 6. MVP vs później
+## 6. MVP vs later
 
-### MVP (fazy A→D, opcjonalnie E bez pełnego UI)
+### MVP (phases A→D, optionally E without full UI)
 
-- Schema products/offers/aliases/payload_history/match_reviews/match_decisions.
+- Schema: products/offers/aliases/payload_history/match_reviews/match_decisions.
 - Dual-write.
-- Extractor: brand, model, size, capacity, EAN/SKU/ceneo_group_id gdzie dostępne.
-- Pipeline L1+L2 (z required_match_attrs).
-- Backfill z konserwatywnym fallbackiem.
-- Konwersja walut NBP.
-- Nowe widoki `/products`, `/products/{uuid}` równolegle do `/deals`.
+- Extractor: brand, model, size, capacity, EAN/SKU/ceneo_group_id where available.
+- Pipeline L1+L2 (with required_match_attrs).
+- Conservative backfill fallback.
+- NBP currency conversion.
+- New views `/products`, `/products/{uuid}` in parallel with `/deals`.
 
-### Następnie (E→F)
+### Next (E→F)
 
-- Manual review queue z UI, undo, negative evidence.
-- Cutover: Telegram link do produktu, watchlista produktowa.
+- Manual review queue UI, undo, negative evidence.
+- Cutover: Telegram product link, product-level watchlist.
 
 ### Post-MVP (G+)
 
 - Background merge sweep.
-- ProductFamily jako encja.
-- Publiczne API `/api/products`.
-- Cross-category matching (świadomie zablokowane w MVP).
+- ProductFamily as an entity.
+- Public API `/api/products`.
+- Cross-category matching (deliberately blocked in MVP).
 
-### Nice to have (bez use case nie ruszać)
+### Nice to have (don't touch without a use case)
 
 - Image-based matching (perceptual hash).
 - ML scorer.
-- Porównywarka side-by-side.
+- Side-by-side comparator.
 - Embeddable widget.
 
 ---
 
-## 7. Zmiany w systemie
+## 7. System changes
 
 ### Backend
 
-- `storage/sqlite.py` — nowe CRUD dla products/offers/aliases/payload_history/match_reviews/match_decisions; rozszerzone metody `price_history` (price_pln, price_original, fx).
-- `deal_hunter.py` — po `fetch_deals` nowy pipeline: upsert Offer → append payload history → extractor → match → create/link Product → zapis PricePoint (z FX) → decyzja event_type → zapis Deal.
-- `matching/` (nowy moduł) — `extractor.py`, `normalizer.py`, `scorer.py`, `pipeline.py`, `review_queue.py`.
-- `fx/nbp.py` (nowy moduł) — NBP client z cache i fallback.
-- `stores/*.yaml` — nowe sekcje `identifiers:` (ean, sku, mpn, canonical_url_pattern, ceneo_group_id) i `attributes:` (per-kategoria selectory).
-- `profiles/*.yaml` — nowe pole `required_match_attrs:` (lista stringów).
-- `utils/validation.py` — walidacja nowych sekcji.
-- `sources/base.py` — `Deal` dostaje opcjonalne `ean, sku, mpn, brand_hint, attributes_hint` (backward compat).
+- `storage/sqlite.py` — new CRUD for products/offers/aliases/payload_history/match_reviews/match_decisions; extended `price_history` methods (price_pln, price_original, fx).
+- `deal_hunter.py` — after `fetch_deals` a new pipeline: upsert Offer → append payload history → extractor → match → create/link Product → write PricePoint (with FX) → decide event_type → write Deal.
+- `matching/` (new module) — `extractor.py`, `normalizer.py`, `scorer.py`, `pipeline.py`, `review_queue.py`.
+- `fx/nbp.py` (new module) — NBP client with cache and fallback.
+- `stores/*.yaml` — new sections `identifiers:` (ean, sku, mpn, canonical_url_pattern, ceneo_group_id) and `attributes:` (per-category selectors).
+- `profiles/*.yaml` — new `required_match_attrs:` field (list of strings).
+- `utils/validation.py` — validate new sections.
+- `sources/base.py` — `Deal` gains optional `ean, sku, mpn, brand_hint, attributes_hint` (backward compatible).
 
 ### Dashboard
 
-- `dashboard.py` — nowe routes: `GET /products`, `GET /products/{uuid}`, `GET /api/products`, `GET /api/products/{uuid}`, `GET /api/products/{uuid}/offers`, `GET /api/products/{uuid}/price-history`, `GET /review`, `POST /review/{id}/action`, `POST /products/{uuid}/merge`, `POST /products/{uuid}/split`, `POST /match_decisions/{id}/undo`.
-- Nowe templaty: `products_list.html`, `product_detail.html` (timeline + wykres + active offers table + price history), `review_queue.html`.
-- Istniejące templaty deals: link "Zobacz produkt" gdzie `product_id` znane.
-- Nawigacja: nowa zakładka "Produkty".
+- `dashboard.py` — new routes: `GET /products`, `GET /products/{uuid}`, `GET /api/products`, `GET /api/products/{uuid}`, `GET /api/products/{uuid}/offers`, `GET /api/products/{uuid}/price-history`, `GET /review`, `POST /review/{id}/action`, `POST /products/{uuid}/merge`, `POST /products/{uuid}/split`, `POST /match_decisions/{id}/undo`.
+- New templates: `products_list.html`, `product_detail.html` (timeline + chart + active offers table + price history), `review_queue.html`.
+- Existing deals templates: "View product" link wherever `product_id` is known.
+- Navigation: new "Products" tab.
 
-### Joby
+### Jobs
 
-- `scripts/migrate_add_products_schema.py` — jednorazowa migracja.
-- `scripts/backfill_products.py` — jednorazowy backfill, wznawialny.
-- `scripts/eval_matching.py` — liczenie metryk na golden set.
-- `scripts/fetch_fx_rates.py` — cron codziennie (NBP).
-- `scripts/reindex_match_candidates.py` — cron nightly (faza G).
+- `scripts/migrate_add_products_schema.py` — one-shot migration.
+- `scripts/backfill_products.py` — one-shot backfill, resumable.
+- `scripts/eval_matching.py` — compute metrics on golden set.
+- `scripts/fetch_fx_rates.py` — daily cron (NBP).
+- `scripts/reindex_match_candidates.py` — nightly cron (phase G).
 
 ### Telegram
 
-- `notifiers/telegram.py` — w `send_alert` i `send_price_drop_alert` dodać przycisk "Produkt" z deeplinkiem.
-- Digest `--digest` — po cutoverze grupuje price drops per produkt.
+- `notifiers/telegram.py` — add a "Product" deep-link button in `send_alert` and `send_price_drop_alert`.
+- Digest `--digest` — after cutover groups price drops per product.
 
 ### Feedback bot
 
-- Nowa komenda `/product <uuid>`.
-- `/watch <deal_id>` pracuje wewnętrznie na `product_id` gdzie dostępne; fallback na deal_id.
-- Callback_data bez zmian (klucz: deal_id).
+- New command `/product <uuid>`.
+- `/watch <deal_id>` works internally on `product_id` where available; fallback to deal_id.
+- Callback_data unchanged (key: deal_id).
 
 ---
 
-## 8. Testy i walidacja
+## 8. Tests and validation
 
 ### Unit
 
-- `test_normalizer.py` — lowercase, diakrytyki, stopwords, separatory, normalizacja rozmiaru ("58cm" ≡ "58" ≡ "r.58").
-- `test_extractor.py` — per źródło na fixtureach HTML/JSON: brand/model/EAN/SKU/attributes, edge cases.
-- `test_matcher_l1.py` — twarde identyfikatory, idempotencja.
-- `test_matcher_l2.py` — required_match_attrs (różny rozmiar → no merge), token_set_ratio progi, null-vs-known (blokuje).
+- `test_normalizer.py` — lowercase, diacritics, stopwords, separators, size normalization ("58cm" ≡ "58" ≡ "r.58").
+- `test_extractor.py` — per source on HTML/JSON fixtures: brand/model/EAN/SKU/attributes, edge cases.
+- `test_matcher_l1.py` — hard identifiers, idempotency.
+- `test_matcher_l2.py` — required_match_attrs (different size → no merge), token_set_ratio thresholds, null-vs-known (blocks).
 - `test_matcher_negative_evidence.py` — "sticky no".
-- `test_ceneo_group.py` — ceneo_group_id jako L2 + required_match_attrs konieczne.
-- `test_fx_nbp.py` — NBP client, cache, fallback, konwersja.
+- `test_ceneo_group.py` — ceneo_group_id as L2 + required_match_attrs is required.
+- `test_fx_nbp.py` — NBP client, cache, fallback, conversion.
 
 ### Integration
 
-- `test_ingest_pipeline_products.py` — full flow: mock source → offer → match → product → deal event; idempotencja.
-- `test_review_flow.py` — L3 → review → manual approve → alias utworzony → ponowny fetch trafia L1.
-- `test_merge_split_undo.py` — merge → split → undo w 7 dni.
-- `test_dashboard_products.py` — endpointy listy/detail/API; paginacja; filtry; Playwright E2E.
-- `test_fx_alert_semantics.py` — price drop alert NIE odpala z samego ruchu kursu gdy oryginalna waluta nie zmieniła ceny.
+- `test_ingest_pipeline_products.py` — full flow: mock source → offer → match → product → deal event; idempotency.
+- `test_review_flow.py` — L3 → review → manual approve → alias created → next fetch hits L1.
+- `test_merge_split_undo.py` — merge → split → undo within 7 days.
+- `test_dashboard_products.py` — list/detail/API endpoints; pagination; filters; Playwright E2E.
+- `test_fx_alert_semantics.py` — price-drop alert does NOT fire from FX movement alone when original currency has unchanged price.
 
 ### Migration tests
 
-- `test_migration_schema.py` — na kopii real DB: idempotencja migracji, counts, brak dataloss.
-- `test_backfill_products.py` — idempotencja backfillu, checkpoint recovery.
+- `test_migration_schema.py` — on a copy of real DB: migration idempotency, counts, no data loss.
+- `test_backfill_products.py` — backfill idempotency, checkpoint recovery.
 
-### Jakość matchowania
+### Match quality
 
-- Golden set ~200 par (same/different) per kategoria, `tests/fixtures/matching/golden/*.yaml`.
-- Metryki skryptem `scripts/eval_matching.py` — precision, recall, F1, per warstwa.
+- Golden set ~200 pairs (same/different) per category, `tests/fixtures/matching/golden/*.yaml`.
+- Metrics via `scripts/eval_matching.py` — precision, recall, F1, per layer.
 - **Gates:**
   - L1 precision = 1.0 (hard).
   - L2 precision ≥ 0.98, recall ≥ 0.70.
-  - L3 (review-only): mierzymy `human_accept_rate` po fazie E.
-- Metryka operacyjna w `/health`: `manual_review_rate` (target steady-state < 20%; > 30% → tuning extractora).
-- Alert tygodniowy: `false_merge_rate > 0.5%` → blokada cutoveru / rollback.
-- Canary: cron co tydzień sample 20 auto-L2 do `match_reviews.status=audit_sample`.
+  - L3 (review-only): measure `human_accept_rate` after phase E.
+- Operational metric in `/health`: `manual_review_rate` (steady-state target < 20%; > 30% → extractor tuning).
+- Weekly alert: `false_merge_rate > 0.5%` → cutover gate / rollback.
+- Canary: weekly cron samples 20 auto-L2 into `match_reviews.status=audit_sample`.
 
 ### Dashboard sanity
 
-- Produkt z N ofertami: min/max/mediana zgodne z PricePoint.
-- Dezaktywacja oferty (`is_active=0`) nie psuje price history produktu.
-- Cross-source timeline renderuje się przy brakach w jednym źródle.
+- Product with N offers: min/max/median consistent with PricePoint.
+- Offer deactivation (`is_active=0`) does not break product price history.
+- Cross-source timeline renders when a source has gaps.
 
 ---
 
-## 9. Ryzyka i decyzje
+## 9. Risks and decisions
 
-### Ryzyka techniczne
+### Technical risks
 
-- **Niskie pokrycie EAN/SKU** w polskich sklepach (Pepper prawie zero, Ceneo ma `ceneo_group_id` — gold, x-kom zmienne). L2 nosi większość ciężaru → wyższy `manual_review_rate`.
-- **Cloudflare na x-kom** — store YAML istnieje, live scraping bywa blokowany. Produkt się utworzy, ale bez świeżych ofert.
-- **Migracje SQLite ALTER** — preferujemy `ADD COLUMN` pojedynczo; cięższe zmiany: CREATE new → INSERT SELECT → DROP old → RENAME.
-- **NBP API downtime** — cache + fallback na ostatni znany kurs, log ostrzeżenia.
-- **Regex w profile YAML** (score_rules) i extractor — nie wchodzą sobie w drogę (extractor działa na raw_title przed scoringiem).
+- **Low EAN/SKU coverage** in Polish stores (Pepper near zero, Ceneo has `ceneo_group_id` — gold, x-kom inconsistent). L2 carries most of the weight → higher `manual_review_rate`.
+- **Cloudflare on x-kom** — store YAML exists, live scraping is sometimes blocked. Product gets created but without fresh offers.
+- **SQLite ALTER migrations** — prefer `ADD COLUMN` one at a time; heavier changes: CREATE new → INSERT SELECT → DROP old → RENAME.
+- **NBP API downtime** — cache + fallback to last known rate, warning logged.
+- **Regex in profile YAML** (score_rules) and extractor — they do not collide (extractor runs on raw_title before scoring).
 
-### Ryzyka produktowe
+### Product risks
 
-- **False merge psuje zaufanie do alertów** → rygor progów + required_match_attrs + canary.
-- **FX-driven false price drops** → próg alertu liczony na price_original gdy waluta stała.
-- **Watchlista użytkownika** — migracja musi zachować subskrypcje (fallback deal_id).
-- **"Explosion of products"** — jeśli extractor słaby, każda oferta → nowy produkt → dashboard zaśmiecony. Mitigation: metryka `products_with_only_one_offer_after_30d` + manual merge.
+- **False merge erodes alert trust** → rigorous thresholds + required_match_attrs + canary.
+- **FX-driven false price drops** → alert threshold on price_original when currency unchanged.
+- **Existing user watchlist** — migration must preserve subscriptions (deal_id fallback).
+- **"Explosion of products"** — if the extractor is weak, each offer → a new product → cluttered dashboard. Mitigation: metric `products_with_only_one_offer_after_30d` + manual merge.
 
-### Decyzje podjęte (podczas brainstormingu)
+### Decisions made (during brainstorming)
 
-| # | Decyzja |
+| # | Decision |
 |---|---|
-| 1 | `required_match_attrs`: bikes: `{size, frame_color, year}`; nas_hdd: `{capacity_tb, form_factor}`. Inne profile: ustalane per profil przy implementacji. |
-| 2 | `ceneo_group_id` jako sygnał L2 (nie L1), wymaga zgodności `required_match_attrs`. |
-| 3 | Warianty cenowe na jednej stronie → N Offerów, suffix `#size=54` w `source_native_id`. |
-| 4 | Waluty: konwersja do PLN z NBP już w MVP; price_original + fx_rate_used w PricePoint; próg alertu na price_original gdy waluta stała. |
-| 5 | Cross-profile matching zablokowany, twarda bariera category. |
-| 6 | Product.id = UUID, bez slugów. URL: `/products/{uuid}`. |
-| 7 | Priority review queue = `score + (temp/20 jeśli Pepper) + (5 jeśli w budżecie)`. |
-| 8 | MVP bez encji Family, tylko pole `attributes.family_key` (string). |
-| 9 | Soft-delete Product po 180 dniach bez aktywnej oferty, flaga `archived=1`. |
-| 10 | `offer_payload_history` jako osobna tabela, N=10 snapshotów FIFO per offer. |
+| 1 | `required_match_attrs`: bikes: `{size, frame_color, year}`; nas_hdd: `{capacity_tb, form_factor}`. Other profiles: defined per profile at implementation time. |
+| 2 | `ceneo_group_id` as an L2 signal (not L1), still requires `required_match_attrs` agreement. |
+| 3 | Price variants on one page → N Offers, suffix `#size=54` in `source_native_id`. |
+| 4 | Currencies: NBP conversion to PLN in MVP; price_original + fx_rate_used in PricePoint; alert threshold on price_original when currency unchanged. |
+| 5 | Cross-profile matching blocked, hard category barrier. |
+| 6 | Product.id = UUID, no slugs. URL: `/products/{uuid}`. |
+| 7 | Review queue priority = `score + (temp/20 if Pepper) + (5 if within budget)`. |
+| 8 | MVP without Family entity, only `attributes.family_key` (string). |
+| 9 | Soft-delete Product after 180 days without an active offer, flag `archived=1`. |
+| 10 | `offer_payload_history` as a separate table, N=10 FIFO snapshots per offer. |
 
-### Decyzje do podjęcia przy implementacji (nie-blokery)
+### Decisions deferred to implementation (non-blockers)
 
-- `required_match_attrs` dla pozostałych profili (innych niż bikes i nas_hdd) — ustalić listę aktualnych profili i per-profil zdefiniować.
-- Częstotliwość fetch NBP — proponowane raz dziennie o 06:00 (przed pierwszym cronem deal-huntera).
-- Rozmiar FIFO dla OfferPayloadHistory — obecnie N=10; gdyby DB puchnąć, zmniejszyć do N=5.
+- `required_match_attrs` for profiles other than bikes and nas_hdd — enumerate current profiles and define per profile.
+- NBP fetch frequency — proposed daily at 06:00 (before the first deal-hunter cron).
+- FIFO size for OfferPayloadHistory — currently N=10; reduce to N=5 if DB growth becomes an issue.
 
 ---
 
-## Rekomendowana kolejność wdrożenia (8 kroków)
+## Recommended rollout order (8 steps)
 
-1. **Schema + dual-write Offer + payload history** (Faza A) — tabele + migracja + zapis równoległy.
-2. **Extractor + FX NBP + sekcja `identifiers:` w stores YAML** (Faza B) — ekstrakcja + konwersja walut + raport pokrycia.
-3. **Pipeline L1 tylko** — auto-match po twardych identyfikatorach; brak matchu → nowy Product; backfill konserwatywny.
-4. **Golden set + metryki + pipeline L2 z required_match_attrs** (Faza C cz. 2) — gate precision ≥ 0.98 przed włączeniem L2.
-5. **Dashboard `/products` read-only** (Faza D) — równolegle do `/deals`, cross-source timeline.
-6. **Manual review queue + undo** (Faza E) — L3 akcjonowalne, audit log, negative evidence.
-7. **Cutover: Telegram + bot + watchlista produktowa** (Faza F) — `/products` default, canary audit OK.
-8. **Background merge sweep** (Faza G, post-MVP) — nightly z limitami bezpieczeństwa.
+1. **Schema + dual-write Offer + payload history** (Phase A) — tables + migration + parallel writes.
+2. **Extractor + NBP FX + `identifiers:` section in stores YAML** (Phase B) — extraction + currency conversion + coverage report.
+3. **Pipeline L1 only** — auto-match via hard identifiers; no match → new Product; conservative backfill.
+4. **Golden set + metrics + L2 pipeline with required_match_attrs** (Phase C part 2) — precision ≥ 0.98 gate before enabling L2.
+5. **Dashboard `/products` read-only** (Phase D) — parallel to `/deals`, cross-source timeline.
+6. **Manual review queue + undo** (Phase E) — L3 actionable, audit log, negative evidence.
+7. **Cutover: Telegram + bot + product watchlist** (Phase F) — `/products` default, canary audit green.
+8. **Background merge sweep** (Phase G, post-MVP) — nightly with safety caps.
