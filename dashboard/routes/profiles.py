@@ -9,36 +9,28 @@ from sqlalchemy.orm import Session
 from dashboard import templates
 from dashboard.dependencies import (
     _PROFILE_NAME_RE,
+    _get_mgr,
     get_db,
-    get_profiles,
     safe_load_profile,
     safe_profile_path,
 )
+from dashboard.services.profile_service import ProfileService
 
 BASE_DIR = Path(__file__).parent.parent.parent
 
 router = APIRouter()
 
 
+def _get_profile_service() -> ProfileService:
+    """Build a ProfileService from the current ProfileManager."""
+    return ProfileService(_get_mgr())
+
+
 @router.get("/profiles", response_class=HTMLResponse)
 def profiles_page(request: Request):
     """Profile list page."""
-    profile_names = get_profiles()
-    profiles = []
-    for name in profile_names:
-        prof = safe_load_profile(name)
-        if prof:
-            profiles.append(
-                {
-                    "name": name,
-                    "emoji": prof.get("emoji", "\U0001f50d"),
-                    "enabled": prof.get("enabled", True),
-                    "source_count": len(prof.get("sources", {})),
-                    "budget_min": prof.get("budget", {}).get("min", 0),
-                    "budget_max": prof.get("budget", {}).get("max", 0),
-                    "score_threshold": prof.get("score_threshold", 0),
-                }
-            )
+    svc = _get_profile_service()
+    profiles = svc.get_profile_summaries()
     return templates.TemplateResponse(
         request,
         "profiles.html",
@@ -122,10 +114,6 @@ def profile_yaml_redirect(name: str):
 @router.put("/api/profiles/{name}/yaml")
 async def api_update_profile_yaml(request: Request, name: str):
     """Update a profile from raw YAML text."""
-    import yaml as _yaml
-
-    from utils.validation import validate_profile as _validate
-
     profile_path = safe_profile_path(name)
     if not profile_path.exists():
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
@@ -133,20 +121,10 @@ async def api_update_profile_yaml(request: Request, name: str):
     body = await request.body()
     yaml_text = body.decode("utf-8")
 
-    try:
-        profile = _yaml.safe_load(yaml_text)
-    except _yaml.YAMLError as e:
-        return JSONResponse({"errors": [f"YAML parse error: {e}"]})
-
-    if not isinstance(profile, dict):
-        return JSONResponse({"errors": ["YAML must be a mapping (dict)"]})
-
-    errors = _validate(profile)
+    svc = _get_profile_service()
+    errors = svc.save_yaml_text(profile_path, yaml_text)
     if errors:
         return JSONResponse({"errors": errors})
-
-    with profile_path.open("w", encoding="utf-8") as f:
-        f.write(yaml_text)
 
     return JSONResponse({"ok": True})
 
@@ -154,10 +132,6 @@ async def api_update_profile_yaml(request: Request, name: str):
 @router.post("/api/profiles")
 async def api_create_profile(request: Request):
     """Create a new profile."""
-    import yaml as _yaml
-
-    from utils.validation import validate_profile as _validate
-
     body = await request.json()
     name = body.get("name", "")
 
@@ -174,14 +148,12 @@ async def api_create_profile(request: Request):
     if profile_path.exists():
         return JSONResponse({"errors": [f"Profile '{name}' already exists."]})
 
-    errors = _validate(body)
-    if errors:
-        return JSONResponse({"errors": errors})
-
     profile_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with profile_path.open("w", encoding="utf-8") as f:
-        _yaml.dump(body, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    svc = _get_profile_service()
+    errors = svc.save_profile_dict(profile_path, body)
+    if errors:
+        return JSONResponse({"errors": errors})
 
     return JSONResponse({"ok": True})
 
@@ -189,10 +161,6 @@ async def api_create_profile(request: Request):
 @router.put("/api/profiles/{name}")
 async def api_update_profile(request: Request, name: str):
     """Update a profile from form data (JSON body)."""
-    import yaml as _yaml
-
-    from utils.validation import validate_profile as _validate
-
     safe_profile_path(name)
     body = await request.json()
 
@@ -209,13 +177,11 @@ async def api_update_profile(request: Request, name: str):
         if key in existing and key not in body:
             body[key] = existing[key]
 
-    errors = _validate(body)
+    svc = _get_profile_service()
+    profile_path = safe_profile_path(name)
+    errors = svc.save_profile_dict(profile_path, body)
     if errors:
         return JSONResponse({"errors": errors})
-
-    profile_path = safe_profile_path(name)
-    with profile_path.open("w", encoding="utf-8") as f:
-        _yaml.dump(body, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
     return JSONResponse({"ok": True})
 
@@ -233,48 +199,26 @@ def api_delete_profile(name: str):
 @router.patch("/api/profiles/{name}/toggle")
 def api_toggle_profile(name: str):
     """Toggle a profile's enabled state."""
-    import yaml as _yaml
-
     profile_path = safe_profile_path(name)
     if not profile_path.exists():
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
 
-    with profile_path.open(encoding="utf-8") as f:
-        profile = _yaml.safe_load(f)
+    svc = _get_profile_service()
+    new_enabled = svc.toggle_enabled(profile_path)
 
-    profile["enabled"] = not profile.get("enabled", True)
-
-    with profile_path.open("w", encoding="utf-8") as f:
-        _yaml.dump(profile, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
-
-    return JSONResponse({"ok": True, "enabled": profile["enabled"]})
+    return JSONResponse({"ok": True, "enabled": new_enabled})
 
 
 @router.post("/api/profiles/{name}/run")
 def api_run_profile(name: str):
     """Trigger a profile run (dry-run with --verify)."""
-    import html as _html
-    import subprocess
-
     profile_path = safe_profile_path(name)
     if not profile_path.exists():
         raise HTTPException(status_code=404, detail=f"Profile '{name}' not found")
 
-    try:
-        result = subprocess.run(  # noqa: S603, S607
-            ["python", "deal_hunter.py", "--profile", name, "--verify"],  # noqa: S607
-            capture_output=True,
-            text=True,
-            timeout=120,
-            cwd=str(BASE_DIR),
-        )
-        output = result.stdout + result.stderr
-    except subprocess.TimeoutExpired:
-        output = "Run timed out after 120 seconds."
-    except Exception as e:
-        output = f"Error: {e}"
+    svc = _get_profile_service()
+    safe_output = svc.run_verify(name)
 
-    safe_output = _html.escape(output)
     pre_cls = (
         "text-xs text-on-surface-variant whitespace-pre-wrap"
         " overflow-x-auto bg-surface-container rounded-lg p-4"
@@ -291,17 +235,6 @@ def api_run_profile(name: str):
 @router.get("/api/profiles")
 def api_profiles_list():
     """JSON list of profiles."""
-    profile_names = get_profiles()
-    profiles = []
-    for name in profile_names:
-        prof = safe_load_profile(name)
-        if prof:
-            profiles.append(
-                {
-                    "name": name,
-                    "emoji": prof.get("emoji", "\U0001f50d"),
-                    "enabled": prof.get("enabled", True),
-                    "source_count": len(prof.get("sources", {})),
-                }
-            )
+    svc = _get_profile_service()
+    profiles = svc.get_profile_summaries()
     return JSONResponse(profiles)
