@@ -1,6 +1,40 @@
 # CHANGELOG
 
 
+## v0.12.2 (2026-04-13)
+
+### Bug Fixes
+
+- **ci**: Grant write permissions for Claude code review workflows
+  ([`29c87ef`](https://github.com/giraffe-horizon/deal-hunter/commit/29c87efe4ed5218a485f3fc9cf8fe51ba938558e))
+
+The claude-review and claude workflows had pull-requests: read which prevented them from posting
+  review comments. Changed to write.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Documentation
+
+- **spec**: Add products-and-offers design for dashboard pivot
+  ([`2599f31`](https://github.com/giraffe-horizon/deal-hunter/commit/2599f3149068f8af1393907575eadec74645eb1f))
+
+Design doc for evolving deal-hunter from per-Deal feed to per-Product dashboard with cross-source
+  price history and offer pinning. Covers domain model, data schema, conservative layered matching
+  strategy (L1 hard IDs → L2 strong → L3 review → L4 new product), NBP FX conversion, migration plan
+  (strangler with feature flag), implementation phases A-G, test/validation strategy, and decisions
+  captured during brainstorming.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **spec**: Translate products-and-offers design to English
+  ([`e64d2d1`](https://github.com/giraffe-horizon/deal-hunter/commit/e64d2d140f156e66e91c8709a8a27fee0b148328))
+
+Same content, English wording — project convention is English for all code and docs (Telegram output
+  stays Polish).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+
 ## v0.12.1 (2026-04-07)
 
 ### Bug Fixes
