@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from dashboard import templates
 from dashboard.dependencies import get_db
+from dashboard.schemas import WatchlistAdd, WatchlistUpdate
 from dashboard.services import DealService
 from storage.repositories import WatchlistRepository
 
@@ -31,10 +32,16 @@ async def add_to_watchlist_api(
 ) -> HTMLResponse:
     """Add a deal to the watchlist."""
     form = await request.form()
-    deal_id = form.get("deal_id", "")
-    target_price = int(form.get("target_price", 0))
-    if deal_id and target_price > 0:
-        WatchlistRepository(session).add(deal_id, target_price)
+    try:
+        validated = WatchlistAdd(
+            deal_id=str(form.get("deal_id", "")),
+            target_price=int(form.get("target_price", 0)),
+        )
+    except Exception:
+        return HTMLResponse(
+            '<span class="text-sm text-tertiary font-medium">\u2713 Target set</span>'
+        )
+    WatchlistRepository(session).add(validated.deal_id, validated.target_price)
     return HTMLResponse('<span class="text-sm text-tertiary font-medium">\u2713 Target set</span>')
 
 
@@ -56,7 +63,9 @@ async def update_watchlist_api(
     session: Session = Depends(get_db),
 ) -> Response:
     """Update target price for a watchlist item."""
-    if target_price <= 0:
+    try:
+        WatchlistUpdate(target_price=target_price)
+    except Exception:
         return JSONResponse({"error": "Target price must be positive"}, status_code=400)
     ok = WatchlistRepository(session).update_target_price(deal_id, target_price)
     if not ok:

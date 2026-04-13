@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from dashboard import templates
 from dashboard.dependencies import get_db, get_profiles
+from dashboard.schemas import StatusUpdate
 from dashboard.services import DEALS_PER_PAGE, SCORE_THRESHOLD, DealService
 from storage.repositories import DealRepository, PriceRepository
 
@@ -166,9 +167,11 @@ def api_update_deal_status(
     inline: str = Form(""),
     session: Session = Depends(get_db),
 ) -> Response:
-    if status not in ("watching", "rejected", "active"):
+    try:
+        validated = StatusUpdate(status=status)
+    except Exception:
         return JSONResponse({"error": "Invalid status"}, status_code=400)
-    ok = DealRepository(session).update_status(deal_id, status)
+    ok = DealRepository(session).update_status(deal_id, validated.status)
     if not ok:
         return JSONResponse({"error": "Deal not found"}, status_code=404)
     if inline:

@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session
 
 from dashboard import templates
 from dashboard.dependencies import (
-    _PROFILE_NAME_RE,
     _get_mgr,
     get_db,
     safe_load_profile,
     safe_profile_path,
 )
+from dashboard.schemas import ProfileCreate
 from dashboard.services.profile_service import ProfileService
 
 BASE_DIR = Path(__file__).parent.parent.parent
@@ -133,20 +133,15 @@ async def api_update_profile_yaml(request: Request, name: str) -> JSONResponse:
 async def api_create_profile(request: Request) -> JSONResponse:
     """Create a new profile."""
     body = await request.json()
-    name = body.get("name", "")
 
-    if not name or not _PROFILE_NAME_RE.match(name):
-        return JSONResponse(
-            {
-                "errors": [
-                    "Invalid profile name. Use lowercase letters, numbers, hyphens, underscores."
-                ]
-            }
-        )
+    try:
+        validated = ProfileCreate.model_validate(body)
+    except Exception as e:
+        return JSONResponse({"errors": [str(e)]})
 
-    profile_path = safe_profile_path(name)
+    profile_path = safe_profile_path(validated.name)
     if profile_path.exists():
-        return JSONResponse({"errors": [f"Profile '{name}' already exists."]})
+        return JSONResponse({"errors": [f"Profile '{validated.name}' already exists."]})
 
     profile_path.parent.mkdir(parents=True, exist_ok=True)
 
