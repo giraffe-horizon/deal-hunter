@@ -20,7 +20,6 @@ from filters import FILTER_REGISTRY
 from storage.database import get_session
 from storage.repositories import (
     AlertQueueRepository,
-    OfferRepository,
     PriceRepository,
     SeenDealRepository,
     WatchlistRepository,
@@ -186,9 +185,11 @@ def run_profile(
     alerts: list[dict] = []
     price_drop_alerts: list[dict] = []
 
+    # Set profile context on the fetcher for ingest_one to persist profile on Offer rows
+    _fetcher.profile_name = profile_name
+
     with get_session() as session:
         seen_repo = SeenDealRepository(session)
-        deal_repo = OfferRepository(session)
         price_repo = PriceRepository(session)
         watchlist_repo = WatchlistRepository(session)
         alert_repo = AlertQueueRepository(session)
@@ -235,15 +236,10 @@ def run_profile(
             # Persist to database
             if result.score >= threshold:
                 category = _scoring.detect_category(deal, profile, profile_name)
-                deal_repo.upsert(
-                    id=deal.id,
-                    title=deal.title,
-                    price=deal.price,
-                    link=deal.link,
-                    source=deal.source,
-                    description=deal.description,
-                    image_url=deal.image_url,
-                    profile=profile_name,
+                _fetcher.ingest_one(
+                    session,
+                    deal,
+                    profile=profile,
                     score=result.score,
                     category=category,
                 )

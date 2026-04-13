@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from services.fetcher import DealFetcher
 from sources.base import Deal as FetchDTO
-from storage.models import Base, DealEvent, OfferPayloadHistory
+from storage.models import Base, DealEvent, Offer, OfferPayloadHistory
 
 
 @pytest.fixture
@@ -97,3 +97,24 @@ def test_reingest_with_lower_price_emits_price_drop(session: Session) -> None:
     drop_payload = session.query(DealEvent).filter_by(event_type="price_drop").one().payload
     assert drop_payload["old_price"] == 100
     assert drop_payload["new_price"] == 80
+
+
+def test_ingest_one_persists_score_and_category_kwargs(session: Session) -> None:
+    dto = FetchDTO(
+        id="pepper:114",
+        title="Scored deal",
+        price=200,
+        link="",
+        source="pepper",
+        description="",
+        temperature=0,
+        image_url="",
+        published_at="",
+    )
+    fetcher = DealFetcher(profile_name="bikes")
+    fetcher.ingest_one(session, dto, profile={}, score=42, category="bikes")
+    session.commit()
+    offer = session.get(Offer, "pepper:114")
+    assert offer is not None
+    assert offer.score == 42
+    assert offer.category == "bikes"

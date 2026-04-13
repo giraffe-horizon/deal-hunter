@@ -38,7 +38,15 @@ class DealFetcher:
         self.source_registry = source_registry or {}
         self.profile_name = profile_name
 
-    def ingest_one(self, session, dto: Deal, profile: dict):
+    def ingest_one(
+        self,
+        session,
+        dto: Deal,
+        profile: dict,
+        *,
+        score: int = 0,
+        category: str = "",
+    ):
         """Upsert one DTO, append payload history, emit appropriate DealEvent.
 
         Returns the upserted Offer ORM instance.
@@ -58,6 +66,9 @@ class DealFetcher:
         old_price = existing.current_price_pln if existing else None
         old_availability = existing.availability if existing else None
 
+        effective_score = score or getattr(dto, "score", 0) or 0
+        effective_category = category or profile.get("category", "")
+
         offer = repo.upsert(
             id=dto.id,
             raw_title=dto.title,
@@ -67,8 +78,8 @@ class DealFetcher:
             description=dto.description,
             image_url=dto.image_url,
             profile=self.profile_name,
-            score=getattr(dto, "score", 0) or 0,
-            category=profile.get("category", ""),
+            score=effective_score,
+            category=effective_category,
             first_seen_at="",
             last_seen_at="",
         )
