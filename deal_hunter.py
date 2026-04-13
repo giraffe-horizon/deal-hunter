@@ -401,7 +401,7 @@ def _run_with_health_tracking(
 
 
 def run_digest() -> None:
-    """Generate and send weekly price digest from SQLite price_history."""
+    """Generate and send weekly price digest from SQLite price_points."""
     tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
     if not tg_token or not tg_chat:

@@ -271,7 +271,7 @@ class OfferRepository:
 
 
 class PriceRepository:
-    """Query and mutation wrapper for price_history table."""
+    """Query and mutation wrapper for price_points table."""
 
     def __init__(self, session: Session) -> None:
         self.session = session
