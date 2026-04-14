@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, inspect
 def alembic_db(tmp_path: Path) -> tuple[Config, str]:
     """Fresh SQLite DB with a pre-wired Alembic config pointing to it."""
     db_url = f"sqlite:///{tmp_path / 'test.db'}"
-    cfg = Config("storage/migrations/alembic.ini")
+    cfg = Config("src/deal_hunter/storage/migrations/alembic.ini")
     return cfg, db_url
 
 

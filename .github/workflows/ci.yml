@@ -17,8 +17,8 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install linting tools
-        run: pip install ruff mypy pydantic types-requests types-beautifulsoup4 types-PyYAML
+      - name: Install project + linting tools
+        run: pip install -e ".[dev]"
 
       - name: Ruff check (linting)
         run: ruff check .
@@ -27,7 +27,7 @@ jobs:
         run: ruff format --check .
 
       - name: Mypy type check
-        run: mypy --ignore-missing-imports deal_hunter.py sources/ filters/ notifiers/ utils/
+        run: mypy --ignore-missing-imports src/deal_hunter
 
   test:
     runs-on: ubuntu-latest
@@ -46,10 +46,10 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run tests with coverage
-        run: python -m pytest tests/ --ignore=tests/e2e -v --tb=short --cov=sources --cov=filters --cov=deal_hunter --cov-report=term-missing
+        run: python -m pytest tests/ --ignore=tests/e2e -v --tb=short --cov=deal_hunter --cov-report=term-missing
 
       - name: Smoke test — version
-        run: python deal_hunter.py --version
+        run: deal-hunter --version
 
       - name: Smoke test — list profiles
-        run: python deal_hunter.py --list
+        run: deal-hunter --list

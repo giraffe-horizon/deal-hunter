@@ -22,7 +22,9 @@ from .base import Deal, Source
 
 logger = logging.getLogger(__name__)
 
-STORES_DIR = Path(__file__).parent.parent / "stores"
+# stores/ lives at the repo root (not inside the package).
+# yaml_source.py is at src/deal_hunter/sources/yaml_source.py — parents[3] = repo root.
+STORES_DIR = Path(__file__).resolve().parents[3] / "stores"
 
 
 def load_store_definition(name: str) -> dict | None:

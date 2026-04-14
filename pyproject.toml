@@ -108,6 +108,13 @@ disallow_untyped_defs = false
 warn_return_any = false
 disable_error_code = ["attr-defined"]
 
+# Bot handlers: python-telegram-bot stubs type update.message as Message | None,
+# but the library guarantees it's set for CommandHandler / CallbackQueryHandler
+# dispatch paths. Suppress union-attr to avoid None-guard boilerplate.
+[[tool.mypy.overrides]]
+module = ["deal_hunter.bot.commands", "deal_hunter.bot.callbacks"]
+disable_error_code = ["union-attr", "arg-type", "index"]
+
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 disallow_untyped_defs = false

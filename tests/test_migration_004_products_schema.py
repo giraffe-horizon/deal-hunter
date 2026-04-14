@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, inspect, text
 @pytest.fixture
 def alembic_db(tmp_path: Path) -> tuple[Config, str]:
     db_url = f"sqlite:///{tmp_path / 'test.db'}"
-    cfg = Config("storage/migrations/alembic.ini")
+    cfg = Config("src/deal_hunter/storage/migrations/alembic.ini")
     return cfg, db_url
 
 
