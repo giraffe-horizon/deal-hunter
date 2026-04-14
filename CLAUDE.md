@@ -56,7 +56,6 @@ docs/creating-profiles.md  Profile creation guide
 state/*.json            Persistent state per profile (what's been seen, 14-day TTL)
 state/health.json       Health monitoring state (last run, per-source/profile results)
 state/deals.db          SQLite database (deals, price_history, feedback tables)
-scripts/migrate_json_state.py  One-time migration from state/*.json to SQLite (seen_deals + price_history)
 scripts/systemd/        Systemd user timer units + bot service + install script
 Dockerfile              Docker image (python:3.12-slim + supercronic + tini)
 docker-compose.yml      Three services: deal-hunter (cron) + deal-hunter-bot (polling) + deal-hunter-web (dashboard)
