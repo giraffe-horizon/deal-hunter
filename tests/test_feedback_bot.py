@@ -6,10 +6,16 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from notifiers.telegram import build_deal_keyboard
-from sources.base import Deal
-from storage.models import Base
-from storage.repositories import DealRepository, FeedbackRepository, WatchlistRepository
+from deal_hunter.notifiers.telegram import build_deal_keyboard
+from deal_hunter.sources.base import Deal
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.repositories import (
+    FeedbackRepository,
+    WatchlistRepository,
+)
+from deal_hunter.storage.repositories import (
+    OfferRepository as DealRepository,
+)
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -218,7 +224,7 @@ class TestCallbackParsing:
 class TestBotHandlers:
     @pytest.mark.asyncio
     async def test_handle_callback_watch(self, engine):
-        from feedback_bot import handle_callback
+        from deal_hunter.bot.main import handle_callback
 
         # Seed a deal using a session
         with Session(engine) as session:
@@ -240,7 +246,7 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("feedback_bot.get_session", _mock_session):
+        with patch("deal_hunter.bot.callbacks.get_session", _mock_session):
             await handle_callback(update, context)
 
         query.answer.assert_called_once_with("\u2b50 Dodano do obserwowanych")
@@ -252,7 +258,7 @@ class TestBotHandlers:
 
     @pytest.mark.asyncio
     async def test_handle_callback_skip(self, engine):
-        from feedback_bot import handle_callback
+        from deal_hunter.bot.main import handle_callback
 
         with Session(engine) as session:
             _seed_deal(session)
@@ -272,7 +278,7 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("feedback_bot.get_session", _mock_session):
+        with patch("deal_hunter.bot.callbacks.get_session", _mock_session):
             await handle_callback(update, context)
 
         query.answer.assert_called_once_with("\U0001f44e Pominięto")
@@ -283,7 +289,7 @@ class TestBotHandlers:
 
     @pytest.mark.asyncio
     async def test_handle_callback_unknown_deal(self, engine):
-        from feedback_bot import handle_callback
+        from deal_hunter.bot.main import handle_callback
 
         query = AsyncMock()
         query.data = "watch:nonexistent:000"
@@ -299,14 +305,14 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("feedback_bot.get_session", _mock_session):
+        with patch("deal_hunter.bot.callbacks.get_session", _mock_session):
             await handle_callback(update, context)
 
         query.answer.assert_called_once_with("Nie znaleziono oferty w bazie")
 
     @pytest.mark.asyncio
     async def test_cmd_status(self, engine):
-        from feedback_bot import cmd_status
+        from deal_hunter.bot.main import cmd_status
 
         with Session(engine) as session:
             _seed_deal(session)
@@ -326,7 +332,7 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("feedback_bot.get_session", _mock_session):
+        with patch("deal_hunter.bot.commands.get_session", _mock_session):
             await cmd_status(update, context)
 
         message.reply_text.assert_called_once()
@@ -335,7 +341,7 @@ class TestBotHandlers:
 
     @pytest.mark.asyncio
     async def test_cmd_watchlist_empty(self, engine):
-        from feedback_bot import cmd_watchlist
+        from deal_hunter.bot.main import cmd_watchlist
 
         message = AsyncMock()
         update = MagicMock()
@@ -350,14 +356,14 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("feedback_bot.get_session", _mock_session):
+        with patch("deal_hunter.bot.commands.get_session", _mock_session):
             await cmd_watchlist(update, context)
 
         message.reply_text.assert_called_once_with("Brak obserwowanych ofert.")
 
     @pytest.mark.asyncio
     async def test_cmd_watchlist_with_deals(self, engine):
-        from feedback_bot import cmd_watchlist
+        from deal_hunter.bot.main import cmd_watchlist
 
         with Session(engine) as session:
             _seed_deal(session)
@@ -377,7 +383,7 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("feedback_bot.get_session", _mock_session):
+        with patch("deal_hunter.bot.commands.get_session", _mock_session):
             await cmd_watchlist(update, context)
 
         message.reply_text.assert_called_once()
@@ -397,7 +403,7 @@ async def test_cmd_target_adds_to_watchlist():
         _seed_deal(session, "pepper:123", price=10000)
         session.commit()
 
-    from feedback_bot import cmd_target
+    from deal_hunter.bot.main import cmd_target
 
     update = MagicMock()
     update.effective_chat.id = 12345
@@ -414,7 +420,7 @@ async def test_cmd_target_adds_to_watchlist():
             yield s
             s.commit()
 
-    with patch("feedback_bot.get_session", _mock_session):
+    with patch("deal_hunter.bot.commands.get_session", _mock_session):
         await cmd_target(update, context)
 
     update.message.reply_html.assert_called_once()
@@ -430,7 +436,7 @@ async def test_cmd_target_adds_to_watchlist():
 @pytest.mark.asyncio
 async def test_cmd_target_missing_args():
     """The /target command with wrong args shows usage."""
-    from feedback_bot import cmd_target
+    from deal_hunter.bot.main import cmd_target
 
     update = MagicMock()
     update.effective_chat.id = 12345

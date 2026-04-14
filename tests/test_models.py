@@ -4,14 +4,18 @@ import pytest
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session
 
-from storage.models import (
+from deal_hunter.storage.models import (
     AlertQueue,
     Base,
-    Deal,
     Feedback,
-    PriceHistory,
     SeenDeal,
     WatchlistItem,
+)
+from deal_hunter.storage.models import (
+    Offer as Deal,
+)
+from deal_hunter.storage.models import (
+    PricePoint as PriceHistory,
 )
 
 
@@ -32,21 +36,28 @@ class TestTableCreation:
     def test_all_tables_created(self, engine):
         tables = inspect(engine).get_table_names()
         assert set(tables) == {
-            "deals",
-            "price_history",
+            "offers",
+            "price_points",
             "feedback",
             "alert_queue",
             "watchlist",
             "seen_deals",
+            "products",
+            "product_aliases",
+            "offer_payload_history",
+            "deal_events",
+            "match_reviews",
+            "match_decisions",
+            "fx_rates",
         }
 
     def test_deals_columns(self, engine):
-        cols = {c["name"] for c in inspect(engine).get_columns("deals")}
+        cols = {c["name"] for c in inspect(engine).get_columns("offers")}
         assert cols == {
             "id",
-            "title",
-            "price",
-            "link",
+            "raw_title",
+            "current_price_pln",
+            "url",
             "source",
             "description",
             "image_url",
@@ -54,8 +65,29 @@ class TestTableCreation:
             "score",
             "category",
             "status",
-            "first_seen",
-            "last_seen",
+            "first_seen_at",
+            "last_seen_at",
+            "product_id",
+            "source_native_id",
+            "current_price_original",
+            "currency_original",
+            "fx_rate_used",
+            "availability",
+            "attributes_hint",
+            "is_active",
+        }
+
+    def test_price_points_columns(self, engine):
+        cols = {c["name"] for c in inspect(engine).get_columns("price_points")}
+        assert cols == {
+            "offer_id",
+            "price_pln",
+            "recorded_at",
+            "product_id",
+            "price_original",
+            "currency_original",
+            "fx_rate_used",
+            "availability",
         }
 
     def test_seen_deals_columns(self, engine):
@@ -67,9 +99,9 @@ class TestDealModel:
     def test_create_deal(self, session):
         deal = Deal(
             id="pepper:123",
-            title="Test Deal",
-            price=1000,
-            link="https://example.com",
+            raw_title="Test Deal",
+            current_price_pln=1000,
+            url="https://example.com",
             source="pepper",
             description="desc",
             image_url="",
@@ -77,24 +109,24 @@ class TestDealModel:
             score=80,
             category="road",
             status="active",
-            first_seen="2026-04-13T10:00:00",
-            last_seen="2026-04-13T10:00:00",
+            first_seen_at="2026-04-13T10:00:00",
+            last_seen_at="2026-04-13T10:00:00",
         )
         session.add(deal)
         session.commit()
 
         loaded = session.get(Deal, "pepper:123")
         assert loaded is not None
-        assert loaded.title == "Test Deal"
-        assert loaded.price == 1000
+        assert loaded.raw_title == "Test Deal"
+        assert loaded.current_price_pln == 1000
         assert loaded.status == "active"
 
     def test_deal_relationships(self, session):
         deal = Deal(
             id="pepper:456",
-            title="Bike",
-            price=5000,
-            link="https://example.com",
+            raw_title="Bike",
+            current_price_pln=5000,
+            url="https://example.com",
             source="pepper",
             description="",
             image_url="",
@@ -102,26 +134,26 @@ class TestDealModel:
             score=70,
             category="",
             status="active",
-            first_seen="2026-04-13T10:00:00",
-            last_seen="2026-04-13T10:00:00",
+            first_seen_at="2026-04-13T10:00:00",
+            last_seen_at="2026-04-13T10:00:00",
         )
         session.add(deal)
         session.flush()
 
-        ph = PriceHistory(deal_id="pepper:456", price=5000, recorded_at="2026-04-13T10:00:00")
+        ph = PriceHistory(offer_id="pepper:456", price_pln=5000, recorded_at="2026-04-13T10:00:00")
         session.add(ph)
         session.commit()
 
         loaded = session.get(Deal, "pepper:456")
         assert len(loaded.prices) == 1
-        assert loaded.prices[0].price == 5000
+        assert loaded.prices[0].price_pln == 5000
 
     def test_deal_feedback_entries_relationship(self, session):
         deal = Deal(
             id="pepper:rel-fb",
-            title="Feedback Rel Deal",
-            price=2000,
-            link="https://example.com",
+            raw_title="Feedback Rel Deal",
+            current_price_pln=2000,
+            url="https://example.com",
             source="pepper",
             description="",
             image_url="",
@@ -129,8 +161,8 @@ class TestDealModel:
             score=60,
             category="",
             status="active",
-            first_seen="2026-04-13T10:00:00",
-            last_seen="2026-04-13T10:00:00",
+            first_seen_at="2026-04-13T10:00:00",
+            last_seen_at="2026-04-13T10:00:00",
         )
         session.add(deal)
         session.flush()
@@ -147,9 +179,9 @@ class TestDealModel:
     def test_deal_watchlist_entry_relationship(self, session):
         deal = Deal(
             id="pepper:rel-wl",
-            title="Watchlist Rel Deal",
-            price=3000,
-            link="https://example.com",
+            raw_title="Watchlist Rel Deal",
+            current_price_pln=3000,
+            url="https://example.com",
             source="pepper",
             description="",
             image_url="",
@@ -157,8 +189,8 @@ class TestDealModel:
             score=55,
             category="",
             status="active",
-            first_seen="2026-04-13T10:00:00",
-            last_seen="2026-04-13T10:00:00",
+            first_seen_at="2026-04-13T10:00:00",
+            last_seen_at="2026-04-13T10:00:00",
         )
         session.add(deal)
         session.flush()
@@ -197,9 +229,9 @@ class TestFeedbackModel:
     def _make_deal(self, session, deal_id: str) -> Deal:
         deal = Deal(
             id=deal_id,
-            title="Feedback Test Deal",
-            price=1500,
-            link="https://example.com",
+            raw_title="Feedback Test Deal",
+            current_price_pln=1500,
+            url="https://example.com",
             source="pepper",
             description="",
             image_url="",
@@ -207,8 +239,8 @@ class TestFeedbackModel:
             score=50,
             category="",
             status="active",
-            first_seen="2026-04-13T10:00:00",
-            last_seen="2026-04-13T10:00:00",
+            first_seen_at="2026-04-13T10:00:00",
+            last_seen_at="2026-04-13T10:00:00",
         )
         session.add(deal)
         session.flush()
@@ -329,9 +361,9 @@ class TestWatchlistItemModel:
     def _make_deal(self, session, deal_id: str) -> Deal:
         deal = Deal(
             id=deal_id,
-            title="Watchlist Test Deal",
-            price=4000,
-            link="https://example.com",
+            raw_title="Watchlist Test Deal",
+            current_price_pln=4000,
+            url="https://example.com",
             source="pepper",
             description="",
             image_url="",
@@ -339,8 +371,8 @@ class TestWatchlistItemModel:
             score=65,
             category="",
             status="active",
-            first_seen="2026-04-13T10:00:00",
-            last_seen="2026-04-13T10:00:00",
+            first_seen_at="2026-04-13T10:00:00",
+            last_seen_at="2026-04-13T10:00:00",
         )
         session.add(deal)
         session.flush()
@@ -420,12 +452,12 @@ class TestWatchlistItemModel:
 
 class TestIndexes:
     def test_deals_index_exists(self, engine):
-        indexes = {idx["name"] for idx in inspect(engine).get_indexes("deals")}
-        assert "idx_deals_profile_score" in indexes
+        indexes = {idx["name"] for idx in inspect(engine).get_indexes("offers")}
+        assert "idx_offers_profile_score" in indexes
 
     def test_deals_index_columns(self, engine):
-        indexes = inspect(engine).get_indexes("deals")
-        idx = next(i for i in indexes if i["name"] == "idx_deals_profile_score")
+        indexes = inspect(engine).get_indexes("offers")
+        idx = next(i for i in indexes if i["name"] == "idx_offers_profile_score")
         assert set(idx["column_names"]) == {"profile", "score"}
 
     def test_seen_deals_index_exists(self, engine):

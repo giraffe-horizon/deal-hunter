@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from filters.base import BaseFilter
-from services.types import PriceChange, PriceTrackingConfig
-from sources.base import Deal
+from deal_hunter.core.types import PriceChange, PriceTrackingConfig
+from deal_hunter.domain.scoring.base import BaseFilter
+from deal_hunter.sources.base import Deal
 
 
 def test_price_tracking_config_defaults():
@@ -42,7 +42,7 @@ class TestProfileManager:
 
     @pytest.fixture
     def mgr(self, profiles_dir):
-        from services.profile_manager import ProfileManager
+        from deal_hunter.services.profile_manager import ProfileManager
 
         return ProfileManager(profiles_dir)
 
@@ -92,7 +92,7 @@ def _make_deal(**overrides):
 
 class TestDealFetcher:
     def test_deduplicate_by_id(self):
-        from services.fetcher import DealFetcher
+        from deal_hunter.services.fetcher import DealFetcher
 
         fetcher = DealFetcher({})
         deals = [
@@ -104,7 +104,7 @@ class TestDealFetcher:
         assert len(result) == 2
 
     def test_deduplicate_fuzzy_merge(self):
-        from services.fetcher import DealFetcher
+        from deal_hunter.services.fetcher import DealFetcher
 
         fetcher = DealFetcher({})
         deals = [
@@ -116,14 +116,14 @@ class TestDealFetcher:
         assert len(result[0].alt_links) == 1
 
     def test_normalize_title(self):
-        from services.fetcher import DealFetcher
+        from deal_hunter.services.fetcher import DealFetcher
 
         assert DealFetcher._normalize_title("  Hello, World!  ") == "hello world"
 
 
 class TestScoringService:
     def test_get_filter_default(self):
-        from services.scorer import ScoringService
+        from deal_hunter.services.scorer import ScoringService
 
         svc = ScoringService({})
         profile = {"score_rules": {"test": 10}, "budget": {"min": 0, "max": 10000}}
@@ -131,21 +131,21 @@ class TestScoringService:
         assert isinstance(f, BaseFilter)
 
     def test_detect_category_match(self):
-        from services.scorer import ScoringService
+        from deal_hunter.services.scorer import ScoringService
 
         deal = _make_deal(title="Giant Defy Advanced", description="road bike")
         profile = {"categories": {"bikes": ["bike", "rower"], "parts": ["pedal"]}}
         assert ScoringService.detect_category(deal, profile, "default") == "bikes"
 
     def test_detect_category_no_match(self):
-        from services.scorer import ScoringService
+        from deal_hunter.services.scorer import ScoringService
 
         deal = _make_deal(title="Something else", description="no match")
         profile = {"categories": {"bikes": ["bike"]}}
         assert ScoringService.detect_category(deal, profile, "fallback") == "fallback"
 
     def test_detect_category_no_categories(self):
-        from services.scorer import ScoringService
+        from deal_hunter.services.scorer import ScoringService
 
         deal = _make_deal(title="Anything")
         assert ScoringService.detect_category(deal, {}, "myprofile") == "myprofile"
@@ -153,14 +153,14 @@ class TestScoringService:
 
 class TestPriceTracker:
     def test_get_config_defaults(self):
-        from services.price_tracker import PriceTracker
+        from deal_hunter.services.price_tracker import PriceTracker
 
         config = PriceTracker.get_config({})
         assert config.enabled is True
         assert config.min_drop_percent == 10
 
     def test_get_config_custom(self):
-        from services.price_tracker import PriceTracker
+        from deal_hunter.services.price_tracker import PriceTracker
 
         config = PriceTracker.get_config(
             {"price_tracking": {"min_drop_percent": 20, "track_increases": True}}
@@ -169,7 +169,7 @@ class TestPriceTracker:
         assert config.track_increases is True
 
     def test_no_change_returns_none(self):
-        from services.price_tracker import PriceTracker
+        from deal_hunter.services.price_tracker import PriceTracker
 
         repo = MagicMock()
         repo.get_previous_price.return_value = 1000
@@ -178,7 +178,7 @@ class TestPriceTracker:
         assert tracker.check_price_change(deal) is None
 
     def test_small_drop_below_threshold(self):
-        from services.price_tracker import PriceTracker
+        from deal_hunter.services.price_tracker import PriceTracker
 
         repo = MagicMock()
         repo.get_previous_price.return_value = 1000
@@ -187,7 +187,7 @@ class TestPriceTracker:
         assert tracker.check_price_change(deal) is None
 
     def test_significant_drop_returns_price_change(self):
-        from services.price_tracker import PriceTracker
+        from deal_hunter.services.price_tracker import PriceTracker
 
         repo = MagicMock()
         repo.get_previous_price.return_value = 5000
@@ -201,7 +201,7 @@ class TestPriceTracker:
         assert result.is_lowest_ever is True
 
     def test_increase_not_reported_by_default(self):
-        from services.price_tracker import PriceTracker
+        from deal_hunter.services.price_tracker import PriceTracker
 
         repo = MagicMock()
         repo.get_previous_price.return_value = 1000
@@ -210,7 +210,7 @@ class TestPriceTracker:
         assert tracker.check_price_change(deal) is None
 
     def test_zero_price_returns_none(self):
-        from services.price_tracker import PriceTracker
+        from deal_hunter.services.price_tracker import PriceTracker
 
         repo = MagicMock()
         tracker = PriceTracker(repo)
@@ -220,12 +220,12 @@ class TestPriceTracker:
 
 class TestAlertService:
     def test_is_quiet_hours_no_config(self):
-        from services.alerter import is_quiet_hours
+        from deal_hunter.services.alerter import is_quiet_hours
 
         assert is_quiet_hours({}) is False
 
     def test_send_deal_alerts_no_telegram(self):
-        from services.alerter import AlertService
+        from deal_hunter.services.alerter import AlertService
 
         repo = MagicMock()
         svc = AlertService(telegram=None, alert_repo=repo)
@@ -239,7 +239,7 @@ class TestAlertService:
         assert result == 0
 
     def test_send_source_failure_no_telegram(self):
-        from services.alerter import AlertService
+        from deal_hunter.services.alerter import AlertService
 
         repo = MagicMock()
         svc = AlertService(telegram=None, alert_repo=repo)
@@ -247,7 +247,7 @@ class TestAlertService:
         # Should not raise
 
     def test_flush_queued_empty(self):
-        from services.alerter import AlertService
+        from deal_hunter.services.alerter import AlertService
 
         repo = MagicMock()
         repo.get_pending.return_value = []
@@ -264,7 +264,7 @@ class TestHealthTracker:
 
     @pytest.fixture
     def tracker(self, health_file):
-        from services.health_tracker import HealthTracker
+        from deal_hunter.services.health_tracker import HealthTracker
 
         return HealthTracker(health_file)
 

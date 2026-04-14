@@ -7,12 +7,14 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from notifiers.telegram import TelegramNotifier
-from services.price_tracker import PriceTracker
-from sources.base import Deal
-from storage.models import Base, PriceHistory
-from storage.models import Deal as DealModel
-from storage.repositories import DealRepository, PriceRepository
+from deal_hunter.notifiers.telegram import TelegramNotifier
+from deal_hunter.services.price_tracker import PriceTracker
+from deal_hunter.sources.base import Deal
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.models import Offer as DealModel
+from deal_hunter.storage.models import PricePoint as PriceHistory
+from deal_hunter.storage.repositories import OfferRepository as DealRepository
+from deal_hunter.storage.repositories import PriceRepository
 
 # ──────────────── FIXTURES ────────────────
 
@@ -45,8 +47,8 @@ def _seed_deal_with_prices(session, deal_id="pepper:12345", prices=None, profile
     now = datetime.now().isoformat()
     deal = DealModel(
         id=deal_id,
-        title="Test Deal",
-        price=prices[-1] if prices else 0,
+        raw_title="Test Deal",
+        current_price_pln=prices[-1] if prices else 0,
         source="pepper",
         description="",
         image_url="",
@@ -54,15 +56,15 @@ def _seed_deal_with_prices(session, deal_id="pepper:12345", prices=None, profile
         score=80,
         category="road",
         status="active",
-        first_seen=now,
-        last_seen=now,
+        first_seen_at=now,
+        last_seen_at=now,
     )
     session.add(deal)
     session.flush()
     if prices:
         for i, p in enumerate(prices):
             ts = f"2026-04-{10 + i:02d}T10:00:00"
-            ph = PriceHistory(deal_id=deal_id, price=p, recorded_at=ts)
+            ph = PriceHistory(offer_id=deal_id, price_pln=p, recorded_at=ts)
             session.add(ph)
     session.flush()
 
@@ -371,13 +373,15 @@ class TestPriceRepoGetPriceDrops:
         # Add price history: old high price, then current lower price
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (offer_id, price_pln, recorded_at)"
+                " VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 12999, "ts": (now - timedelta(days=3)).isoformat()},
         )
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (offer_id, price_pln, recorded_at)"
+                " VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 10499, "ts": (now - timedelta(hours=1)).isoformat()},
         )
@@ -399,14 +403,14 @@ class TestPriceRepoGetPriceDrops:
         for d in [deal, deal2]:
             session.execute(
                 text(
-                    "INSERT INTO price_history (deal_id, price, recorded_at)"
+                    "INSERT INTO price_points (offer_id, price_pln, recorded_at)"
                     " VALUES (:id, :price, :ts)"
                 ),
                 {"id": d.id, "price": d.price + 2000, "ts": (now - timedelta(days=2)).isoformat()},
             )
             session.execute(
                 text(
-                    "INSERT INTO price_history (deal_id, price, recorded_at)"
+                    "INSERT INTO price_points (offer_id, price_pln, recorded_at)"
                     " VALUES (:id, :price, :ts)"
                 ),
                 {"id": d.id, "price": d.price, "ts": (now - timedelta(hours=1)).isoformat()},
@@ -423,13 +427,15 @@ class TestPriceRepoGetPriceDrops:
         # Small drop: 10600 -> 10499 (~1%)
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (offer_id, price_pln, recorded_at)"
+                " VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 10600, "ts": (now - timedelta(days=2)).isoformat()},
         )
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (offer_id, price_pln, recorded_at)"
+                " VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 10499, "ts": (now - timedelta(hours=1)).isoformat()},
         )
@@ -450,13 +456,15 @@ class TestPriceRepoGetPriceDrops:
         # Old drop (10+ days ago)
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (offer_id, price_pln, recorded_at)"
+                " VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 15000, "ts": (now - timedelta(days=15)).isoformat()},
         )
         session.execute(
             text(
-                "INSERT INTO price_history (deal_id, price, recorded_at) VALUES (:id, :price, :ts)"
+                "INSERT INTO price_points (offer_id, price_pln, recorded_at)"
+                " VALUES (:id, :price, :ts)"
             ),
             {"id": deal.id, "price": 10499, "ts": (now - timedelta(days=10)).isoformat()},
         )
@@ -573,7 +581,7 @@ class TestTelegramDigest:
 
 class TestPriceTrackingValidation:
     def test_valid_price_tracking(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -592,7 +600,7 @@ class TestPriceTrackingValidation:
         assert len(errors) == 0
 
     def test_invalid_price_tracking_not_dict(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -606,7 +614,7 @@ class TestPriceTrackingValidation:
         assert any("price_tracking" in e and "dict" in e for e in errors)
 
     def test_invalid_min_drop_percent_range(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -620,7 +628,7 @@ class TestPriceTrackingValidation:
         assert any("min_drop_percent" in e and "between" in e for e in errors)
 
     def test_invalid_min_drop_amount_negative(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -634,7 +642,7 @@ class TestPriceTrackingValidation:
         assert any("min_drop_amount" in e and "non-negative" in e for e in errors)
 
     def test_invalid_enabled_not_bool(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -648,7 +656,7 @@ class TestPriceTrackingValidation:
         assert any("enabled" in e and "boolean" in e for e in errors)
 
     def test_invalid_track_increases_not_bool(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -662,7 +670,7 @@ class TestPriceTrackingValidation:
         assert any("track_increases" in e and "boolean" in e for e in errors)
 
     def test_no_price_tracking_is_valid(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",

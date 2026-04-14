@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=%h/Projects/deal-hunter
-ExecStart=%h/Projects/deal-hunter/venv/bin/python deal_hunter.py --digest
+ExecStart=%h/Projects/deal-hunter/venv/bin/deal-hunter --digest
 EnvironmentFile=%h/Projects/deal-hunter/.env
 
 [Install]

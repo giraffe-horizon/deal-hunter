@@ -13,8 +13,8 @@ import yaml
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 
-from storage.models import Base
-from storage.repositories import DealRepository
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.repositories import OfferRepository
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
@@ -48,7 +48,7 @@ def seeded_db(e2e_state_dir):
     session = Session(eng)
 
     today = datetime.now().isoformat()
-    deal_repo = DealRepository(session)
+    deal_repo = OfferRepository(session)
 
     deal_repo.upsert(
         id="pepper:99999",
@@ -112,14 +112,14 @@ def seeded_db(e2e_state_dir):
     # Price history for deal1 — insert directly with different timestamps
     session.execute(
         text(
-            "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"
+            "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
             " VALUES (:deal_id, :price, :recorded_at)"
         ),
         {"deal_id": "pepper:99999", "price": 9500, "recorded_at": "2026-03-20T10:00:00"},
     )
     session.execute(
         text(
-            "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"
+            "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
             " VALUES (:deal_id, :price, :recorded_at)"
         ),
         {"deal_id": "pepper:99999", "price": 8500, "recorded_at": "2026-03-25T10:00:00"},

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from services.health_tracker import HealthTracker
+from deal_hunter.services.health_tracker import HealthTracker
 
 # ──────────────── Fixtures ────────────────
 

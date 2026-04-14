@@ -2,8 +2,8 @@
 
 from unittest.mock import patch
 
-from services.fetcher import DealFetcher
-from sources.base import Deal
+from deal_hunter.services.fetcher import DealFetcher
+from deal_hunter.sources.base import Deal
 
 _fetcher = DealFetcher({})
 _normalize_title = DealFetcher._normalize_title
@@ -243,7 +243,7 @@ def test_normalize_title_unicode():
 
 def test_telegram_alert_with_alt_links():
     """send_alert includes alt_links in message when present."""
-    from notifiers.telegram import TelegramNotifier
+    from deal_hunter.notifiers.telegram import TelegramNotifier
 
     notifier = TelegramNotifier("fake-token", "fake-chat")
     deal = _make_deal(
@@ -267,7 +267,7 @@ def test_telegram_alert_with_alt_links():
 
 def test_telegram_alert_without_alt_links():
     """send_alert omits 'Też w:' section when alt_links is empty."""
-    from notifiers.telegram import TelegramNotifier
+    from deal_hunter.notifiers.telegram import TelegramNotifier
 
     notifier = TelegramNotifier("fake-token", "fake-chat")
     deal = _make_deal(
@@ -285,7 +285,7 @@ def test_telegram_alert_without_alt_links():
 
 def test_telegram_price_drop_with_alt_links():
     """send_price_drop_alert includes alt_links when present."""
-    from notifiers.telegram import TelegramNotifier
+    from deal_hunter.notifiers.telegram import TelegramNotifier
 
     notifier = TelegramNotifier("fake-token", "fake-chat")
     deal = _make_deal(

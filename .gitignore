@@ -1,13 +1,18 @@
-.env
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
 *.pyc
-state/
-*.log
-venv/
+*.egg-info/
+dist/
+build/
 .venv/
+venv/
+*.log
 
 # User profiles (not committed — see docs/creating-profiles.md)
-profiles/*.yaml
+/profiles/
+/state/
 .coverage
 deal_hunter.egg-info/
 .playwright-mcp/
@@ -16,3 +21,6 @@ screenshots/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+
+#
+.env

@@ -6,11 +6,12 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from services.price_tracker import PriceTracker
-from sources.base import Deal
-from storage.models import Base, PriceHistory
-from storage.models import Deal as DealModel
-from storage.repositories import PriceRepository
+from deal_hunter.services.price_tracker import PriceTracker
+from deal_hunter.sources.base import Deal
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.models import Offer as DealModel
+from deal_hunter.storage.models import PricePoint as PriceHistory
+from deal_hunter.storage.repositories import PriceRepository
 
 
 @pytest.fixture
@@ -52,23 +53,23 @@ def _seed_deal_with_prices(session, deal_id="test:1", prices=None):
     now = datetime.now().isoformat()
     deal = DealModel(
         id=deal_id,
-        title="Test Deal",
-        price=prices[-1] if prices else 0,
+        raw_title="Test Deal",
+        current_price_pln=prices[-1] if prices else 0,
         source="pepper",
         description="",
         image_url="",
         profile="test",
         score=80,
         status="active",
-        first_seen=now,
-        last_seen=now,
+        first_seen_at=now,
+        last_seen_at=now,
     )
     session.add(deal)
     session.flush()
     if prices:
         for i, p in enumerate(prices):
             ts = f"2026-04-{10 + i:02d}T10:00:00"
-            ph = PriceHistory(deal_id=deal_id, price=p, recorded_at=ts)
+            ph = PriceHistory(offer_id=deal_id, price_pln=p, recorded_at=ts)
             session.add(ph)
     session.flush()
 

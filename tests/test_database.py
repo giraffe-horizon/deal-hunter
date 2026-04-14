@@ -4,8 +4,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from storage.database import SessionLocal, engine, get_session
-from storage.models import Base, Deal
+from deal_hunter.storage.database import SessionLocal, engine, get_session
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.models import Offer as Deal
 
 
 @pytest.fixture(autouse=True)
@@ -37,38 +38,38 @@ class TestGetSession:
         with get_session() as session:
             deal = Deal(
                 id="test:1",
-                title="Test",
-                price=100,
+                raw_title="Test",
+                current_price_pln=100,
                 source="test",
                 description="",
                 image_url="",
                 profile="test",
                 score=50,
                 status="active",
-                first_seen="2026-04-13",
-                last_seen="2026-04-13",
+                first_seen_at="2026-04-13",
+                last_seen_at="2026-04-13",
             )
             session.add(deal)
 
         with get_session() as session:
             loaded = session.get(Deal, "test:1")
             assert loaded is not None
-            assert loaded.title == "Test"
+            assert loaded.raw_title == "Test"
 
     def test_auto_rollback_on_exception(self):
         with pytest.raises(ValueError, match="boom"), get_session() as session:
             deal = Deal(
                 id="test:2",
-                title="Fail",
-                price=0,
+                raw_title="Fail",
+                current_price_pln=0,
                 source="test",
                 description="",
                 image_url="",
                 profile="test",
                 score=0,
                 status="active",
-                first_seen="2026-04-13",
-                last_seen="2026-04-13",
+                first_seen_at="2026-04-13",
+                last_seen_at="2026-04-13",
             )
             session.add(deal)
             session.flush()

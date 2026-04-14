@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 
-from sources.base import Deal
-from storage.models import Base
-from storage.repositories import DealRepository
+from deal_hunter.sources.base import Deal
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.repositories import OfferRepository
 
 
 @pytest.fixture
@@ -70,7 +70,7 @@ def tmp_state_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def dashboard_session(tmp_path):
     """SQLAlchemy session seeded with test data for dashboard tests."""
-    eng = create_engine(f"sqlite:///{tmp_path / 'dashboard.db'}")
+    eng = create_engine(f"sqlite:///{tmp_path / 'deal_hunter.api.db'}")
 
     @event.listens_for(eng, "connect")
     def _set_sqlite_pragma(dbapi_conn, connection_record):
@@ -83,7 +83,7 @@ def dashboard_session(tmp_path):
     session = Session(eng)
 
     today = datetime.now().isoformat()
-    deal_repo = DealRepository(session)
+    deal_repo = OfferRepository(session)
 
     # Deal 1: high-score bike, active (set first_seen/last_seen early so price history
     # manual inserts come after the upsert's initial price)
@@ -152,17 +152,17 @@ def dashboard_session(tmp_path):
     # Price history for deal1 (two prices — enables drop detection)
     session.execute(
         text(
-            "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"
-            " VALUES (:deal_id, :price, :recorded_at)"
+            "INSERT OR IGNORE INTO price_points (offer_id, price_pln, recorded_at)"
+            " VALUES (:offer_id, :price_pln, :recorded_at)"
         ),
-        {"deal_id": "pepper:99999", "price": 9500, "recorded_at": "2026-03-20T10:00:00"},
+        {"offer_id": "pepper:99999", "price_pln": 9500, "recorded_at": "2026-03-20T10:00:00"},
     )
     session.execute(
         text(
-            "INSERT OR IGNORE INTO price_history (deal_id, price, recorded_at)"
-            " VALUES (:deal_id, :price, :recorded_at)"
+            "INSERT OR IGNORE INTO price_points (offer_id, price_pln, recorded_at)"
+            " VALUES (:offer_id, :price_pln, :recorded_at)"
         ),
-        {"deal_id": "pepper:99999", "price": 8500, "recorded_at": "2026-03-25T10:00:00"},
+        {"offer_id": "pepper:99999", "price_pln": 8500, "recorded_at": "2026-03-25T10:00:00"},
     )
 
     session.commit()
@@ -209,7 +209,7 @@ def raw_client(dashboard_session):
     """FastAPI TestClient WITHOUT auto CSRF headers (for CSRF-specific tests)."""
     from fastapi.testclient import TestClient
 
-    from dashboard import app, get_db
+    from deal_hunter.api import app, get_db
 
     def _override():
         yield dashboard_session
@@ -226,7 +226,7 @@ def client(dashboard_session):
     """FastAPI TestClient with dashboard_session injected and auto CSRF headers."""
     from fastapi.testclient import TestClient
 
-    from dashboard import app, get_db
+    from deal_hunter.api import app, get_db
 
     def _override():
         yield dashboard_session

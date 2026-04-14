@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import yaml
 
-from utils.init_profile import run_init
+from deal_hunter.utils.init_profile import run_init
 
 # Fixed registry so tests don't break when new stores are added.
 # First entry is a search-type YAML store (accepts queries).
@@ -56,13 +56,15 @@ def test_init_creates_valid_profile(tmp_path, monkeypatch):
         return next(inputs)
 
     monkeypatch.setattr("builtins.input", mock_input)
-    monkeypatch.setattr("utils.init_profile.SOURCE_REGISTRY", _FIXED_REGISTRY)
-    monkeypatch.setattr("utils.init_profile.load_all_store_definitions", lambda: _FIXED_STORE_DEFS)
+    monkeypatch.setattr("deal_hunter.utils.init_profile.SOURCE_REGISTRY", _FIXED_REGISTRY)
+    monkeypatch.setattr(
+        "deal_hunter.utils.init_profile.load_all_store_definitions", lambda: _FIXED_STORE_DEFS
+    )
 
     # Redirect profiles dir to tmp
     profiles_dir = tmp_path / "profiles"
     profiles_dir.mkdir()
-    monkeypatch.setattr("utils.init_profile.PROFILES_DIR", profiles_dir)
+    monkeypatch.setattr("deal_hunter.utils.init_profile.PROFILES_DIR", profiles_dir)
 
     run_init()
 
@@ -139,12 +141,14 @@ def test_init_rejects_invalid_name(tmp_path, monkeypatch, capsys):
         return next(inputs)
 
     monkeypatch.setattr("builtins.input", mock_input)
-    monkeypatch.setattr("utils.init_profile.SOURCE_REGISTRY", _FIXED_REGISTRY)
-    monkeypatch.setattr("utils.init_profile.load_all_store_definitions", lambda: _FIXED_STORE_DEFS)
+    monkeypatch.setattr("deal_hunter.utils.init_profile.SOURCE_REGISTRY", _FIXED_REGISTRY)
+    monkeypatch.setattr(
+        "deal_hunter.utils.init_profile.load_all_store_definitions", lambda: _FIXED_STORE_DEFS
+    )
 
     profiles_dir = tmp_path / "profiles"
     profiles_dir.mkdir()
-    monkeypatch.setattr("utils.init_profile.PROFILES_DIR", profiles_dir)
+    monkeypatch.setattr("deal_hunter.utils.init_profile.PROFILES_DIR", profiles_dir)
 
     run_init()
 
@@ -167,12 +171,14 @@ def test_init_no_sources_aborts(tmp_path, monkeypatch, capsys):
         return next(inputs)
 
     monkeypatch.setattr("builtins.input", mock_input)
-    monkeypatch.setattr("utils.init_profile.SOURCE_REGISTRY", _FIXED_REGISTRY)
-    monkeypatch.setattr("utils.init_profile.load_all_store_definitions", lambda: _FIXED_STORE_DEFS)
+    monkeypatch.setattr("deal_hunter.utils.init_profile.SOURCE_REGISTRY", _FIXED_REGISTRY)
+    monkeypatch.setattr(
+        "deal_hunter.utils.init_profile.load_all_store_definitions", lambda: _FIXED_STORE_DEFS
+    )
 
     profiles_dir = tmp_path / "profiles"
     profiles_dir.mkdir()
-    monkeypatch.setattr("utils.init_profile.PROFILES_DIR", profiles_dir)
+    monkeypatch.setattr("deal_hunter.utils.init_profile.PROFILES_DIR", profiles_dir)
 
     run_init()
 

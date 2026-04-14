@@ -34,10 +34,13 @@ dependencies = [
     "python-multipart>=0.0.6",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
+    "pydantic>=2.5",
+    "pydantic-settings>=2.0",
 ]
 
 [project.scripts]
-deal-hunter = "deal_hunter:main"
+deal-hunter = "deal_hunter.cli.main:main"
+deal-hunter-bot = "deal_hunter.bot.main:main"
 
 [project.urls]
 Homepage = "https://github.com/giraffe-horizon/deal-hunter"
@@ -63,7 +66,8 @@ e2e = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["sources*", "filters*", "notifiers*", "utils*", "dashboard*", "storage*", "visualization*"]
+where = ["src"]
+include = ["deal_hunter*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -99,10 +103,17 @@ module = ["telegram.*", "matplotlib.*", "rich.*", "sqlalchemy.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["dashboard.routes.*", "dashboard"]
+module = ["deal_hunter.api.routes.*", "deal_hunter.api"]
 disallow_untyped_defs = false
 warn_return_any = false
 disable_error_code = ["attr-defined"]
+
+# Bot handlers: python-telegram-bot stubs type update.message as Message | None,
+# but the library guarantees it's set for CommandHandler / CallbackQueryHandler
+# dispatch paths. Suppress union-attr to avoid None-guard boilerplate.
+[[tool.mypy.overrides]]
+module = ["deal_hunter.bot.commands", "deal_hunter.bot.callbacks"]
+disable_error_code = ["union-attr", "arg-type", "index"]
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
@@ -110,7 +121,7 @@ disallow_untyped_defs = false
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-version_variables = ["deal_hunter.py:__version__"]
+version_variables = ["src/deal_hunter/__init__.py:__version__"]
 branch = "main"
 commit_message = "chore(release): {version}"
 build_command = ""

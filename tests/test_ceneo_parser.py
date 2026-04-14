@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sources.yaml_source import YamlSource, load_store_definition
+from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

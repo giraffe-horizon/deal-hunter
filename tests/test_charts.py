@@ -8,8 +8,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from storage.models import Base, PriceHistory
-from storage.models import Deal as DealModel
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.models import Offer as DealModel
+from deal_hunter.storage.models import PricePoint as PriceHistory
 
 # ── Fixtures ──
 
@@ -30,34 +31,34 @@ def chart_session(engine):
         # Deal with price history
         deal = DealModel(
             id="pepper:12345",
-            title="Canyon Endurace CF 8 Di2",
-            price=10499,
-            link="https://example.com/deal",
+            raw_title="Canyon Endurace CF 8 Di2",
+            current_price_pln=10499,
+            url="https://example.com/deal",
             source="pepper",
             description="",
             image_url="",
             profile="bikes",
             score=80,
             status="active",
-            first_seen=now.isoformat(),
-            last_seen=now.isoformat(),
+            first_seen_at=now.isoformat(),
+            last_seen_at=now.isoformat(),
         )
         session.add(deal)
 
         # Second deal for trend chart
         deal2 = DealModel(
             id="pepper:67890",
-            title="Giant Defy Advanced 2",
-            price=8999,
-            link="https://example.com/deal2",
+            raw_title="Giant Defy Advanced 2",
+            current_price_pln=8999,
+            url="https://example.com/deal2",
             source="pepper",
             description="",
             image_url="",
             profile="bikes",
             score=75,
             status="active",
-            first_seen=now.isoformat(),
-            last_seen=now.isoformat(),
+            first_seen_at=now.isoformat(),
+            last_seen_at=now.isoformat(),
         )
         session.add(deal2)
         session.flush()
@@ -72,8 +73,8 @@ def chart_session(engine):
         for price, ts in prices:
             session.add(
                 PriceHistory(
-                    deal_id="pepper:12345",
-                    price=price,
+                    offer_id="pepper:12345",
+                    price_pln=price,
                     recorded_at=ts.isoformat(),
                 )
             )
@@ -81,8 +82,8 @@ def chart_session(engine):
         # Price history for second deal
         session.add(
             PriceHistory(
-                deal_id="pepper:67890",
-                price=8999,
+                offer_id="pepper:67890",
+                price_pln=8999,
                 recorded_at=(now - timedelta(days=5)).isoformat(),
             )
         )
@@ -140,7 +141,7 @@ def _is_png(path: Path) -> bool:
 
 class TestGeneratePriceChart:
     def test_generates_valid_png(self, chart_session, tmp_path):
-        from visualization.charts import generate_price_chart
+        from deal_hunter.visualization.charts import generate_price_chart
 
         output = tmp_path / "test_chart.png"
         result = generate_price_chart("pepper:12345", chart_session, output_path=str(output))
@@ -150,7 +151,7 @@ class TestGeneratePriceChart:
         assert _is_png(output)
 
     def test_default_output_path(self, chart_session):
-        from visualization.charts import generate_price_chart
+        from deal_hunter.visualization.charts import generate_price_chart
 
         result = generate_price_chart("pepper:12345", chart_session)
 
@@ -160,28 +161,28 @@ class TestGeneratePriceChart:
         result.unlink(missing_ok=True)
 
     def test_deal_not_found(self, empty_session):
-        from visualization.charts import generate_price_chart
+        from deal_hunter.visualization.charts import generate_price_chart
 
         with pytest.raises(ValueError, match="Nie znaleziono oferty"):
             generate_price_chart("nonexistent:999", empty_session)
 
     def test_no_price_history(self, engine):
-        from visualization.charts import generate_price_chart
+        from deal_hunter.visualization.charts import generate_price_chart
 
         # Create a deal with no price history
         with Session(engine) as session:
             deal = DealModel(
                 id="pepper:noprice",
-                title="No Price Deal",
-                price=1000,
+                raw_title="No Price Deal",
+                current_price_pln=1000,
                 source="pepper",
                 description="",
                 image_url="",
                 profile="bikes",
                 score=50,
                 status="active",
-                first_seen=datetime.now().isoformat(),
-                last_seen=datetime.now().isoformat(),
+                first_seen_at=datetime.now().isoformat(),
+                last_seen_at=datetime.now().isoformat(),
             )
             session.add(deal)
             session.flush()
@@ -195,7 +196,7 @@ class TestGeneratePriceChart:
 
 class TestGenerateDigestChart:
     def test_generates_valid_png(self, sample_drops, tmp_path):
-        from visualization.charts import generate_digest_chart
+        from deal_hunter.visualization.charts import generate_digest_chart
 
         output = tmp_path / "digest.png"
         result = generate_digest_chart(sample_drops, output_path=str(output))
@@ -205,13 +206,13 @@ class TestGenerateDigestChart:
         assert _is_png(output)
 
     def test_empty_drops_raises(self):
-        from visualization.charts import generate_digest_chart
+        from deal_hunter.visualization.charts import generate_digest_chart
 
         with pytest.raises(ValueError, match="Brak danych"):
             generate_digest_chart([])
 
     def test_default_output_path(self, sample_drops):
-        from visualization.charts import generate_digest_chart
+        from deal_hunter.visualization.charts import generate_digest_chart
 
         result = generate_digest_chart(sample_drops)
 
@@ -225,7 +226,7 @@ class TestGenerateDigestChart:
 
 class TestGenerateTrendChart:
     def test_generates_valid_png(self, chart_session, tmp_path):
-        from visualization.charts import generate_trend_chart
+        from deal_hunter.visualization.charts import generate_trend_chart
 
         output = tmp_path / "trend.png"
         result = generate_trend_chart("bikes", chart_session, days=30, output_path=str(output))
@@ -235,28 +236,28 @@ class TestGenerateTrendChart:
         assert _is_png(output)
 
     def test_no_deals_raises(self, empty_session):
-        from visualization.charts import generate_trend_chart
+        from deal_hunter.visualization.charts import generate_trend_chart
 
         with pytest.raises(ValueError, match="Brak ofert"):
             generate_trend_chart("empty_profile", empty_session)
 
     def test_no_price_data_raises(self, engine):
-        from visualization.charts import generate_trend_chart
+        from deal_hunter.visualization.charts import generate_trend_chart
 
         # Create a deal with no price history
         with Session(engine) as session:
             deal = DealModel(
                 id="pepper:noprice",
-                title="No Price Deal",
-                price=1000,
+                raw_title="No Price Deal",
+                current_price_pln=1000,
                 source="pepper",
                 description="",
                 image_url="",
                 profile="test_profile",
                 score=50,
                 status="active",
-                first_seen=datetime.now().isoformat(),
-                last_seen=datetime.now().isoformat(),
+                first_seen_at=datetime.now().isoformat(),
+                last_seen_at=datetime.now().isoformat(),
             )
             session.add(deal)
             session.flush()
@@ -280,7 +281,7 @@ class TestLazyImport:
 
         # Need to reload charts module with mocked import
         with patch("builtins.__import__", side_effect=mock_import):
-            from visualization.charts import _import_matplotlib
+            from deal_hunter.visualization.charts import _import_matplotlib
 
             with pytest.raises(ImportError, match="matplotlib is required"):
                 _import_matplotlib()
@@ -291,7 +292,7 @@ class TestLazyImport:
 
 class TestSendPhoto:
     def test_send_photo_success(self, tmp_path):
-        from notifiers.telegram import TelegramNotifier
+        from deal_hunter.notifiers.telegram import TelegramNotifier
 
         notifier = TelegramNotifier("test_token", "test_chat")
 
@@ -303,8 +304,10 @@ class TestSendPhoto:
         mock_response.status_code = 200
 
         with (
-            patch("notifiers.telegram.requests.post", return_value=mock_response) as mock_post,
-            patch("notifiers.telegram.time.sleep"),
+            patch(
+                "deal_hunter.notifiers.telegram.requests.post", return_value=mock_response
+            ) as mock_post,
+            patch("deal_hunter.notifiers.telegram.time.sleep"),
         ):
             notifier.send_photo(str(photo), caption="Test caption", topic_id=42)
 
@@ -316,7 +319,7 @@ class TestSendPhoto:
         assert "photo" in call_kwargs[1]["files"]
 
     def test_send_photo_retry_on_429(self, tmp_path):
-        from notifiers.telegram import TelegramNotifier
+        from deal_hunter.notifiers.telegram import TelegramNotifier
 
         notifier = TelegramNotifier("test_token", "test_chat")
 
@@ -332,16 +335,16 @@ class TestSendPhoto:
 
         with (
             patch(
-                "notifiers.telegram.requests.post", side_effect=[resp_429, resp_200]
+                "deal_hunter.notifiers.telegram.requests.post", side_effect=[resp_429, resp_200]
             ) as mock_post,
-            patch("notifiers.telegram.time.sleep"),
+            patch("deal_hunter.notifiers.telegram.time.sleep"),
         ):
             notifier.send_photo(str(photo))
 
         assert mock_post.call_count == 2
 
     def test_send_photo_no_caption(self, tmp_path):
-        from notifiers.telegram import TelegramNotifier
+        from deal_hunter.notifiers.telegram import TelegramNotifier
 
         notifier = TelegramNotifier("test_token", "test_chat")
 
@@ -352,8 +355,10 @@ class TestSendPhoto:
         mock_response.status_code = 200
 
         with (
-            patch("notifiers.telegram.requests.post", return_value=mock_response) as mock_post,
-            patch("notifiers.telegram.time.sleep"),
+            patch(
+                "deal_hunter.notifiers.telegram.requests.post", return_value=mock_response
+            ) as mock_post,
+            patch("deal_hunter.notifiers.telegram.time.sleep"),
         ):
             notifier.send_photo(str(photo))
 

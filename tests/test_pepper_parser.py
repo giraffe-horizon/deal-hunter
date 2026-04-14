@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bs4 import BeautifulSoup
 
-from sources.pepper import PepperSource
+from deal_hunter.sources.pepper import PepperSource
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
