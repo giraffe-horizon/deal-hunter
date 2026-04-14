@@ -2,7 +2,7 @@
 
 import pytest
 
-from sources.base import Source
+from deal_hunter.sources.base import Source
 
 
 @pytest.mark.parametrize(

@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/Projects/deal-hunter
-ExecStart=%h/Projects/deal-hunter/venv/bin/python feedback_bot.py
+ExecStart=%h/Projects/deal-hunter/venv/bin/deal-hunter-bot
 Restart=on-failure
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1

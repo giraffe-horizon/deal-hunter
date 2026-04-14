@@ -3,8 +3,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from dashboard import _get_profiles, format_pln, safe_load_profile
-from storage.repositories import OfferRepository as DealRepository
+from deal_hunter.api import _get_profiles, format_pln, safe_load_profile
+from deal_hunter.storage.repositories import OfferRepository as DealRepository
 
 # ──────────────── Unit tests: format_pln ────────────────
 
@@ -48,12 +48,12 @@ class TestHelpers:
 
     def test_get_profiles_missing_dir(self, tmp_path):
         missing = tmp_path / "no_such_dir"
-        with patch("dashboard.dependencies.PROFILES_DIR", missing):
+        with patch("deal_hunter.api.dependencies.PROFILES_DIR", missing):
             result = _get_profiles()
             assert result == []
 
     def test_get_profiles_empty_dir(self, tmp_path):
-        with patch("dashboard.dependencies.PROFILES_DIR", tmp_path):
+        with patch("deal_hunter.api.dependencies.PROFILES_DIR", tmp_path):
             result = _get_profiles()
             assert result == []
 
@@ -61,7 +61,7 @@ class TestHelpers:
         (tmp_path / "nas_hdd.yaml").write_text("name: nas_hdd")
         (tmp_path / "bikes.yaml").write_text("name: bikes")
         (tmp_path / "audio.yaml").write_text("name: audio")
-        with patch("dashboard.dependencies.PROFILES_DIR", tmp_path):
+        with patch("deal_hunter.api.dependencies.PROFILES_DIR", tmp_path):
             result = _get_profiles()
             assert result == ["audio", "bikes", "nas_hdd"]
 
@@ -348,13 +348,13 @@ class TestDealDetailPage:
 
 class TestHealthPage:
     def test_health_no_data(self, client):
-        with patch("dashboard.routes.health._tracker.load", return_value=None):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=None):
             response = client.get("/health")
             assert response.status_code == 200
             assert "No health data" in response.text
 
     def test_health_with_data(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             response = client.get("/health")
             assert response.status_code == 200
             text = response.text
@@ -364,55 +364,55 @@ class TestHealthPage:
             assert "bikes" in text  # profile name
 
     def test_health_shows_errors(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Connection timeout" in text
 
     def test_health_shows_source_status(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "ceneo" in text
             assert "degraded" in text.lower() or "2" in text  # consecutive failures
 
     def test_health_shows_duration(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "12.5" in text
 
     def test_health_shows_operational_heartbeat(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Operational Heartbeat" in text
             assert "Last Run" in text
             assert "Duration" in text
 
     def test_health_shows_version_card(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Version" in text
             assert "0.4.3" in text
 
     def test_health_shows_deals_found_count(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Total Deals" in text
             assert "15" in text  # bikes found 15
 
     def test_health_shows_alerts_count(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Total Alerts" in text
             assert "3" in text  # bikes had 3 alerts
 
     def test_health_shows_profile_results_table(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Profile Results" in text
             assert "nas_hdd" in text
             assert "error" in text.lower()  # nas_hdd status
 
     def test_health_shows_multiple_errors(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Connection timeout" in text
             assert "Parser failed" in text
@@ -426,12 +426,12 @@ class TestHealthPage:
             "profile_results": {},
             "sources_health": {},
         }
-        with patch("dashboard.routes.health._tracker.load", return_value=data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=data):
             text = client.get("/health").text
             assert "OK" in text
 
     def test_health_source_consecutive_failures(self, client, sample_health_data):
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             text = client.get("/health").text
             assert "Consecutive Failures" in text
 
@@ -791,7 +791,7 @@ class TestE2EWorkflows:
 
     def test_health_page_accessible_from_nav(self, client, sample_health_data):
         """Health page loads independently with its own data source."""
-        with patch("dashboard.routes.health._tracker.load", return_value=sample_health_data):
+        with patch("deal_hunter.api.routes.health._tracker.load", return_value=sample_health_data):
             response = client.get("/health")
             assert response.status_code == 200
             assert "System Health" in response.text
@@ -1118,7 +1118,7 @@ class TestComparePage:
 class TestScoreDealsHelper:
     def test_score_deals_empty(self):
         """Empty deal list returns empty result."""
-        from dashboard.services import DealService
+        from deal_hunter.api.view_services import DealService
 
         result = DealService(None).score_deals_with_profile(
             [], {"score_rules": {}, "penalties": {}}
@@ -1127,7 +1127,7 @@ class TestScoreDealsHelper:
 
     def test_score_deals_applies_rules(self):
         """Helper correctly applies score rules to deal dicts."""
-        from dashboard.services import DealService
+        from deal_hunter.api.view_services import DealService
 
         deals = [
             {
@@ -1154,7 +1154,7 @@ class TestScoreDealsHelper:
 
     def test_score_deals_sorts_by_new_score_desc(self):
         """Results are sorted by new_score descending."""
-        from dashboard.services import DealService
+        from deal_hunter.api.view_services import DealService
 
         deals = [
             {
@@ -1188,7 +1188,7 @@ class TestScoreDealsHelper:
 
     def test_score_deals_handles_rejected(self):
         """Deals matching excluded words are marked rejected."""
-        from dashboard.services import DealService
+        from deal_hunter.api.view_services import DealService
 
         deals = [
             {
@@ -1213,7 +1213,7 @@ class TestScoreDealsHelper:
 
     def test_score_deals_none_price_handled(self):
         """Deals with None price don't crash."""
-        from dashboard.services import DealService
+        from deal_hunter.api.view_services import DealService
 
         deals = [
             {
@@ -1382,7 +1382,7 @@ class TestTunerPage:
         data = response.json()
         assert data.get("ok") is True
         # Verify the profile was updated by loading it
-        from dashboard import safe_load_profile
+        from deal_hunter.api import safe_load_profile
 
         updated = safe_load_profile("test_tuner_save")
         assert updated is not None
@@ -1484,13 +1484,13 @@ def test_deals_per_page_env_override(monkeypatch):
     monkeypatch.setenv("DEALS_PER_PAGE", "25")
     import importlib
 
-    import dashboard.services
+    from deal_hunter.api import view_services
 
-    importlib.reload(dashboard.services)
-    assert dashboard.services.DEALS_PER_PAGE == 25
+    importlib.reload(view_services)
+    assert view_services.DEALS_PER_PAGE == 25
     monkeypatch.delenv("DEALS_PER_PAGE")
-    importlib.reload(dashboard.services)
-    assert dashboard.services.DEALS_PER_PAGE == 50
+    importlib.reload(view_services)
+    assert view_services.DEALS_PER_PAGE == 50
 
 
 def test_score_threshold_env_override(monkeypatch):
@@ -1498,10 +1498,10 @@ def test_score_threshold_env_override(monkeypatch):
     monkeypatch.setenv("SCORE_THRESHOLD", "60")
     import importlib
 
-    import dashboard.services
+    from deal_hunter.api import view_services
 
-    importlib.reload(dashboard.services)
-    assert dashboard.services.SCORE_THRESHOLD == 60
+    importlib.reload(view_services)
+    assert view_services.SCORE_THRESHOLD == 60
     monkeypatch.delenv("SCORE_THRESHOLD")
-    importlib.reload(dashboard.services)
-    assert dashboard.services.SCORE_THRESHOLD == 70
+    importlib.reload(view_services)
+    assert view_services.SCORE_THRESHOLD == 70

@@ -1,7 +1,7 @@
 """Tests for the bike-specific filter."""
 
-from filters.bike_filter import BikeFilter
-from sources.base import Deal
+from deal_hunter.domain.scoring.bike_filter import BikeFilter
+from deal_hunter.sources.base import Deal
 
 
 def _bike_profile(**overrides) -> dict:

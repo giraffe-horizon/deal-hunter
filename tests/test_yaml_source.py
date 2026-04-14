@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sources.yaml_source import (
+from deal_hunter.sources.yaml_source import (
     YamlSource,
     load_all_store_definitions,
     load_store_definition,
@@ -566,7 +566,7 @@ class TestStoreLoading:
 
 class TestAutoDiscovery:
     def test_yaml_stores_in_registry(self):
-        from sources import SOURCE_REGISTRY
+        from deal_hunter.sources import SOURCE_REGISTRY
 
         for name in [
             "ceneo",
@@ -580,7 +580,7 @@ class TestAutoDiscovery:
             assert name in SOURCE_REGISTRY, f"{name} not in SOURCE_REGISTRY"
 
     def test_yaml_source_instantiation(self):
-        from sources import SOURCE_REGISTRY
+        from deal_hunter.sources import SOURCE_REGISTRY
 
         for name in ["ceneo", "proshop", "canyon"]:
             source_class = SOURCE_REGISTRY[name]
@@ -588,14 +588,14 @@ class TestAutoDiscovery:
             assert isinstance(source, YamlSource)
 
     def test_pepper_still_python(self):
-        from sources import SOURCE_REGISTRY
-        from sources.pepper import PepperSource
+        from deal_hunter.sources import SOURCE_REGISTRY
+        from deal_hunter.sources.pepper import PepperSource
 
         assert SOURCE_REGISTRY["pepper"] is PepperSource
 
     def test_web_still_python(self):
-        from sources import SOURCE_REGISTRY
-        from sources.web import WebSource
+        from deal_hunter.sources import SOURCE_REGISTRY
+        from deal_hunter.sources.web import WebSource
 
         assert SOURCE_REGISTRY["web"] is WebSource
 
@@ -795,7 +795,7 @@ class TestStoreValidation:
         """Store with selectors as string instead of dict should be skipped."""
         store_yaml = tmp_path / "badstore.yaml"
         store_yaml.write_text("name: badstore\nstrategies:\n  - css\nselectors: 'div.product'\n")
-        with patch("sources.yaml_source.STORES_DIR", tmp_path):
+        with patch("deal_hunter.sources.yaml_source.STORES_DIR", tmp_path):
             stores = load_all_store_definitions()
         assert "badstore" not in stores
 
@@ -805,7 +805,7 @@ class TestStoreValidation:
         store_yaml.write_text(
             "name: nocontainer\nstrategies:\n  - css\nselectors:\n  title: h2\n  price: span\n"
         )
-        with patch("sources.yaml_source.STORES_DIR", tmp_path):
+        with patch("deal_hunter.sources.yaml_source.STORES_DIR", tmp_path):
             stores = load_all_store_definitions()
         assert "nocontainer" not in stores
 
@@ -815,7 +815,7 @@ class TestStoreValidation:
         store_yaml.write_text(
             "name: goodstore\nstrategies:\n  - css\nselectors:\n  products: div.item\n  title: h2\n"
         )
-        with patch("sources.yaml_source.STORES_DIR", tmp_path):
+        with patch("deal_hunter.sources.yaml_source.STORES_DIR", tmp_path):
             stores = load_all_store_definitions()
         assert "goodstore" in stores
 
@@ -823,7 +823,7 @@ class TestStoreValidation:
         """Store with only json-ld strategy should not require selectors.products."""
         store_yaml = tmp_path / "jsononly.yaml"
         store_yaml.write_text("name: jsononly\nstrategies:\n  - json-ld\nselectors:\n  title: h2\n")
-        with patch("sources.yaml_source.STORES_DIR", tmp_path):
+        with patch("deal_hunter.sources.yaml_source.STORES_DIR", tmp_path):
             stores = load_all_store_definitions()
         assert "jsononly" in stores
 
@@ -836,24 +836,25 @@ class TestYAMLShadowWarning:
 
     def test_shadow_warning_logged(self, tmp_path):
         """YAML store named 'pepper' should trigger a warning."""
+        import deal_hunter.sources as dh_sources
+
         store_yaml = tmp_path / "pepper.yaml"
         store_yaml.write_text(
             "name: pepper\nstrategies:\n  - css\nselectors:\n  products: div.item\n  title: h2\n"
         )
-        with patch("sources.yaml_source.STORES_DIR", tmp_path):
+        with patch("deal_hunter.sources.yaml_source.STORES_DIR", tmp_path):
             store_defs = load_all_store_definitions()
 
         # Re-import to test the warning in __init__.py
-        import sources
 
         with (
-            patch.dict(sources.SOURCE_REGISTRY, {"pepper": sources.PepperSource}),
-            patch("sources.logger") as mock_logger,
+            patch.dict(dh_sources.SOURCE_REGISTRY, {"pepper": dh_sources.PepperSource}),
+            patch("deal_hunter.sources.logger") as mock_logger,
         ):
             for name, store_def in store_defs.items():
-                if name in sources.SOURCE_REGISTRY:
+                if name in dh_sources.SOURCE_REGISTRY:
                     mock_logger.warning(f"YAML store '{name}' overrides Python source")
-                sources.SOURCE_REGISTRY[name] = make_yaml_source_class(store_def)
+                dh_sources.SOURCE_REGISTRY[name] = make_yaml_source_class(store_def)
             mock_logger.warning.assert_called_once_with(
                 "YAML store 'pepper' overrides Python source"
             )

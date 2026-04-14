@@ -10,7 +10,7 @@ class TestRssSource:
     """Tests for RssSource parsing."""
 
     def test_parse_rss_feed(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         xml_content = (FIXTURES_DIR / "allegro_rss.xml").read_text()
@@ -23,7 +23,7 @@ class TestRssSource:
         assert deals[0].id.startswith("allegro:")
 
     def test_extract_price_from_title(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         xml_content = (FIXTURES_DIR / "allegro_rss.xml").read_text()
@@ -33,7 +33,7 @@ class TestRssSource:
         assert giant.price == 8999
 
     def test_extract_price_from_description(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         xml_content = (FIXTURES_DIR / "allegro_rss.xml").read_text()
@@ -43,7 +43,7 @@ class TestRssSource:
         assert canyon.price == 10499
 
     def test_no_price_returns_zero(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         xml_content = (FIXTURES_DIR / "allegro_rss.xml").read_text()
@@ -53,7 +53,7 @@ class TestRssSource:
         assert akc.price == 0
 
     def test_parse_atom_feed(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         xml_content = (FIXTURES_DIR / "rss_atom.xml").read_text()
@@ -65,7 +65,7 @@ class TestRssSource:
         assert deals[0].price == 5499
 
     def test_atom_price_from_summary(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         xml_content = (FIXTURES_DIR / "rss_atom.xml").read_text()
@@ -75,7 +75,7 @@ class TestRssSource:
         assert monitor.price == 1899
 
     def test_empty_feed(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         xml_content = '<?xml version="1.0"?><rss version="2.0"><channel></channel></rss>'
@@ -83,14 +83,14 @@ class TestRssSource:
         assert deals == []
 
     def test_malformed_xml_returns_empty(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         deals = source._parse_feed("<not>valid xml", "test")
         assert deals == []
 
     def test_fetch_deals_multiple_feeds(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         rss_content = (FIXTURES_DIR / "allegro_rss.xml").read_text()
@@ -122,7 +122,7 @@ class TestRssSource:
         assert call_count == 2
 
     def test_published_at_parsed(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         xml_content = (FIXTURES_DIR / "allegro_rss.xml").read_text()
@@ -131,7 +131,7 @@ class TestRssSource:
         assert deals[0].published_at != ""
 
     def test_deal_id_uses_guid(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         xml_content = (FIXTURES_DIR / "allegro_rss.xml").read_text()
@@ -141,7 +141,7 @@ class TestRssSource:
         assert deals[0].id.startswith("allegro:")
 
     def test_default_source_name(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         xml_content = (FIXTURES_DIR / "allegro_rss.xml").read_text()
@@ -157,7 +157,7 @@ class TestRssSource:
         assert all(d.source == "rss" for d in deals)
 
     def test_fetch_page_returns_none_skips_feed(self):
-        from sources.rss import RssSource
+        from deal_hunter.sources.rss import RssSource
 
         source = RssSource()
         config = {"feeds": [{"url": "https://example.com/broken"}]}

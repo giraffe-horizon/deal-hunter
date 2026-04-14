@@ -4,9 +4,9 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from storage.database import SessionLocal, engine, get_session
-from storage.models import Base
-from storage.models import Offer as Deal
+from deal_hunter.storage.database import SessionLocal, engine, get_session
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.models import Offer as Deal
 
 
 @pytest.fixture(autouse=True)

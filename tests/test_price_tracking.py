@@ -6,12 +6,12 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from services.price_tracker import PriceTracker
-from sources.base import Deal
-from storage.models import Base
-from storage.models import Offer as DealModel
-from storage.models import PricePoint as PriceHistory
-from storage.repositories import PriceRepository
+from deal_hunter.services.price_tracker import PriceTracker
+from deal_hunter.sources.base import Deal
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.models import Offer as DealModel
+from deal_hunter.storage.models import PricePoint as PriceHistory
+from deal_hunter.storage.repositories import PriceRepository
 
 
 @pytest.fixture

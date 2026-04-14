@@ -21,11 +21,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import text  # noqa: E402
 
-from storage.database import (
+from deal_hunter.storage.database import (
     engine,  # noqa: E402
     get_session,  # noqa: E402
 )
-from storage.models import Base, SeenDeal  # noqa: E402
+from deal_hunter.storage.models import Base, SeenDeal  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)

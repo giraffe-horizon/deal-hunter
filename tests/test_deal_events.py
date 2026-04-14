@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from storage.models import Base, Offer
-from storage.repositories import DealEventRepository
+from deal_hunter.storage.models import Base, Offer
+from deal_hunter.storage.repositories import DealEventRepository
 
 
 @pytest.fixture

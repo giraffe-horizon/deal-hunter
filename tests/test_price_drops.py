@@ -7,14 +7,14 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from notifiers.telegram import TelegramNotifier
-from services.price_tracker import PriceTracker
-from sources.base import Deal
-from storage.models import Base
-from storage.models import Offer as DealModel
-from storage.models import PricePoint as PriceHistory
-from storage.repositories import OfferRepository as DealRepository
-from storage.repositories import PriceRepository
+from deal_hunter.notifiers.telegram import TelegramNotifier
+from deal_hunter.services.price_tracker import PriceTracker
+from deal_hunter.sources.base import Deal
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.models import Offer as DealModel
+from deal_hunter.storage.models import PricePoint as PriceHistory
+from deal_hunter.storage.repositories import OfferRepository as DealRepository
+from deal_hunter.storage.repositories import PriceRepository
 
 # ──────────────── FIXTURES ────────────────
 
@@ -581,7 +581,7 @@ class TestTelegramDigest:
 
 class TestPriceTrackingValidation:
     def test_valid_price_tracking(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -600,7 +600,7 @@ class TestPriceTrackingValidation:
         assert len(errors) == 0
 
     def test_invalid_price_tracking_not_dict(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -614,7 +614,7 @@ class TestPriceTrackingValidation:
         assert any("price_tracking" in e and "dict" in e for e in errors)
 
     def test_invalid_min_drop_percent_range(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -628,7 +628,7 @@ class TestPriceTrackingValidation:
         assert any("min_drop_percent" in e and "between" in e for e in errors)
 
     def test_invalid_min_drop_amount_negative(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -642,7 +642,7 @@ class TestPriceTrackingValidation:
         assert any("min_drop_amount" in e and "non-negative" in e for e in errors)
 
     def test_invalid_enabled_not_bool(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -656,7 +656,7 @@ class TestPriceTrackingValidation:
         assert any("enabled" in e and "boolean" in e for e in errors)
 
     def test_invalid_track_increases_not_bool(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",
@@ -670,7 +670,7 @@ class TestPriceTrackingValidation:
         assert any("track_increases" in e and "boolean" in e for e in errors)
 
     def test_no_price_tracking_is_valid(self):
-        from utils.validation import validate_profile
+        from deal_hunter.utils.validation import validate_profile
 
         profile = {
             "name": "test",

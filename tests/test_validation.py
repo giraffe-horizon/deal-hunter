@@ -1,6 +1,6 @@
 """Tests for profile validation."""
 
-from utils.validation import validate_profile
+from deal_hunter.utils.validation import validate_profile
 
 
 def _valid_profile() -> dict:

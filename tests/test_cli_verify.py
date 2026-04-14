@@ -1,6 +1,6 @@
 """Tests for CLI verify output."""
 
-from cli.verify import format_breakdown_line
+from deal_hunter.cli.verify import format_breakdown_line
 
 
 def test_format_keyword():

@@ -6,9 +6,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from storage.models import Base
-from storage.repositories import OfferRepository as DealRepository
-from storage.repositories import WatchlistRepository
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.repositories import OfferRepository as DealRepository
+from deal_hunter.storage.repositories import WatchlistRepository
 
 
 @pytest.fixture
@@ -148,7 +148,7 @@ class TestWatchlistTelegram:
 
     def test_send_watchlist_alert_format(self):
         """send_watchlist_alert sends properly formatted Polish message."""
-        from notifiers.telegram import TelegramNotifier
+        from deal_hunter.notifiers.telegram import TelegramNotifier
 
         notifier = TelegramNotifier("fake-token", "fake-chat")
         deal = type(
@@ -172,7 +172,7 @@ class TestWatchlistTelegram:
 
     def test_send_watchlist_alert_no_alt_links(self):
         """send_watchlist_alert works without alt_links attribute."""
-        from notifiers.telegram import TelegramNotifier
+        from deal_hunter.notifiers.telegram import TelegramNotifier
 
         notifier = TelegramNotifier("fake-token", "fake-chat")
         deal = type(

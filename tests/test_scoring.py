@@ -1,7 +1,7 @@
 """Tests for the base scoring engine."""
 
-from filters.base import BaseFilter
-from sources.base import Deal
+from deal_hunter.domain.scoring.base import BaseFilter
+from deal_hunter.sources.base import Deal
 
 
 def _make_deal(**kwargs) -> Deal:

@@ -6,17 +6,17 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from storage.models import Base, SeenDeal
-from storage.models import Offer as Deal
-from storage.models import PricePoint as PriceHistory
-from storage.repositories import (
+from deal_hunter.storage.models import Base, SeenDeal
+from deal_hunter.storage.models import Offer as Deal
+from deal_hunter.storage.models import PricePoint as PriceHistory
+from deal_hunter.storage.repositories import (
     AlertQueueRepository,
     FeedbackRepository,
     PriceRepository,
     SeenDealRepository,
     WatchlistRepository,
 )
-from storage.repositories import (
+from deal_hunter.storage.repositories import (
     OfferRepository as DealRepository,
 )
 

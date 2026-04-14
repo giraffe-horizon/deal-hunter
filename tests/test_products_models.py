@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from storage.models import Base, Product, ProductAlias
+from deal_hunter.storage.models import Base, Product, ProductAlias
 
 
 @pytest.fixture
@@ -68,7 +68,7 @@ def test_product_alias_fk(session: Session) -> None:
 
 
 def test_match_review_roundtrip(session: Session) -> None:
-    from storage.models import MatchReview, Offer
+    from deal_hunter.storage.models import MatchReview, Offer
 
     now = datetime.now().isoformat()
     session.add(
@@ -96,7 +96,7 @@ def test_match_review_roundtrip(session: Session) -> None:
 
 
 def test_match_decision_roundtrip(session: Session) -> None:
-    from storage.models import MatchDecision
+    from deal_hunter.storage.models import MatchDecision
 
     now = datetime.now().isoformat()
     session.add(
@@ -115,7 +115,7 @@ def test_match_decision_roundtrip(session: Session) -> None:
 
 
 def test_fx_rate_roundtrip(session: Session) -> None:
-    from storage.models import FxRate
+    from deal_hunter.storage.models import FxRate
 
     now = datetime.now().isoformat()
     session.add(FxRate(currency="EUR", rate_to_pln=4.30, fetched_at=now, table_no="A/076/2026"))

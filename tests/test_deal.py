@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from sources.base import Deal
+from deal_hunter.sources.base import Deal
 
 
 def _make_deal(**kwargs) -> Deal:

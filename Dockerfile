@@ -13,20 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends tini curl \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY deal_hunter.py .
-COPY feedback_bot.py .
-COPY cli/ cli/
-COPY services/ services/
-COPY dashboard/ dashboard/
-COPY sources/ sources/
-COPY filters/ filters/
-COPY notifiers/ notifiers/
-COPY utils/ utils/
+# Copy application code (src-layout package + runtime data)
+COPY src/ src/
 COPY stores/ stores/
-COPY storage/ storage/
-COPY visualization/ visualization/
 COPY pyproject.toml .
+COPY README.md .
 RUN pip install --no-cache-dir -e .
 
 # Create non-root user and directories
@@ -44,6 +35,6 @@ VOLUME ["/app/profiles", "/app/state"]
 USER dealer
 
 HEALTHCHECK --interval=60s --timeout=5s --retries=3 \
-  CMD python deal_hunter.py --health || exit 1
+  CMD deal-hunter --health || exit 1
 
 ENTRYPOINT ["tini", "--", "/entrypoint.sh"]

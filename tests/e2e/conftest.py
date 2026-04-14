@@ -13,8 +13,8 @@ import yaml
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 
-from storage.models import Base
-from storage.repositories import OfferRepository
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.repositories import OfferRepository
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 

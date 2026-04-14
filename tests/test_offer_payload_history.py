@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from storage.models import Base, Offer, OfferPayloadHistory
-from storage.repositories import OfferPayloadHistoryRepository
+from deal_hunter.storage.models import Base, Offer, OfferPayloadHistory
+from deal_hunter.storage.repositories import OfferPayloadHistoryRepository
 
 
 @pytest.fixture

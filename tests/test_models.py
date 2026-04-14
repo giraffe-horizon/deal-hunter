@@ -4,17 +4,17 @@ import pytest
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session
 
-from storage.models import (
+from deal_hunter.storage.models import (
     AlertQueue,
     Base,
     Feedback,
     SeenDeal,
     WatchlistItem,
 )
-from storage.models import (
+from deal_hunter.storage.models import (
     Offer as Deal,
 )
-from storage.models import (
+from deal_hunter.storage.models import (
     PricePoint as PriceHistory,
 )
 

@@ -4,9 +4,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from services.fetcher import DealFetcher
-from sources.base import Deal as FetchDTO
-from storage.models import Base, DealEvent, Offer, OfferPayloadHistory
+from deal_hunter.services.fetcher import DealFetcher
+from deal_hunter.sources.base import Deal as FetchDTO
+from deal_hunter.storage.models import Base, DealEvent, Offer, OfferPayloadHistory
 
 
 @pytest.fixture

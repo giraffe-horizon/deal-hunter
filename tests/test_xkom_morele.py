@@ -19,14 +19,14 @@ class TestXkomStore:
     """Tests for x-kom YAML store parsing."""
 
     def test_xkom_store_registered(self):
-        from sources import SOURCE_REGISTRY
+        from deal_hunter.sources import SOURCE_REGISTRY
 
         assert "xkom" in SOURCE_REGISTRY, (
             "xkom store not registered — ensure stores/xkom.yaml exists and has a valid 'name' key"
         )
 
     def test_xkom_store_parses_fixture(self):
-        from sources import SOURCE_REGISTRY
+        from deal_hunter.sources import SOURCE_REGISTRY
 
         source_cls = SOURCE_REGISTRY["xkom"]
         source = source_cls()
@@ -46,7 +46,7 @@ class TestXkomStore:
             assert deal.link, f"Deal link should not be empty: {deal}"
 
     def test_xkom_parses_three_products(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("xkom")
         assert store_def is not None, "stores/xkom.yaml not found"
@@ -58,7 +58,7 @@ class TestXkomStore:
         assert len(deals) == 3, f"Expected 3 deals, got {len(deals)}"
 
     def test_xkom_product_titles(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("xkom")
         source = YamlSource(store_def)
@@ -71,7 +71,7 @@ class TestXkomStore:
         assert any("Samsung" in t for t in titles), f"Expected Samsung monitor in titles: {titles}"
 
     def test_xkom_product_prices(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("xkom")
         source = YamlSource(store_def)
@@ -84,7 +84,7 @@ class TestXkomStore:
         assert 999 in prices, f"Expected Samsung price 999 PLN in {prices}"
 
     def test_xkom_product_links(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("xkom")
         source = YamlSource(store_def)
@@ -97,7 +97,7 @@ class TestXkomStore:
             )
 
     def test_xkom_product_ids(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("xkom")
         source = YamlSource(store_def)
@@ -110,7 +110,7 @@ class TestXkomStore:
         assert "xkom:345678" in ids, f"Expected xkom:345678 in {ids}"
 
     def test_xkom_product_images(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("xkom")
         source = YamlSource(store_def)
@@ -125,7 +125,7 @@ class TestXkomStore:
 
     def test_xkom_regular_prices(self):
         """Products with OldPrice should have regular_price populated."""
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("xkom")
         source = YamlSource(store_def)
@@ -152,14 +152,14 @@ class TestXkomStore:
             )
 
     def test_xkom_store_type_is_search(self):
-        from sources.yaml_source import load_store_definition
+        from deal_hunter.sources.yaml_source import load_store_definition
 
         store_def = load_store_definition("xkom")
         assert store_def["type"] == "search"
         assert "{query}" in store_def["search_url"]
 
     def test_xkom_store_base_url(self):
-        from sources.yaml_source import load_store_definition
+        from deal_hunter.sources.yaml_source import load_store_definition
 
         store_def = load_store_definition("xkom")
         assert store_def["base_url"] == "https://www.x-kom.pl"
@@ -175,7 +175,7 @@ class TestMoreleStore:
     """
 
     def test_morele_store_registered(self):
-        from sources import SOURCE_REGISTRY
+        from deal_hunter.sources import SOURCE_REGISTRY
 
         assert "morele" in SOURCE_REGISTRY, (
             "morele store not registered — ensure stores/morele.yaml"
@@ -185,7 +185,7 @@ class TestMoreleStore:
     def test_morele_store_parses_fixture(self):
         from unittest.mock import patch
 
-        from sources import SOURCE_REGISTRY
+        from deal_hunter.sources import SOURCE_REGISTRY
 
         source_cls = SOURCE_REGISTRY["morele"]
         source = source_cls()
@@ -205,7 +205,7 @@ class TestMoreleStore:
             assert deal.link, f"Deal link should not be empty: {deal}"
 
     def test_morele_parses_three_products(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("morele")
         assert store_def is not None, "stores/morele.yaml not found"
@@ -217,7 +217,7 @@ class TestMoreleStore:
         assert len(deals) == 3, f"Expected 3 deals, got {len(deals)}"
 
     def test_morele_product_titles(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("morele")
         source = YamlSource(store_def)
@@ -230,7 +230,7 @@ class TestMoreleStore:
         assert any("Samsung" in t for t in titles), f"Expected Samsung monitor in titles: {titles}"
 
     def test_morele_product_prices(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("morele")
         source = YamlSource(store_def)
@@ -243,7 +243,7 @@ class TestMoreleStore:
         assert 899 in prices, f"Expected Samsung price 899 PLN in {prices}"
 
     def test_morele_product_links_are_absolute(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("morele")
         source = YamlSource(store_def)
@@ -256,7 +256,7 @@ class TestMoreleStore:
             )
 
     def test_morele_product_ids(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("morele")
         source = YamlSource(store_def)
@@ -269,7 +269,7 @@ class TestMoreleStore:
         assert "morele:14987654" in ids, f"Expected morele:14987654 in {ids}"
 
     def test_morele_product_images(self):
-        from sources.yaml_source import YamlSource, load_store_definition
+        from deal_hunter.sources.yaml_source import YamlSource, load_store_definition
 
         store_def = load_store_definition("morele")
         source = YamlSource(store_def)
@@ -283,20 +283,20 @@ class TestMoreleStore:
             )
 
     def test_morele_store_type_is_search(self):
-        from sources.yaml_source import load_store_definition
+        from deal_hunter.sources.yaml_source import load_store_definition
 
         store_def = load_store_definition("morele")
         assert store_def["type"] == "search"
         assert "{query}" in store_def["search_url"]
 
     def test_morele_store_base_url(self):
-        from sources.yaml_source import load_store_definition
+        from deal_hunter.sources.yaml_source import load_store_definition
 
         store_def = load_store_definition("morele")
         assert store_def["base_url"] == "https://www.morele.net"
 
     def test_morele_search_url_contains_query(self):
-        from sources.yaml_source import load_store_definition
+        from deal_hunter.sources.yaml_source import load_store_definition
 
         store_def = load_store_definition("morele")
         search_url = store_def["search_url"]

@@ -37,7 +37,8 @@ dependencies = [
 ]
 
 [project.scripts]
-deal-hunter = "deal_hunter:main"
+deal-hunter = "deal_hunter.cli.main:main"
+deal-hunter-bot = "deal_hunter.bot.main:main"
 
 [project.urls]
 Homepage = "https://github.com/giraffe-horizon/deal-hunter"
@@ -63,7 +64,8 @@ e2e = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["sources*", "filters*", "notifiers*", "utils*", "dashboard*", "storage*", "visualization*"]
+where = ["src"]
+include = ["deal_hunter*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -99,7 +101,7 @@ module = ["telegram.*", "matplotlib.*", "rich.*", "sqlalchemy.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["dashboard.routes.*", "dashboard"]
+module = ["deal_hunter.api.routes.*", "deal_hunter.api"]
 disallow_untyped_defs = false
 warn_return_any = false
 disable_error_code = ["attr-defined"]
@@ -110,7 +112,7 @@ disallow_untyped_defs = false
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-version_variables = ["deal_hunter.py:__version__"]
+version_variables = ["src/deal_hunter/__init__.py:__version__"]
 branch = "main"
 commit_message = "chore(release): {version}"
 build_command = ""

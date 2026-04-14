@@ -7,9 +7,9 @@ import sys
 from io import StringIO
 from unittest.mock import patch
 
-from filters.base import BaseFilter, ScoreResult
-from filters.bike_filter import BikeFilter
-from sources.base import Deal
+from deal_hunter.domain.scoring.base import BaseFilter, ScoreResult
+from deal_hunter.domain.scoring.bike_filter import BikeFilter
+from deal_hunter.sources.base import Deal
 
 
 def _make_deal(**kwargs) -> Deal:
@@ -256,7 +256,7 @@ class TestBikeFilterBreakdown:
 class TestVerboseOutput:
     def test_verbose_plain_output(self):
         """Plain text verbose output uses box-drawing characters."""
-        from cli.verify import _print_verbose_plain
+        from deal_hunter.cli.verify import _print_verbose_plain
 
         deal = _make_deal(title="Carbon bike deal", price=10000, temperature=120)
         f = BaseFilter(_base_profile())
@@ -282,7 +282,7 @@ class TestVerboseOutput:
 
     def test_verbose_plain_rejected(self):
         """Rejected deals are shown in verbose mode."""
-        from cli.verify import _print_verbose_plain
+        from deal_hunter.cli.verify import _print_verbose_plain
 
         deal = _make_deal(title="Stolen bike")
         f = BaseFilter(_base_profile())
@@ -300,7 +300,7 @@ class TestVerboseOutput:
 
     def test_verbose_plain_pass_status(self):
         """Deals above threshold show checkmark, below show X."""
-        from cli.verify import _print_verbose_plain
+        from deal_hunter.cli.verify import _print_verbose_plain
 
         # Deal above threshold
         deal_good = _make_deal(title="Carbon shimano deal", price=10000, temperature=120)
@@ -327,7 +327,7 @@ class TestVerboseOutput:
 
     def test_verbose_top_limit(self):
         """--top N limits output to N deals."""
-        from cli.verify import _print_verbose_plain
+        from deal_hunter.cli.verify import _print_verbose_plain
 
         deals = []
         f = BaseFilter(_base_profile())
@@ -346,7 +346,7 @@ class TestVerboseOutput:
 
     def test_fallback_when_rich_unavailable(self):
         """_print_verbose falls back to plain text when rich is not importable."""
-        from cli.verify import print_verbose as _print_verbose
+        from deal_hunter.cli.verify import print_verbose as _print_verbose
 
         deal = _make_deal(title="Carbon bike", price=10000)
         f = BaseFilter(_base_profile())

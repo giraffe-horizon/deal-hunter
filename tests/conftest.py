@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 
-from sources.base import Deal
-from storage.models import Base
-from storage.repositories import OfferRepository
+from deal_hunter.sources.base import Deal
+from deal_hunter.storage.models import Base
+from deal_hunter.storage.repositories import OfferRepository
 
 
 @pytest.fixture
@@ -70,7 +70,7 @@ def tmp_state_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def dashboard_session(tmp_path):
     """SQLAlchemy session seeded with test data for dashboard tests."""
-    eng = create_engine(f"sqlite:///{tmp_path / 'dashboard.db'}")
+    eng = create_engine(f"sqlite:///{tmp_path / 'deal_hunter.api.db'}")
 
     @event.listens_for(eng, "connect")
     def _set_sqlite_pragma(dbapi_conn, connection_record):
@@ -209,7 +209,7 @@ def raw_client(dashboard_session):
     """FastAPI TestClient WITHOUT auto CSRF headers (for CSRF-specific tests)."""
     from fastapi.testclient import TestClient
 
-    from dashboard import app, get_db
+    from deal_hunter.api import app, get_db
 
     def _override():
         yield dashboard_session
@@ -226,7 +226,7 @@ def client(dashboard_session):
     """FastAPI TestClient with dashboard_session injected and auto CSRF headers."""
     from fastapi.testclient import TestClient
 
-    from dashboard import app, get_db
+    from deal_hunter.api import app, get_db
 
     def _override():
         yield dashboard_session

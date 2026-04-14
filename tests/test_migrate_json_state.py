@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from storage.models import Base, SeenDeal
-from storage.models import PricePoint as PriceHistory
+from deal_hunter.storage.models import Base, SeenDeal
+from deal_hunter.storage.models import PricePoint as PriceHistory
 
 
 @pytest.fixture

@@ -7,7 +7,7 @@ OnFailure=deal-hunter-notify@%n.service
 [Service]
 Type=oneshot
 WorkingDirectory=%h/Projects/deal-hunter
-ExecStart=%h/Projects/deal-hunter/venv/bin/python deal_hunter.py --all
+ExecStart=%h/Projects/deal-hunter/venv/bin/deal-hunter --all
 EnvironmentFile=%h/Projects/deal-hunter/.env
 
 [Install]
