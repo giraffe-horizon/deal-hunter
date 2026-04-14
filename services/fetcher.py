@@ -4,9 +4,14 @@ import logging
 import re
 from datetime import datetime
 from difflib import SequenceMatcher
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sources.base import Deal
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+    from storage.models import Offer
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +45,13 @@ class DealFetcher:
 
     def ingest_one(
         self,
-        session,
+        session: "Session",
         dto: Deal,
         profile: dict,
         *,
         score: int = 0,
         category: str = "",
-    ):
+    ) -> "Offer":
         """Upsert one DTO, append payload history, emit appropriate DealEvent.
 
         Returns the upserted Offer ORM instance.

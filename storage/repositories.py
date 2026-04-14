@@ -767,7 +767,8 @@ class ProductRepository:
         return p
 
     def get(self, product_id: str) -> Product | None:
-        return self.session.get(Product, product_id)
+        result: Product | None = self.session.get(Product, product_id)
+        return result
 
 
 class ProductAliasRepository:
@@ -812,7 +813,8 @@ class ProductAliasRepository:
             q = q.where(ProductAlias.source == source)
         else:
             q = q.where(ProductAlias.source.is_(None))
-        return self.session.execute(q).scalars().first()
+        result: ProductAlias | None = self.session.execute(q).scalars().first()
+        return result
 
 
 OFFER_PAYLOAD_HISTORY_MAX = 10
@@ -949,7 +951,8 @@ class FxRateRepository:
         self.session = session
 
     def get(self, currency: str) -> FxRate | None:
-        return self.session.get(FxRate, currency)
+        result: FxRate | None = self.session.get(FxRate, currency)
+        return result
 
     def upsert(
         self,
@@ -959,7 +962,7 @@ class FxRateRepository:
         fetched_at: str,
         table_no: str | None = None,
     ) -> FxRate:
-        existing = self.session.get(FxRate, currency)
+        existing: FxRate | None = self.session.get(FxRate, currency)
         if existing:
             existing.rate_to_pln = rate_to_pln
             existing.fetched_at = fetched_at
