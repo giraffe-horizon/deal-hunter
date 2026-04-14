@@ -246,7 +246,7 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("deal_hunter.bot.main.get_session", _mock_session):
+        with patch("deal_hunter.bot.callbacks.get_session", _mock_session):
             await handle_callback(update, context)
 
         query.answer.assert_called_once_with("\u2b50 Dodano do obserwowanych")
@@ -278,7 +278,7 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("deal_hunter.bot.main.get_session", _mock_session):
+        with patch("deal_hunter.bot.callbacks.get_session", _mock_session):
             await handle_callback(update, context)
 
         query.answer.assert_called_once_with("\U0001f44e Pominięto")
@@ -305,7 +305,7 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("deal_hunter.bot.main.get_session", _mock_session):
+        with patch("deal_hunter.bot.callbacks.get_session", _mock_session):
             await handle_callback(update, context)
 
         query.answer.assert_called_once_with("Nie znaleziono oferty w bazie")
@@ -332,7 +332,7 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("deal_hunter.bot.main.get_session", _mock_session):
+        with patch("deal_hunter.bot.commands.get_session", _mock_session):
             await cmd_status(update, context)
 
         message.reply_text.assert_called_once()
@@ -356,7 +356,7 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("deal_hunter.bot.main.get_session", _mock_session):
+        with patch("deal_hunter.bot.commands.get_session", _mock_session):
             await cmd_watchlist(update, context)
 
         message.reply_text.assert_called_once_with("Brak obserwowanych ofert.")
@@ -383,7 +383,7 @@ class TestBotHandlers:
                 yield s
                 s.commit()
 
-        with patch("deal_hunter.bot.main.get_session", _mock_session):
+        with patch("deal_hunter.bot.commands.get_session", _mock_session):
             await cmd_watchlist(update, context)
 
         message.reply_text.assert_called_once()
@@ -420,7 +420,7 @@ async def test_cmd_target_adds_to_watchlist():
             yield s
             s.commit()
 
-    with patch("deal_hunter.bot.main.get_session", _mock_session):
+    with patch("deal_hunter.bot.commands.get_session", _mock_session):
         await cmd_target(update, context)
 
     update.message.reply_html.assert_called_once()
