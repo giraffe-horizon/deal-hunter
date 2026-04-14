@@ -5,9 +5,10 @@ from __future__ import annotations
 import html
 import json
 import logging
-import os
 from datetime import datetime
 from typing import TYPE_CHECKING
+
+from deal_hunter.core.settings import Settings
 
 if TYPE_CHECKING:
     from deal_hunter.notifiers.telegram import TelegramNotifier
@@ -27,8 +28,10 @@ def is_quiet_hours(profile: dict) -> bool:
         start_str = qh.get("start")
         end_str = qh.get("end")
     else:
-        start_str = os.environ.get("QUIET_HOURS_START")
-        end_str = os.environ.get("QUIET_HOURS_END")
+        # Read fresh so env changes (including test monkeypatch) are picked up.
+        s = Settings()
+        start_str = s.quiet_hours_start
+        end_str = s.quiet_hours_end
 
     if not start_str or not end_str:
         return False

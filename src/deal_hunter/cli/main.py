@@ -9,13 +9,11 @@ import argparse
 import contextlib
 import importlib.metadata
 import logging
-import os
 import sys
 import time
-from pathlib import Path
 
-from dotenv import load_dotenv
-
+from deal_hunter.core.logging import setup_app_logging
+from deal_hunter.core.settings import get_settings
 from deal_hunter.domain.scoring import FILTER_REGISTRY
 from deal_hunter.storage.database import get_session
 from deal_hunter.storage.repositories import (
@@ -43,38 +41,23 @@ from deal_hunter.sources import SOURCE_REGISTRY
 
 # ──────────────── SETUP ────────────────
 
-BASE_DIR = Path(__file__).resolve().parents[3]
-PROFILES_DIR = BASE_DIR / "profiles"
-
-load_dotenv(BASE_DIR / ".env")
-
-
-def _setup_logging() -> None:
-    """Configure logging once on the root logger. Child loggers just propagate."""
-    root = logging.getLogger()
-    if root.handlers:
-        return  # Already configured — avoid duplicate handlers
-    root.setLevel(logging.INFO)
-    fmt = logging.Formatter(
-        "[%(asctime)s] %(levelname)s %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    sh = logging.StreamHandler()
-    sh.setFormatter(fmt)
-    root.addHandler(sh)
-    fh = logging.FileHandler(BASE_DIR / "deal_hunter.log", encoding="utf-8")
-    fh.setFormatter(fmt)
-    root.addHandler(fh)
+_settings = get_settings()
+BASE_DIR = _settings.base_dir
+PROFILES_DIR = _settings.profiles_dir
 
 
-_setup_logging()
+setup_app_logging()
 logger = logging.getLogger("deal_hunter")
 
 
 def validate_environment() -> None:
     """Check required environment variables and warn about missing ones."""
-    required = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]
-    missing = [v for v in required if not os.getenv(v)]
+    s = get_settings()
+    missing = []
+    if not s.telegram_bot_token:
+        missing.append("TELEGRAM_BOT_TOKEN")
+    if not s.telegram_chat_id:
+        missing.append("TELEGRAM_CHAT_ID")
     if missing:
         logger.warning(
             "Missing env vars: %s — Telegram alerts will be disabled", ", ".join(missing)
@@ -82,23 +65,15 @@ def validate_environment() -> None:
 
 
 def _parse_topic_id() -> int | None:
-    """Parse TELEGRAM_TOPIC_ID from environment, returning None if unset or invalid."""
-    raw = os.environ.get("TELEGRAM_TOPIC_ID")
-    if not raw:
-        return None
-    try:
-        return int(raw)
-    except ValueError:
-        logger.warning(f"Invalid TELEGRAM_TOPIC_ID: {raw!r}, ignoring")
-        return None
+    """Return TELEGRAM_TOPIC_ID from settings (already parsed)."""
+    return get_settings().telegram_topic_id
 
 
 def _create_telegram() -> TelegramNotifier | None:
     """Create a TelegramNotifier if credentials are configured."""
-    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if tg_token and tg_chat:
-        return TelegramNotifier(tg_token, tg_chat)
+    s = get_settings()
+    if s.telegram_configured:
+        return TelegramNotifier(s.telegram_bot_token, s.telegram_chat_id)
     return None
 
 
@@ -110,8 +85,7 @@ _scoring = ScoringService(FILTER_REGISTRY)
 
 
 def _health_tracker() -> HealthTracker:
-    state_dir = Path(os.environ.get("DEAL_HUNTER_STATE_DIR", str(BASE_DIR / "state")))
-    return HealthTracker(state_dir / "health.json")
+    return HealthTracker(get_settings().state_dir / "health.json")
 
 
 # ──────────────── RUN MODES ────────────────
@@ -398,9 +372,8 @@ def _run_with_health_tracking(
 
 def run_digest() -> None:
     """Generate and send weekly price digest from SQLite price_points."""
-    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if not tg_token or not tg_chat:
+    s = get_settings()
+    if not s.telegram_configured:
         logger.warning("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — cannot send digest")
         print(
             "Warning: Telegram not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env"
@@ -429,7 +402,7 @@ def run_digest() -> None:
 
     # Send Telegram digest
     topic_id = _parse_topic_id()
-    telegram = TelegramNotifier(tg_token, tg_chat)
+    telegram = TelegramNotifier(s.telegram_bot_token, s.telegram_chat_id)
     telegram.send_digest(drops, topic_id=topic_id)
     print(f"\nDigest sent to Telegram ({len(drops)} drops).")
 
@@ -463,11 +436,10 @@ def run_price_chart(deal_id: str) -> None:
 
     print(f"Chart saved to {chart_path}")
 
-    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if tg_token and tg_chat:
+    s = get_settings()
+    if s.telegram_configured:
         topic_id = _parse_topic_id()
-        telegram = TelegramNotifier(tg_token, tg_chat)
+        telegram = TelegramNotifier(s.telegram_bot_token, s.telegram_chat_id)
         telegram.send_photo(
             str(chart_path),
             caption=f"\U0001f4c8 Historia cen: {deal_id}",
@@ -491,11 +463,10 @@ def run_trend_chart(profile_name: str) -> None:
 
     print(f"Chart saved to {chart_path}")
 
-    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    tg_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if tg_token and tg_chat:
+    s = get_settings()
+    if s.telegram_configured:
         topic_id = _parse_topic_id()
-        telegram = TelegramNotifier(tg_token, tg_chat)
+        telegram = TelegramNotifier(s.telegram_bot_token, s.telegram_chat_id)
         telegram.send_photo(
             str(chart_path),
             caption=f"\U0001f4ca Trend cenowy: {profile_name}",

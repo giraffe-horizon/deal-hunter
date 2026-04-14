@@ -1,6 +1,5 @@
 """SQLAlchemy engine and session management for Deal Hunter."""
 
-import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -9,9 +8,9 @@ from typing import Any
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-_BASE_DIR = Path(__file__).resolve().parents[3]
-_DEFAULT_DB = f"sqlite:///{_BASE_DIR / 'state' / 'deals.db'}"
-DATABASE_URL = os.environ.get("DATABASE_URL", _DEFAULT_DB)
+from deal_hunter.core.settings import get_settings
+
+DATABASE_URL = get_settings().default_database_url
 
 # Ensure the database directory exists
 _db_path = DATABASE_URL.replace("sqlite:///", "")

@@ -7,11 +7,9 @@ Run: python feedback_bot.py
 
 import html
 import logging
-import os
 import signal
 import sys
 
-from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -20,6 +18,8 @@ from telegram.ext import (
     ContextTypes,
 )
 
+from deal_hunter.core.logging import setup_bot_logging
+from deal_hunter.core.settings import get_settings
 from deal_hunter.storage.database import get_session
 from deal_hunter.storage.repositories import (
     FeedbackRepository,
@@ -27,12 +27,7 @@ from deal_hunter.storage.repositories import (
     WatchlistRepository,
 )
 
-load_dotenv()
-
-logging.basicConfig(
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-    level=logging.INFO,
-)
+setup_bot_logging()
 logger = logging.getLogger("feedback_bot")
 
 
@@ -198,7 +193,7 @@ async def cmd_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 def main() -> None:
     """Start the feedback bot."""
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    token = get_settings().telegram_bot_token
     if not token:
         logger.error("TELEGRAM_BOT_TOKEN not set in environment")
         sys.exit(1)

@@ -1,19 +1,15 @@
 """Health and price trends routes."""
 
-import os
-from pathlib import Path
-
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from deal_hunter.api import templates
+from deal_hunter.core.settings import get_settings
 from deal_hunter.services.health_tracker import HealthTracker
 
 router = APIRouter()
 
-_BASE_DIR = Path(__file__).resolve().parents[4]
-_state_dir = Path(os.environ.get("DEAL_HUNTER_STATE_DIR", str(_BASE_DIR / "state")))
-_tracker = HealthTracker(_state_dir / "health.json")
+_tracker = HealthTracker(get_settings().state_dir / "health.json")
 
 
 @router.get("/health")
