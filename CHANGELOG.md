@@ -1,14 +1,423 @@
 # CHANGELOG
 
-## [Unreleased]
 
-### Changed
+## v0.15.0 (2026-04-14)
 
-- **Database**: renamed tables `deals` → `offers` and `price_history` → `price_points` (Alembic `003`). Column names, PK values, and FK relationships preserved. Python classes renamed: `Deal` → `Offer`, `PriceHistory` → `PricePoint`, `DealRepository` → `OfferRepository`. First step of products-and-offers migration.
-- **Database**: Alembic `004` — renamed `offers.title/price/link/first_seen/last_seen` to `raw_title/current_price_pln/url/first_seen_at/last_seen_at`; renamed `price_points.deal_id/price` to `offer_id/price_pln`; added product-model columns (`product_id`, `source_native_id`, `currency_original`, `fx_rate_used`, `availability`, `attributes_hint`, `is_active`) and parallel columns on `price_points`. Backfilled `source_native_id` from existing `id` values.
-- **New schema**: `products`, `product_aliases`, `offer_payload_history` (FIFO N=10 per offer), `deal_events` (append-only event log), `match_reviews`, `match_decisions`, `fx_rates`.
-- **Ingest**: every upsert now appends to `offer_payload_history` and emits a `DealEvent` (`new_listing` / `price_drop` / `price_increase` / `back_in_stock`) via `DealFetcher.ingest_one`.
-- **Compat**: dashboard, Telegram, feedback bot, and Jinja templates continue to use legacy dict keys (`title`, `price`, `link`, `first_seen`, `last_seen`) via `OfferRepository._to_dict`'s dual-key output — no external contract change.
+### Bug Fixes
+
+- **types**: Add mypy annotations for new repos + ingest_one
+  ([`f940397`](https://github.com/giraffe-horizon/deal-hunter/commit/f94039779b70fa4de4c5b0eb5d6b5bc2af397048))
+
+- Type intermediate locals in Product/ProductAlias/FxRate repo getters so mypy doesn't see Any from
+  session.get() / scalars().first(). - Annotate DealFetcher.ingest_one: session: Session, return
+  type Offer (TYPE_CHECKING imports to keep runtime lazy).
+
+Fixes CI lint failures on PR #12.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Chores
+
+- Remove stale roadmap docs and one-time migration script
+  ([`12424d3`](https://github.com/giraffe-horizon/deal-hunter/commit/12424d370cb772f786ae3973faadec14e2ddd804))
+
+- Delete docs/ROADMAP.md and docs/ROADMAP-v2.md (superseded by phase plans in
+  docs/superpowers/plans/ and CHANGELOG.md) - Delete scripts/migrate_json_state.py and its test
+  (one-shot JSON->SQLite migration, already executed; SQLite is the sole state backend now) - Remove
+  stale CLAUDE.md reference to the migration script
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Continuous Integration
+
+- Fix pipeline for src-layout + package restructure
+  ([`686970a`](https://github.com/giraffe-horizon/deal-hunter/commit/686970ac6cbc07eb6c1b510d936171fa5828560e))
+
+CI was still targeting the pre-Phase-2 flat layout and the Phase-2 migration missed a couple of
+  hard-coded paths. Fixes:
+
+.github/workflows/ci.yml - mypy: replace `deal_hunter.py sources/ filters/ notifiers/ utils/` with
+  `src/deal_hunter` (new package root) - lint job: install via `pip install -e ".[dev]"` so mypy
+  sees full type context (types-*, pydantic plugin, etc.) - pytest --cov: drop `--cov=sources
+  --cov=filters`; use single `--cov=deal_hunter` covering the whole package - smoke tests: switch
+  from `python deal_hunter.py` to the console scripts (`deal-hunter --version` / `deal-hunter
+  --list`)
+
+src/deal_hunter/sources/yaml_source.py - STORES_DIR: the stores/ directory lives at the repo root,
+  not inside the package. Phase-2 rename left the path computing parent.parent →
+  src/deal_hunter/stores (which doesn't exist), silently yielding an empty SOURCE_REGISTRY. Now
+  resolves parents[3] correctly → repo-root/stores.
+
+tests/test_migration_003_rename.py, test_migration_004_products_schema.py - alembic config path:
+  `storage/migrations/alembic.ini` → `src/deal_hunter/storage/migrations/alembic.ini`
+
+pyproject.toml - New mypy override for `deal_hunter.bot.commands` + `deal_hunter.bot.callbacks`:
+  disable union-attr/arg-type/index errors. python-telegram-bot stubs type `update.message` as
+  `Message | None`, but library dispatch guarantees it's set inside
+  CommandHandler/CallbackQueryHandler bodies. Previous CI didn't catch this because bot/ wasn't in
+  the mypy target.
+
+Test suite after fix: 696 passed / 0 failed / 0 errors (up from 663/31/4). ruff + mypy both clean on
+  src/deal_hunter.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Documentation
+
+- Fix stale price_history docstrings post-rename
+  ([`a740229`](https://github.com/giraffe-horizon/deal-hunter/commit/a74022913b7806d267161dfdcf6ae96f1b03d2cc))
+
+- **changelog**: Record phase A2 products schema + event emission
+  ([`105ae85`](https://github.com/giraffe-horizon/deal-hunter/commit/105ae858f100a64f6b3c03f8cfa0e7df3eb1a825))
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **plan**: Add phase A1 implementation plan — rename deals->offers
+  ([`a7eb44a`](https://github.com/giraffe-horizon/deal-hunter/commit/a7eb44aff93417184c21d777ed971bb0c47ac705))
+
+First implementation plan for the products-and-offers migration. Covers table rename (deals->offers,
+  price_history->price_points), class rename (Deal->Offer, PriceHistory->PricePoint,
+  DealRepository->OfferRepository), and Alembic revision 003 with round-trip test. Column renames
+  and new schema are deferred to Phase A2.
+
+- **plan**: Mark products-and-offers plan complete (A1+A2 shipped)
+  ([`fc1bb3b`](https://github.com/giraffe-horizon/deal-hunter/commit/fc1bb3b3a304f41aa5526ea4f13a870c86f2698c))
+
+All 12 tasks landed on phase-a1-rename worktree (head 105ae85, 698 tests passing). Plan doc now
+  records each task's status and commit SHA, plus the deviations encountered during execution (Tasks
+  7-10 commit batching, Task 5 FK bootstrapping, Task 11 split for score/category kwargs, Task 11
+  mutable per-run profile_name caveat).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **plan**: Unified products-and-offers plan (A1 finish + A2)
+  ([`5b1e063`](https://github.com/giraffe-horizon/deal-hunter/commit/5b1e063fe61a688af6f08a1b68601ece0e20181c))
+
+Supersedes the phase-a1 plan file (left on disk as historical record). Picks up from the A1 worktree
+  state (commits 2e1cf04, bf9df9c, cdd7aba already landed) and carries through 12 tasks: finish the
+  OfferRepository rename, Alembic 004 (column renames + new tables), ORM updates with
+  adapter-preserving _to_dict, and wiring OfferPayloadHistory + DealEvent emission into the fetcher.
+  Phases B-G deferred to their own plans.
+
+- **spec**: Decompose Phase A into A1 (rename) + A2 (schema)
+  ([`8867338`](https://github.com/giraffe-horizon/deal-hunter/commit/88673386caf3ac1cd2c8fe8152528cf6b223eb68))
+
+Reflects actual execution split: A1 landed a pure table/class rename with column names preserved
+  (Alembic 003, in phase-a1-rename worktree); A2 handles column renames, new columns, and new
+  product/event tables (Alembic 004, pending). Clarifies risks, test file naming, and the 9-step
+  rollout order.
+
+- **spec**: Re-align products-and-offers design to current repo
+  ([`197f3cf`](https://github.com/giraffe-horizon/deal-hunter/commit/197f3cf40e2b917b938ec9a809f31b84b7eb93c1))
+
+Update the 2026-04-13 design spec to match the post Phase 3-6 refactor (SQLAlchemy ORM, Alembic
+  migrations, service layer, Pydantic dashboard schemas). Key changes:
+
+- Adopt Option B naming refactor: rename Deal/deals -> Offer/offers and PriceHistory/price_history
+  -> PricePoint/price_points; introduce new DealEvent append-only event log. Offer ids
+  ("{source}:{native_id}") preserved verbatim so callback_data, CLI, watchlist FK keep working. -
+  Schema migrations land as Alembic revisions 003_rename_deals_to_offers and 004_products_schema
+  under storage/migrations/versions/. - Module paths aligned with current layout:
+  services/matching/, services/fx/nbp.py, services/fetcher.py (existing DealFetcher.dedup coexists),
+  cli/backfill_products.py, cli/eval_matching.py, dashboard/routes/products.py,
+  dashboard/routes/review.py, dashboard/services/product_service.py, dashboard/schemas.py. - Tests
+  updated to existing naming (test_models.py, test_repositories.py, test_services.py extended;
+  test_matching_*.py added; tests/e2e/test_products.py for Playwright coverage). - FK types
+  corrected: offer_id columns are TEXT, matching offers.id. - Added risk note covering in-memory vs
+  persistent dedup overlap.
+
+### Features
+
+- **db**: Add alembic 004 — column renames, new product schema, backfill
+  ([`ec92d8c`](https://github.com/giraffe-horizon/deal-hunter/commit/ec92d8c0ab5f61e7cb7e17aca2e40a8a1fcbfaa1))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **db**: Add alembic revision 003 renaming deals->offers
+  ([`2e1cf04`](https://github.com/giraffe-horizon/deal-hunter/commit/2e1cf0415a4593295b4aec39a865b3484b7b9dbf))
+
+Renames the `deals` table to `offers` and `price_history` to `price_points` at the database level.
+  Includes a round-trip test (upgrade, downgrade, data preservation) in
+  tests/test_migration_003_rename.py.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **events**: Dealevent model + repository
+  ([`f2109fe`](https://github.com/giraffe-horizon/deal-hunter/commit/f2109fe37c230c435133acd2801445196f6889e8))
+
+Model and repository were implemented as part of Task 7 model batch; this commit adds the test suite
+  for emit, get_unnotified, and mark_notified operations.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **events**: Offerpayloadhistory model + FIFO N=10 repository
+  ([`8593437`](https://github.com/giraffe-horizon/deal-hunter/commit/8593437331b9865eb23e745a3edfb85da7807b29))
+
+Model and repository were implemented as part of Task 7 model batch; this commit adds the dedicated
+  test suite verifying FIFO eviction and per-offer isolation.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **fetcher**: Emit DealEvent + append OfferPayloadHistory on ingest
+  ([`7951515`](https://github.com/giraffe-horizon/deal-hunter/commit/7951515e759ededb0b7b9a793a6273d4355375d9))
+
+- **ingest**: Wire DealFetcher.ingest_one into deal_hunter live ingest path
+  ([`c6b249f`](https://github.com/giraffe-horizon/deal-hunter/commit/c6b249f410c8fe252d7222f5e41cc29761f0571f))
+
+- **products**: Add Product + ProductAlias models + minimal repositories
+  ([`ef14a2f`](https://github.com/giraffe-horizon/deal-hunter/commit/ef14a2fa36ee4f5a4d299060f93ef59486a19651))
+
+- Add Product, ProductAlias, OfferPayloadHistory, DealEvent, MatchReview, MatchDecision, FxRate ORM
+  models to storage/models.py - Restore deferred FK + relationship on Offer.product_id and
+  PricePoint.product_id now that Product exists - Add Offer.product, Offer.payload_history,
+  Offer.events relationships - Add ProductRepository, ProductAliasRepository to
+  storage/repositories.py - Update test_models.py expected table set
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+### Refactoring
+
+- Migrate callers to renamed offer/price_point columns, keep legacy dict keys
+  ([`a3049ee`](https://github.com/giraffe-horizon/deal-hunter/commit/a3049ee6c1fd7cba8d66c48b1743cf0a6ebd62f7))
+
+- OfferRepository.upsert: accepts both new names (raw_title, current_price_pln, url, first_seen_at,
+  last_seen_at) and legacy kwarg aliases (title, price, link, first_seen, last_seen) for
+  backward-compat callers - OfferRepository._to_dict: emits both legacy keys (title, price, link,
+  first_seen, last_seen) and new keys (raw_title, current_price_pln, url, first_seen_at,
+  last_seen_at, product_id, ...) — templates/Telegram/bot unchanged - OfferRepository._record_price
+  + PriceRepository.record: raw SQL updated to use offer_id + price_pln column names - All other raw
+  SQL in OfferRepository / PriceRepository / WatchlistRepository updated: aliases preserve legacy
+  dict-key contract (raw_title AS title, etc.)
+
+- ORM attr access in get_by_status: last_seen -> last_seen_at - PriceRepository: ORM attribute reads
+  updated (offer_id, price_pln) - storage/models.py: add server_default for currency_original and
+  is_active so raw SQL inserts that omit those columns don't fail NOT NULL constraints -
+  scripts/migrate_json_state.py: raw SQL updated to new column names - tests updated: ORM
+  constructors, filter_by(), attribute assertions, raw SQL
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **.gitignore**: Reorganize entries and remove example profile
+  ([`0612367`](https://github.com/giraffe-horizon/deal-hunter/commit/061236754af0d45936fd36a0ed46480619d6bee3))
+
+* Moved Python-related entries to the top for better organization. * Added missing entries for
+  egg-info, dist, and build directories. * Removed the example profile file `headphones.yaml` as it
+  is no longer needed. * Ensured that the .env entry is clearly separated for clarity.
+
+- **api**: Create_app() factory + middleware/templating split (Phase 3B #10)
+  ([`bb2f936`](https://github.com/giraffe-horizon/deal-hunter/commit/bb2f936f1a08a75ee0f9ee487592b7101d2cdf0a))
+
+Splits the 75-line api/__init__.py into four focused modules:
+
+api/templating.py Jinja2 templates + format_pln filter + APP_VERSION api/middleware.py csrf_check
+  ASGI middleware api/app.py create_app() factory — builds FastAPI instance, mounts static,
+  registers middleware, includes routers, wires "/" redirect api/__init__.py thin package entry:
+  calls create_app() once to expose `app` (uvicorn target: deal_hunter.api:app) and re-exports
+  templates / dependency helpers.
+
+Why: the old __init__.py mixed four concerns — app construction, middleware, template env, and
+  dependency re-export — with side-effectful imports (`app = FastAPI(...)` at module top) that make
+  alt deployments (tests spinning up isolated apps, or multi-tenant setups) awkward.
+
+With the factory: - tests can build a fresh app via create_app() without patching globals -
+  middleware and template wiring are each testable in isolation - routes keep working unchanged
+  (still `from deal_hunter.api import templates`)
+
+Public surface preserved: `from deal_hunter.api import app, templates, format_pln, get_db, ...`
+  still works. `_get_profiles` legacy alias kept for existing test imports.
+
+Test suite: 663 passed / 31 failed — identical to pre-change baseline.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **bot**: Split bot/main.py into callbacks.py + commands.py (Phase 3C #12)
+  ([`5f3b70b`](https://github.com/giraffe-horizon/deal-hunter/commit/5f3b70bb8af9e22c77063f01e322438c7c6f9254))
+
+bot/main.py drops from 225 → 72 lines, now owning only: logging setup, token check, Application
+  wiring, SIGTERM handling. All handler bodies move out:
+
+bot/callbacks.py handle_callback — inline-keyboard watch/skip dispatcher (Offer.status + Feedback
+  record) bot/commands.py cmd_watch, cmd_skip, cmd_status, cmd_target, cmd_watchlist — all
+  slash-command handlers
+
+Public surface preserved via __all__ re-export in bot/main.py so existing `from deal_hunter.bot.main
+  import handle_callback / cmd_*` imports keep working (tests rely on this).
+
+Test patches of `deal_hunter.bot.main.get_session` are updated to point at the actual import site
+  (`bot.callbacks.get_session` or `bot.commands.get_session`) — since the handlers now live in those
+  modules, that's where the `get_session` symbol they call actually is.
+
+Extracts `_MAX_MSG_LEN = 3500` into a module constant in commands.py (previously a magic number in
+  cmd_watchlist).
+
+Test suite: 663 passed / 31 failed — identical to pre-change baseline.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **cli**: Extract hunt/digest/chart services from cli/main.py (Phase 3C #11)
+  ([`98171cc`](https://github.com/giraffe-horizon/deal-hunter/commit/98171ccf068f126c0e3035938bdceef16b70a059))
+
+cli/main.py drops from 605 → 160 lines; it's now purely argparse + dispatch. Business logic moves
+  into four new service modules:
+
+services/runtime.py Shared singletons — lru_cache'd factories for ProfileManager, DealFetcher,
+  ScoringService, HealthTracker, plus get_telegram() and get_topic_id(). reset_runtime() for tests.
+
+services/hunt_service.py run_profile() + run_profiles(profile_names, version=...) — the full fetch →
+  score → persist → alert orchestration (previously cli.run_profile + _run_with_health_tracking).
+
+services/digest_service.py run_digest() — weekly price-drop digest, previously cli.run_digest.
+
+services/chart_service.py run_price_chart() + run_trend_chart(), sharing a _send_chart() helper.
+
+Why: cli/main.py was acting as both CLI and orchestrator, which made the "run this hunt from code"
+  use case (tests, dashboard, future API endpoints) hard. Now: - services/ owns every non-CLI
+  surface - the CLI is a thin adapter over those services - singletons live in services/runtime.py
+  rather than being constructed as module-level state in cli/main.py - every service can be invoked
+  without argparse
+
+Behavior preserved: same flags, same output, same Telegram/SQLite/ health.json effects. Test suite:
+  663 passed / 31 failed — identical to pre-change baseline.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **core**: Centralize settings + logging (Phase 3A)
+  ([`0d145d7`](https://github.com/giraffe-horizon/deal-hunter/commit/0d145d7f4b145fbc1e1a1902c5e9ee65072996d1))
+
+Introduces two cross-cutting modules in deal_hunter.core:
+
+* settings.py — a pydantic-settings `Settings` class owning all env vars (TELEGRAM_*, QUIET_HOURS_*,
+  DEAL_HUNTER_STATE_DIR, DEAL_HUNTER_PROFILES_DIR, DATABASE_URL, DEALS_PER_PAGE, SCORE_THRESHOLD)
+  plus derived paths (base_dir, state_dir, profiles_dir, default_database_url) and a
+  `telegram_configured` predicate. `get_settings()` returns a cached instance; `Settings()` can be
+  instantiated directly to re-read env.
+
+* logging.py — `setup_app_logging()` (stream + file, used by CLI) and `setup_bot_logging()`
+  (stream-only, used by feedback bot). Both idempotent.
+
+Replaces scattered `os.environ.get(...)` reads and ad-hoc logging setup in: cli/main.py,
+  bot/main.py, api/dependencies.py, api/routes/health.py, api/view_services/__init__.py,
+  services/alerter.py, storage/database.py.
+
+`is_quiet_hours()` and `view_services` read via `Settings()` (uncached) so env overrides (tests
+  using monkeypatch / importlib.reload) still work.
+
+Test suite: 663 passed / 31 failed — identical to pre-change baseline (failures are pre-existing
+  schema/store issues unrelated to Phase 3A).
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **layout**: Migrate to src/deal_hunter/ package (Phase 2)
+  ([`23f8ebf`](https://github.com/giraffe-horizon/deal-hunter/commit/23f8ebfa6e350ff3a2a5fea4e5295ddb58ecc971))
+
+Move flat package directories into a src-layout umbrella package: - services/, sources/, storage/,
+  notifiers/, utils/, cli/, visualization/ -> src/deal_hunter/<pkg>/ - filters/ ->
+  src/deal_hunter/domain/scoring/ - services/types.py -> src/deal_hunter/core/types.py - dashboard/
+  -> src/deal_hunter/api/ - dashboard/services/ -> src/deal_hunter/api/view_services/ -
+  deal_hunter.py (CLI script) -> src/deal_hunter/cli/main.py - feedback_bot.py ->
+  src/deal_hunter/bot/main.py
+
+Configuration updated: - pyproject.toml: packages.find where=["src"]; new console scripts
+  deal-hunter and deal-hunter-bot; mypy/semantic-release paths updated - Dockerfile: single COPY
+  src/ replaces per-package COPYs; HEALTHCHECK uses deal-hunter script - docker-compose.yml: bot
+  uses deal-hunter-bot; web uses uvicorn deal_hunter.api:app - docker/entrypoint.sh and
+  scripts/systemd/*.service: ExecStart uses new console scripts
+
+Imports rewritten across 62 files; BASE_DIR path depths retargeted for the new layout. Two tests
+  (test_dashboard, test_yaml_source) updated to use the new module references in reload/patch calls.
+
+No file contents split yet (Phase 3).
+
+Verified: ruff clean; python -m compileall clean; pytest --collect-only collects 768 tests
+  (identical to pre-refactor baseline); deal-hunter --list works; deal_hunter.api:app loads.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **models**: Rename Deal->Offer, PriceHistory->PricePoint
+  ([`cdd7aba`](https://github.com/giraffe-horizon/deal-hunter/commit/cdd7aba4e422f191f9d4766720e63a4d47c0d57c))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **models**: Rename Offer/PricePoint columns; add A2 columns
+  ([`526962d`](https://github.com/giraffe-horizon/deal-hunter/commit/526962d711386a9328eef71d930932c0ee5cdfe3))
+
+- Offer: title→raw_title, price→current_price_pln, link→url, first_seen→first_seen_at,
+  last_seen→last_seen_at - PricePoint: deal_id→offer_id, price→price_pln - Offer: add product_id,
+  source_native_id, current_price_original, currency_original, fx_rate_used, availability,
+  attributes_hint, is_active - PricePoint: add product_id, price_original, currency_original,
+  fx_rate_used, availability - product_id FK to products.id omitted from ORM (managed by Alembic
+  004); Product model arrives in Tasks 7-10 - test_models.py updated to assert new column names and
+  A2 columns
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **notifiers**: Split telegram.py into transport/formatters/keyboards (Phase 3B #9)
+  ([`7c1d620`](https://github.com/giraffe-horizon/deal-hunter/commit/7c1d620fb323596d517655240f0ce6e1aed96fab))
+
+Replaces the 350-line notifiers/telegram.py monolith with a package:
+
+telegram/keyboards.py build_deal_keyboard (inline keyboard markup) telegram/formatters.py pure
+  Polish-HTML formatters — format_deal_alert, format_summary, format_price_drop,
+  format_watchlist_alert, format_digest telegram/transport.py TelegramNotifier — HTTP transport with
+  retry + rate-limit; high-level send_* methods delegate to formatters + keyboards
+  telegram/__init__.py re-exports TelegramNotifier, build_deal_keyboard, all formatters; also
+  re-exports `requests` and `time` so existing
+  patch("deal_hunter.notifiers.telegram.requests"/"time") test hooks keep working unchanged.
+
+Why: the old file mixed three concerns — HTTP transport, Polish message composition, and keyboard
+  markup — making it hard to reuse formatters outside the HTTP client (e.g. in tests or in the
+  dashboard for preview). Formatters are now pure functions and unit-testable without mocks.
+
+Consolidates retry-loop magic numbers into module constants (_RATE_LIMIT_SLEEP, _MAX_ATTEMPTS,
+  _DEFAULT_RETRY_AFTER) and extracts the 429 retry_after parser into `_retry_after()` helper to DRY
+  up the two retry loops.
+
+Test suite: 663 passed / 31 failed — identical to pre-change baseline.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+- **repos**: Drop DealRepository alias; CHANGELOG for A1 rename
+  ([`725cce9`](https://github.com/giraffe-horizon/deal-hunter/commit/725cce91e2f67eacf5b3f2ee19fc52037e7af69a))
+
+- **repos**: Rename DealRepository->OfferRepository, update all callers & raw SQL
+  ([`c3caf8f`](https://github.com/giraffe-horizon/deal-hunter/commit/c3caf8ffa2e8c3939e4b63f60ea57602c73b8c11))
+
+Finish the A1 rename: DealRepository -> OfferRepository (with DealRepository alias for backward
+  compat), PriceHistory -> PricePoint throughout, raw SQL tables deals/price_history ->
+  offers/price_points. All 677 tests green.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **storage**: Split repositories.py by aggregate (Phase 3A #8)
+  ([`b30b36f`](https://github.com/giraffe-horizon/deal-hunter/commit/b30b36f1673334a1596d74125b7e43430f37afa3))
+
+Replaces the 978-line storage/repositories.py monolith with a storage/repositories/ package, one
+  file per aggregate:
+
+offer.py OfferRepository price.py PriceRepository watchlist.py WatchlistRepository alert_queue.py
+  AlertQueueRepository feedback.py FeedbackRepository seen_deal.py SeenDealRepository product.py
+  ProductRepository + ProductAliasRepository offer_payload_history.py OfferPayloadHistoryRepository
+  + MAX const deal_event.py DealEventRepository match.py MatchReviewRepository +
+  MatchDecisionRepository fx.py FxRateRepository __init__.py public re-exports (stable import
+  surface)
+
+Existing `from deal_hunter.storage.repositories import X` call sites are unchanged — the package
+  __init__ re-exports the full prior public surface.
+
+Each submodule imports only the SQLAlchemy symbols and models it needs, which keeps per-file
+  dependencies minimal and makes the aggregate boundaries explicit.
+
+Test suite: 663 passed / 31 failed — identical to pre-change baseline.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+### Testing
+
+- **migration**: Tighten 003 round-trip test and fixture hygiene
+  ([`bf9df9c`](https://github.com/giraffe-horizon/deal-hunter/commit/bf9df9c255fac45c067acba41b4c798050dd1ef1))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
 
 ## v0.14.1 (2026-04-13)
 
