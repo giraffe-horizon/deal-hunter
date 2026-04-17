@@ -1,0 +1,50 @@
+{#
+  Deals-table row status badge + inline Watch/Skip/Restore buttons, wrapped in
+  #row-actions-<id> so the HTMX outerHTML swap atomically replaces badge and
+  buttons together (no vanishing controls after a click).
+
+  Context inputs:
+    deal_id_encoded  - urlencoded deal id (string)
+    current_status   - "active" | "watching" | "rejected"
+#}
+<div id="row-actions-{{ deal_id_encoded }}" class="flex items-center gap-2">
+  {% if current_status == 'watching' %}
+    <span class="text-xs font-label px-2.5 py-1 rounded-full bg-primary-container text-primary font-medium">Watching</span>
+  {% elif current_status == 'rejected' %}
+    <span class="text-xs font-label px-2.5 py-1 rounded-full bg-error-container/30 text-error font-medium">Rejected</span>
+  {% else %}
+    <span class="text-xs font-label px-2.5 py-1 rounded-full bg-tertiary-container/30 text-tertiary font-medium">Active</span>
+  {% endif %}
+  <span class="hidden sm:inline-flex items-center gap-0.5">
+    {% if current_status != 'watching' %}
+    <button hx-post="/api/deals/{{ deal_id_encoded }}/status"
+            hx-vals='{"status":"watching","inline":"1"}'
+            hx-target="#row-actions-{{ deal_id_encoded }}"
+            hx-swap="outerHTML"
+            class="p-1 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary-container/30"
+            title="Watch">
+      <span class="material-symbols-outlined text-[18px]">visibility</span>
+    </button>
+    {% endif %}
+    {% if current_status != 'rejected' %}
+    <button hx-post="/api/deals/{{ deal_id_encoded }}/status"
+            hx-vals='{"status":"rejected","inline":"1"}'
+            hx-target="#row-actions-{{ deal_id_encoded }}"
+            hx-swap="outerHTML"
+            class="p-1 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error-container/30"
+            title="Skip">
+      <span class="material-symbols-outlined text-[18px]">block</span>
+    </button>
+    {% endif %}
+    {% if current_status in ('watching', 'rejected') %}
+    <button hx-post="/api/deals/{{ deal_id_encoded }}/status"
+            hx-vals='{"status":"active","inline":"1"}'
+            hx-target="#row-actions-{{ deal_id_encoded }}"
+            hx-swap="outerHTML"
+            class="p-1 text-on-surface-variant hover:text-on-surface transition-colors rounded-full hover:bg-surface-container-highest"
+            title="{% if current_status == 'watching' %}Unwatch{% else %}Restore{% endif %}">
+      <span class="material-symbols-outlined text-[18px]">undo</span>
+    </button>
+    {% endif %}
+  </span>
+</div>

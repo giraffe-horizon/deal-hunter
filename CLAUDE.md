@@ -39,7 +39,7 @@ stores/*.yaml           Declarative store definitions (auto-discovered, no Pytho
 stores/README.md        Guide: "How to add a new store in 5 minutes"
 filters/base.py         Base scoring engine (score_rules, penalties, budget, temperature, regex)
 filters/bike_filter.py  Extended scorer for bikes (sizes, colors, tires, race keywords)
-dashboard/__init__.py   Web dashboard: FastAPI app, routes, API endpoints (deals, profiles CRUD, watchlist, scoring tuner, comparator)
+dashboard/__init__.py   Web dashboard: FastAPI app, routes, API endpoints (deals, profiles CRUD, /watchlist bookmarks of status='watching' offers, /alerts target-price alerts backed by the `watchlist` SQLite table, scoring tuner, comparator)
 dashboard/schemas.py    Pydantic models for API validation (StatusUpdate, WatchlistAdd, ProfileCreate)
 dashboard/services/     Dashboard service layer (DealService, ProfileService, TunerService)
 dashboard/templates/    Jinja2 templates with macros (base, deals, health, profiles, watchlist, tuner, compare, partials)

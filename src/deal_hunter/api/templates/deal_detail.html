@@ -38,29 +38,11 @@
         </div>
 
         <!-- Action Buttons -->
-        <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full md:w-auto" id="action-buttons">
-            <a href="{{ deal.link }}" target="_blank" rel="noopener noreferrer"
-               class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
-                <span class="material-symbols-outlined text-[18px]">open_in_new</span>
-                Open Link
-            </a>
-            <button hx-post="/api/deals/{{ deal.id | urlencode }}/status"
-                    hx-vals='{"status": "watching"}'
-                    hx-target="#action-buttons"
-                    hx-swap="innerHTML"
-                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container-high text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-highest transition-colors">
-                <span class="material-symbols-outlined text-[18px]">visibility</span>
-                Watch
-            </button>
-            <button hx-post="/api/deals/{{ deal.id | urlencode }}/status"
-                    hx-vals='{"status": "rejected"}'
-                    hx-target="#action-buttons"
-                    hx-swap="innerHTML"
-                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-surface-container-high text-on-surface-variant rounded-card text-sm font-medium hover:bg-error-container/20 hover:text-error transition-colors">
-                <span class="material-symbols-outlined text-[18px]">block</span>
-                Skip
-            </button>
-            <form hx-post="/api/watchlist"
+        <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full md:w-auto">
+            {% with deal_link=deal.link, deal_id_encoded=deal.id | urlencode, current_status=deal.status %}
+                {% include "partials/deal_action_buttons.html" %}
+            {% endwith %}
+            <form hx-post="/api/alerts"
                   hx-swap="outerHTML"
                   class="flex items-center gap-1">
                 <input type="hidden" name="deal_id" value="{{ deal.id }}">

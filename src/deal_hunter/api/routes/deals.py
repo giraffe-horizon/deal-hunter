@@ -10,7 +10,16 @@ from deal_hunter.api import templates
 from deal_hunter.api.dependencies import get_db, get_profiles
 from deal_hunter.api.schemas import StatusUpdate
 from deal_hunter.api.view_services import DEALS_PER_PAGE, SCORE_THRESHOLD, DealService
-from deal_hunter.storage.repositories import OfferRepository, PriceRepository
+from deal_hunter.storage.repositories import FeedbackRepository, OfferRepository, PriceRepository
+
+# Map dashboard status changes to the feedback-log "action" string used by the
+# Telegram bot. Keeping the vocabulary aligned lets /status stats aggregate
+# across both surfaces.
+_STATUS_TO_FEEDBACK_ACTION = {
+    "watching": "watch",
+    "rejected": "skip",
+    "active": "restore",
+}
 
 router = APIRouter()
 
@@ -82,6 +91,36 @@ def deals_page(
             "selected_min_score": min_score,
             "selected_category": category or None,
             "selected_status": status or None,
+            "page": data.page,
+            "total_pages": data.total_pages,
+            "total_filtered": data.total_filtered,
+            "filter_params": data.filter_params,
+        },
+    )
+
+
+@router.get("/watchlist", response_class=HTMLResponse)
+def watchlist_page(
+    request: Request,
+    page: int = 1,
+    session: Session = Depends(get_db),
+) -> HTMLResponse:
+    """Bookmark-style watchlist — lists offers with status='watching'."""
+    data = DealService(session).get_deals_page(
+        status="watching",
+        page=page,
+        per_page=DEALS_PER_PAGE,
+        score_threshold=SCORE_THRESHOLD,
+        include_stats=False,
+    )
+    is_htmx = bool(request.headers.get("HX-Request"))
+    template_name = "partials/deals_table.html" if is_htmx else "watchlist.html"
+    return templates.TemplateResponse(
+        request,
+        template_name,
+        {
+            "deals": data.deals,
+            "sparklines": data.sparklines,
             "page": data.page,
             "total_pages": data.total_pages,
             "total_filtered": data.total_filtered,
@@ -174,17 +213,18 @@ def api_update_deal_status(
     ok = OfferRepository(session).update_status(deal_id, validated.status)
     if not ok:
         return JSONResponse({"error": "Deal not found"}, status_code=404)
+    FeedbackRepository(session).record(deal_id, _STATUS_TO_FEEDBACK_ACTION[validated.status])
+    encoded_id = deal_id.replace(":", "%3A")
     if inline:
         return templates.TemplateResponse(
             request,
-            "partials/deal_row_status.html",
-            {"current_status": status},
+            "partials/deal_row_actions.html",
+            {"deal_id_encoded": encoded_id, "current_status": validated.status},
         )
     # Return HTML fragment for HTMX swap — must include full action buttons
     # so the user can change status again
     deal = OfferRepository(session).get_by_id(deal_id)
     link = deal["link"] if deal else "#"
-    encoded_id = deal_id.replace(":", "%3A")
 
     return templates.TemplateResponse(
         request,

@@ -664,6 +664,35 @@ class TestApiUpdateStatus:
         client.post("/api/deals/pepper:99999/status", data={"status": "active"})
         assert DealRepository(dashboard_session).get_by_id("pepper:99999")["status"] == "active"
 
+    def test_inline_response_keeps_action_buttons(self, client):
+        """inline=1 swap returns the row wrapper with badge + remaining buttons."""
+        response = client.post(
+            "/api/deals/pepper:99999/status",
+            data={"status": "watching", "inline": "1"},
+        )
+        text = response.text
+        assert 'id="row-actions-pepper%3A99999"' in text
+        assert "Watching" in text
+        # After going to 'watching', Skip + Unwatch (Restore) buttons remain.
+        assert "hx-post" in text
+        assert 'title="Skip"' in text
+
+    def test_status_update_writes_feedback_row(self, client, dashboard_session):
+        """Dashboard Watch/Skip clicks log to the feedback table (parity with bot)."""
+        from sqlalchemy import text as sa_text
+
+        client.post("/api/deals/pepper:99999/status", data={"status": "watching"})
+        client.post("/api/deals/pepper:99999/status", data={"status": "rejected"})
+        client.post("/api/deals/pepper:99999/status", data={"status": "active"})
+        actions = [
+            r[0]
+            for r in dashboard_session.execute(
+                sa_text("SELECT action FROM feedback WHERE deal_id = :id ORDER BY created_at"),
+                {"id": "pepper:99999"},
+            ).all()
+        ]
+        assert actions == ["watch", "skip", "restore"]
+
 
 class TestApiStats:
     def test_stats_returns_json(self, client):
@@ -848,7 +877,7 @@ class TestE2EWorkflows:
 
 
 class TestWatchlistPage:
-    """Tests for the watchlist dashboard page."""
+    """Tests for the /watchlist bookmark page (offers with status='watching')."""
 
     def test_watchlist_page_loads(self, client):
         """GET /watchlist returns 200."""
@@ -861,61 +890,104 @@ class TestWatchlistPage:
         response = client.get("/deals")
         assert "/watchlist" in response.text
 
-    def test_watchlist_empty_state(self, client):
-        """Empty watchlist shows the empty state message."""
+    def test_watchlist_lists_watching_offers(self, client):
+        """Watchlist lists offers whose status is 'watching'."""
+        text = client.get("/watchlist").text
+        # ceneo:88888 is seeded as status='watching'
+        assert "NAS HDD Seagate IronWolf" in text
+
+    def test_watchlist_excludes_non_watching(self, client):
+        """Active and rejected offers do not appear on the watchlist page."""
+        text = client.get("/watchlist").text
+        assert "Test Carbon Bike XL" not in text  # active
+        assert "Cheap Broken Bike Parts" not in text  # rejected
+
+    def test_watchlist_empty_state_when_none(self, client, dashboard_session):
+        """With no watching offers the empty-state message is shown."""
+        from deal_hunter.storage.repositories import OfferRepository
+
+        OfferRepository(dashboard_session).update_status("ceneo:88888", "active")
         response = client.get("/watchlist")
         assert response.status_code == 200
-        assert "No watchlist items" in response.text
+        assert "No watched deals" in response.text
 
-    def test_add_to_watchlist_api(self, client):
-        """POST /api/watchlist adds a deal."""
+    def test_watchlist_populated_after_watch_click(self, client):
+        """Clicking Watch on a deal makes it show up on /watchlist."""
+        client.post("/api/deals/pepper:99999/status", data={"status": "watching"})
+        text = client.get("/watchlist").text
+        assert "Test Carbon Bike XL" in text
+
+
+class TestAlertsPage:
+    """Tests for the /alerts price-target page (backed by the watchlist table)."""
+
+    def test_alerts_page_loads(self, client):
+        """GET /alerts returns 200."""
+        response = client.get("/alerts")
+        assert response.status_code == 200
+        assert "Price Alerts" in response.text
+
+    def test_alerts_in_sidebar(self, client):
+        """Sidebar contains a Price Alerts link."""
+        text = client.get("/deals").text
+        assert "/alerts" in text
+        assert "Price Alerts" in text
+
+    def test_alerts_empty_state(self, client):
+        """Empty alerts list shows its empty-state message."""
+        response = client.get("/alerts")
+        assert response.status_code == 200
+        assert "No price alerts" in response.text
+
+    def test_add_alert_api(self, client):
+        """POST /api/alerts adds a target-price alert."""
         response = client.post(
-            "/api/watchlist",
+            "/api/alerts",
             data={"deal_id": "pepper:99999", "target_price": "8000"},
         )
         assert response.status_code == 200
 
-    def test_add_to_watchlist_returns_confirmation(self, client):
-        """POST /api/watchlist returns confirmation text."""
+    def test_add_alert_returns_confirmation(self, client):
+        """POST /api/alerts returns a 'Target set' confirmation snippet."""
         response = client.post(
-            "/api/watchlist",
+            "/api/alerts",
             data={"deal_id": "pepper:99999", "target_price": "8000"},
         )
         assert "Target set" in response.text
 
-    def test_watchlist_shows_item_after_add(self, client):
-        """After adding, watchlist page shows the item."""
+    def test_alerts_shows_item_after_add(self, client):
+        """After adding, the alerts page shows the item."""
         client.post(
-            "/api/watchlist",
+            "/api/alerts",
             data={"deal_id": "pepper:99999", "target_price": "8000"},
         )
-        response = client.get("/watchlist")
+        response = client.get("/alerts")
         assert "pepper:99999" in response.text or "Test Carbon Bike XL" in response.text
 
-    def test_remove_from_watchlist_api(self, client):
-        """DELETE /api/watchlist/{deal_id} removes a deal."""
+    def test_remove_alert_api(self, client):
+        """DELETE /api/alerts/{deal_id} removes an alert."""
         client.post(
-            "/api/watchlist",
+            "/api/alerts",
             data={"deal_id": "pepper:99999", "target_price": "8000"},
         )
-        response = client.delete("/api/watchlist/pepper:99999")
+        response = client.delete("/api/alerts/pepper:99999")
         assert response.status_code == 200
 
     def test_remove_returns_empty(self, client):
-        """DELETE /api/watchlist returns empty HTML (HTMX row removal)."""
+        """DELETE /api/alerts returns empty HTML (HTMX row removal)."""
         client.post(
-            "/api/watchlist",
+            "/api/alerts",
             data={"deal_id": "pepper:99999", "target_price": "8000"},
         )
-        response = client.delete("/api/watchlist/pepper:99999")
+        response = client.delete("/api/alerts/pepper:99999")
         assert response.text == ""
 
     def test_deal_detail_has_target_form(self, client):
-        """Deal detail page contains the target price form."""
+        """Deal detail page contains the target-price form posting to /api/alerts."""
         text = client.get("/deals/pepper:99999").text
         assert "target_price" in text
-        assert "Target" in text
         assert "bookmark_add" in text
+        assert "/api/alerts" in text
 
 
 class TestProfilePages:

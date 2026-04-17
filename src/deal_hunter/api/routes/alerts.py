@@ -1,4 +1,10 @@
-"""Watchlist routes: view, add, remove, update target price."""
+"""Price-alert routes: view, add, remove, update target price.
+
+Internally persisted in the ``watchlist`` SQLite table via
+``WatchlistRepository``; user-facing URLs and labels use "alerts" to
+distinguish from the bookmark-style Watchlist (offers with
+``status='watching'``, served by ``routes/deals.py``).
+"""
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -13,24 +19,24 @@ from deal_hunter.storage.repositories import WatchlistRepository
 router = APIRouter()
 
 
-@router.get("/watchlist", response_class=HTMLResponse)
-def watchlist_page(request: Request, session: Session = Depends(get_db)) -> HTMLResponse:
-    """Watchlist page — deals with target price alerts."""
+@router.get("/alerts", response_class=HTMLResponse)
+def alerts_page(request: Request, session: Session = Depends(get_db)) -> HTMLResponse:
+    """Price Alerts page — deals with target-price watches."""
     items = WatchlistRepository(session).get_all()
     sparklines = DealService(session).get_sparklines(items)
     return templates.TemplateResponse(
         request,
-        "watchlist.html",
+        "alerts.html",
         {"items": items, "sparklines": sparklines},
     )
 
 
-@router.post("/api/watchlist")
-async def add_to_watchlist_api(
+@router.post("/api/alerts")
+async def add_alert_api(
     request: Request,
     session: Session = Depends(get_db),
 ) -> HTMLResponse:
-    """Add a deal to the watchlist."""
+    """Add a deal to the price-alert list."""
     form = await request.form()
     try:
         validated = WatchlistAdd(
@@ -45,24 +51,24 @@ async def add_to_watchlist_api(
     return HTMLResponse('<span class="text-sm text-tertiary font-medium">\u2713 Target set</span>')
 
 
-@router.delete("/api/watchlist/{deal_id:path}")
-def remove_from_watchlist_api(
+@router.delete("/api/alerts/{deal_id:path}")
+def remove_alert_api(
     deal_id: str,
     session: Session = Depends(get_db),
 ) -> HTMLResponse:
-    """Remove a deal from the watchlist."""
+    """Remove a deal from the price-alert list."""
     WatchlistRepository(session).remove(deal_id)
     return HTMLResponse("")
 
 
-@router.patch("/api/watchlist/{deal_id:path}")
-async def update_watchlist_api(
+@router.patch("/api/alerts/{deal_id:path}")
+async def update_alert_api(
     request: Request,
     deal_id: str,
     target_price: int = Form(...),
     session: Session = Depends(get_db),
 ) -> Response:
-    """Update target price for a watchlist item."""
+    """Update target price for a price-alert item."""
     try:
         WatchlistUpdate(target_price=target_price)
     except Exception:
@@ -74,6 +80,6 @@ async def update_watchlist_api(
     sparklines = DealService(session).get_sparklines([item]) if item else {}
     return templates.TemplateResponse(
         request,
-        "partials/watchlist_row.html",
+        "partials/alert_row.html",
         {"item": item, "sparklines": sparklines},
     )

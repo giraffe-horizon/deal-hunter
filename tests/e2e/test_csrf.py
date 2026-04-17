@@ -17,7 +17,7 @@ def test_post_without_csrf_header_returns_403(page, base_url):
 def test_delete_without_csrf_header_returns_403(page, base_url):
     """DELETE request without CSRF header is rejected with 403."""
     response = page.request.delete(
-        base_url + "/api/watchlist/pepper%3A99999",
+        base_url + "/api/alerts/pepper%3A99999",
     )
     assert response.status == 403
 
