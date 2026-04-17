@@ -1157,16 +1157,16 @@ class TestComparePage:
         assert response.status_code == 200
 
     def test_deals_table_has_checkboxes(self, client):
-        """Deals page includes compare checkboxes."""
+        """Deals page includes row selection checkboxes."""
         response = client.get("/deals")
         assert response.status_code == 200
-        assert "compare-cb" in response.text
+        assert "deal-cb" in response.text
 
-    def test_deals_page_has_compare_bar(self, client):
-        """Deals page includes floating compare bar."""
+    def test_deals_page_has_bulk_action_bar(self, client):
+        """Deals page includes the bulk action bar mount."""
         response = client.get("/deals")
         assert response.status_code == 200
-        assert "compare-bar" in response.text
+        assert "bulk-action-bar" in response.text
 
     def test_compare_with_real_deals(self, client):
         """Compare page renders seeded deal data."""
@@ -1587,6 +1587,230 @@ class TestCompareAndTunerWorkflows:
         response = client.get("/deals")
         assert response.status_code == 200
         assert 'href="/tuner"' not in response.text
+
+
+class TestSortAndDateColumn:
+    """Sort query params and the new Date column on /deals."""
+
+    def test_sort_by_price_asc_orders_rows(self, client):
+        text = client.get("/deals?sort=price&dir=asc").text
+        # pepper:77777 (200) should appear before pepper:99999 (8500) in HTML.
+        low = text.find("Cheap Broken Bike Parts")
+        high = text.find("Test Carbon Bike XL")
+        assert low != -1 and high != -1
+        assert low < high
+
+    def test_sort_by_price_desc_orders_rows(self, client):
+        text = client.get("/deals?sort=price&dir=desc").text
+        low = text.find("Cheap Broken Bike Parts")
+        high = text.find("Test Carbon Bike XL")
+        assert high < low
+
+    def test_bad_sort_column_returns_422(self, client):
+        resp = client.get("/deals?sort=bogus")
+        assert resp.status_code == 422
+
+    def test_bad_direction_returns_422(self, client):
+        resp = client.get("/deals?sort=price&dir=sideways")
+        assert resp.status_code == 422
+
+    def test_active_sort_shows_direction_arrow(self, client):
+        text = client.get("/deals?sort=price&dir=asc").text
+        # Active sort header renders an "arrow_upward" indicator when asc.
+        assert "arrow_upward" in text
+
+    def test_active_sort_desc_shows_down_arrow(self, client):
+        text = client.get("/deals?sort=price&dir=desc").text
+        assert "arrow_downward" in text
+
+    def test_sort_links_present_in_table(self, client):
+        text = client.get("/deals").text
+        # Click-to-sort links are wired via ?sort=<col>&dir=<dir>.
+        assert "?sort=price&amp;dir=" in text or "?sort=price&dir=" in text
+
+    def test_date_column_rendered(self, client):
+        text = client.get("/deals").text
+        assert "added " in text
+
+    def test_data_total_filtered_attribute_present(self, client):
+        text = client.get("/deals").text
+        assert "data-total-filtered=" in text
+
+
+class TestDealsApiCountAndIds:
+    """/api/deals/count and /api/deals/ids convenience endpoints."""
+
+    def test_count_no_filter_returns_all(self, client):
+        resp = client.get("/api/deals/count")
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 4
+
+    def test_count_with_filter(self, client):
+        resp = client.get("/api/deals/count?profile=bikes")
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 3
+
+    def test_ids_returns_matching_ids(self, client):
+        resp = client.get("/api/deals/ids?min_score=70")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["count"] == 2
+        assert set(body["ids"]) == {"pepper:99999", "pepper:66666"}
+
+
+class TestBulkEndpoint:
+    """POST /api/deals/bulk — unified bulk actions."""
+
+    def _post(self, client, payload):
+        # The _CsrfTestClient auto-injects HX-Request header; we pass JSON body
+        # via json= so content-type is application/json.
+        return client.post("/api/deals/bulk", json=payload)
+
+    def test_set_status_watch_ids_mode(self, client):
+        resp = self._post(
+            client,
+            {"action": "set-status", "status": "watching", "ids": ["pepper:99999"]},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["updated"] == 1
+
+    def test_set_status_creates_feedback_rows(self, client, dashboard_session):
+        from deal_hunter.storage.repositories import FeedbackRepository
+
+        self._post(
+            client,
+            {"action": "set-status", "status": "rejected", "ids": ["pepper:99999", "pepper:66666"]},
+        )
+        dashboard_session.flush()
+        stats = FeedbackRepository(dashboard_session).get_stats()
+        assert stats.get("skip", 0) >= 2
+
+    def test_set_status_filter_mode(self, client):
+        resp = self._post(
+            client,
+            {
+                "action": "set-status",
+                "status": "watching",
+                "filter": {"profile": "bikes"},
+                "excluded": [],
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["updated"] == 3  # three bike deals
+
+    def test_set_status_filter_mode_with_excluded(self, client):
+        resp = self._post(
+            client,
+            {
+                "action": "set-status",
+                "status": "watching",
+                "filter": {"profile": "bikes"},
+                "excluded": ["pepper:77777"],
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["updated"] == 2
+
+    def test_set_target_ids_mode(self, client, dashboard_session):
+        from deal_hunter.storage.repositories import WatchlistRepository
+
+        resp = self._post(
+            client,
+            {"action": "set-target", "target_price": 5000, "ids": ["pepper:99999", "pepper:66666"]},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["updated"] == 2
+        dashboard_session.flush()
+        items = WatchlistRepository(dashboard_session).get_all()
+        assert {i["deal_id"] for i in items} >= {"pepper:99999", "pepper:66666"}
+
+    def test_compare_returns_redirect(self, client):
+        resp = self._post(
+            client,
+            {"action": "compare", "ids": ["pepper:99999", "pepper:66666"]},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["redirect"].startswith("/compare?ids=")
+
+    def test_compare_caps_at_four_ids(self, client):
+        resp = self._post(
+            client,
+            {
+                "action": "compare",
+                "ids": [
+                    "pepper:99999",
+                    "pepper:66666",
+                    "pepper:77777",
+                    "ceneo:88888",
+                    "pepper:extra",
+                ],
+            },
+        )
+        assert resp.status_code == 200
+        redirect = resp.json()["redirect"]
+        # 4 commas = 4 ids
+        assert redirect.count(",") == 3
+
+    def test_invalid_payload_rejected(self, client):
+        resp = self._post(client, {"action": "set-status"})  # no ids/filter/status
+        assert resp.status_code == 422
+
+    def test_both_ids_and_filter_rejected(self, client):
+        resp = self._post(
+            client,
+            {
+                "action": "set-status",
+                "status": "watching",
+                "ids": ["pepper:99999"],
+                "filter": {"profile": "bikes"},
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_bulk_over_cap_returns_413(self, client, monkeypatch):
+        import deal_hunter.api.routes.deals as deals_mod
+
+        monkeypatch.setattr(deals_mod, "BULK_MAX_ROWS", 0)
+        resp = self._post(
+            client,
+            {"action": "set-status", "status": "watching", "ids": ["pepper:99999"]},
+        )
+        assert resp.status_code == 413
+
+
+class TestDealsExport:
+    """GET /api/deals/export — streaming CSV / JSON dump."""
+
+    def test_export_csv_headers(self, client):
+        resp = client.get("/api/deals/export?format=csv")
+        assert resp.status_code == 200
+        assert "text/csv" in resp.headers["content-type"]
+        assert "attachment" in resp.headers["content-disposition"]
+        assert "deals.csv" in resp.headers["content-disposition"]
+
+    def test_export_csv_body(self, client):
+        resp = client.get("/api/deals/export?format=csv")
+        text = resp.text
+        assert "id,title,price" in text.splitlines()[0]
+        assert "pepper:99999" in text
+
+    def test_export_json_headers(self, client):
+        resp = client.get("/api/deals/export?format=json")
+        assert resp.status_code == 200
+        assert "application/json" in resp.headers["content-type"]
+        assert "deals.json" in resp.headers["content-disposition"]
+
+    def test_export_filters_apply(self, client):
+        resp = client.get("/api/deals/export?format=json&profile=nas_hdd")
+        import json as _json
+
+        data = _json.loads(resp.text)
+        assert all(row["profile"] == "nas_hdd" for row in data)
+
+    def test_export_bad_format_422(self, client):
+        resp = client.get("/api/deals/export?format=xml")
+        assert resp.status_code == 422
 
 
 def test_deals_per_page_env_override(monkeypatch):

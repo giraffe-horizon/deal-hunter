@@ -44,9 +44,9 @@ def test_filter_by_status_watching(page, base_url):
     count = rows.count()
     assert count >= 1
 
-    # Status is col 8; the row-actions wrapper's first span is the status badge.
+    # Status is col 9 (Date column inserted at 8); row-actions wrapper's first span is the badge.
     status_badges = page.locator(
-        "#deals-table tbody tr td:nth-child(8) div[id^='row-actions-'] > span"
+        "#deals-table tbody tr td:nth-child(9) div[id^='row-actions-'] > span"
     ).first
     assert "Watching" in status_badges.inner_text()
 
@@ -61,21 +61,19 @@ def test_deal_row_click_navigates_to_detail(page, base_url):
     assert "/deals/" in page.url
 
 
-def test_compare_checkboxes_exist(page, base_url):
-    """Each deal row has a compare checkbox."""
+def test_row_checkboxes_exist(page, base_url):
+    """Each deal row has a row-selection checkbox."""
     page.goto(base_url + "/deals")
-    checkboxes = page.locator("#deals-table .compare-cb")
+    checkboxes = page.locator("#deals-table .deal-cb")
     assert checkboxes.count() >= 1
 
 
-def test_compare_bar_appears_on_selection(page, base_url):
-    """Selecting a compare checkbox makes the compare bar visible."""
+def test_bulk_bar_appears_on_selection(page, base_url):
+    """Selecting a row checkbox makes the bulk action bar visible."""
     page.goto(base_url + "/deals")
-    # Check the first compare checkbox
-    page.locator("#deals-table .compare-cb").first.check()
-    compare_bar = page.locator("#compare-bar")
-    # The bar should no longer have the 'hidden' class
-    assert compare_bar.is_visible()
+    page.locator("#deals-table .deal-cb").first.check()
+    bar = page.locator("#bulk-action-bar")
+    assert bar.is_visible()
 
 
 def test_clear_filters_link(page, base_url):

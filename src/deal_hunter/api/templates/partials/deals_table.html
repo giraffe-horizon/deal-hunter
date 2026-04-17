@@ -1,14 +1,53 @@
+{# Sortable table partial. Sort state is URL-owned via ?sort=<col>&dir=asc|desc.
+   Column set (left → right):
+     select, title, price, trend, source, profile, score, date, status.
+   Every column sorts except Trend and the selection checkbox. #}
+{% macro sort_th(label, col, extra_classes="") %}
+    {% set active = (sort == col) %}
+    {% set next_dir = 'asc' if (active and direction == 'desc') else 'desc' if active else 'desc' %}
+    {% set base_url = page_url | default('/deals') %}
+    {% set fp = filter_params | default('') %}
+    {# Strip existing sort/dir out of the carried-over filter params so we don't duplicate. #}
+    {% set fp_clean = [] %}
+    {% for part in fp.split('&') %}
+        {% if part and not part.startswith('sort=') and not part.startswith('dir=') %}{% set _ = fp_clean.append(part) %}{% endif %}
+    {% endfor %}
+    {% set fp_q = ('&' ~ fp_clean | join('&')) if fp_clean else '' %}
+    <th class="pb-3 {{ extra_classes }}">
+        <a href="{{ base_url }}?sort={{ col }}&dir={{ next_dir }}{{ fp_q }}"
+           hx-get="{{ base_url }}?sort={{ col }}&dir={{ next_dir }}{{ fp_q }}"
+           hx-target="#deals-table"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           class="inline-flex items-center gap-1 hover:text-on-surface transition-colors cursor-pointer select-none">
+            {{ label }}
+            {% if active %}
+                <span class="material-symbols-outlined text-[14px]">{% if direction == 'asc' %}arrow_upward{% else %}arrow_downward{% endif %}</span>
+            {% else %}
+                <span class="material-symbols-outlined text-[14px] opacity-30">unfold_more</span>
+            {% endif %}
+        </a>
+    </th>
+{% endmacro %}
+<div data-total-filtered="{{ total_filtered | default(0) }}"
+     data-sort="{{ sort | default('') }}"
+     data-direction="{{ direction | default('') }}">
 <table class="w-full">
     <thead>
         <tr class="text-left text-xs font-label text-on-surface-variant uppercase tracking-wider">
-            <th class="pb-3 pl-4 w-8"></th>
-            <th class="pb-3 pl-4">Title</th>
-            <th class="pb-3">Price</th>
+            <th class="pb-3 pl-4 w-8">
+                <input type="checkbox" id="select-all-cb"
+                       class="rounded border-outline-variant text-primary focus:ring-primary/30"
+                       title="Select all matching this filter">
+            </th>
+            {{ sort_th("Title", "title", "pl-4") }}
+            {{ sort_th("Price", "price") }}
             <th class="pb-3 hidden md:table-cell">Trend</th>
-            <th class="pb-3 hidden sm:table-cell">Source</th>
-            <th class="pb-3 hidden sm:table-cell">Profile</th>
-            <th class="pb-3">Score</th>
-            <th class="pb-3 pr-4">Status</th>
+            {{ sort_th("Source", "source", "hidden sm:table-cell") }}
+            {{ sort_th("Profile", "profile", "hidden sm:table-cell") }}
+            {{ sort_th("Score", "score") }}
+            {{ sort_th("Date", "date", "hidden lg:table-cell") }}
+            {{ sort_th("Status", "status", "pr-4") }}
         </tr>
     </thead>
     <tbody class="divide-y divide-surface-variant/30">
@@ -17,8 +56,8 @@
             <tr class="hover:bg-surface-container transition-colors cursor-pointer"
                 onclick="window.location='/deals/{{ deal.id | urlencode }}'">
                 <td class="py-3 pl-4 pr-1 w-8" onclick="event.stopPropagation()">
-                    <input type="checkbox" class="compare-cb rounded border-outline-variant text-primary focus:ring-primary/30"
-                           value="{{ deal.id }}" onchange="updateCompareBar()">
+                    <input type="checkbox" class="deal-cb rounded border-outline-variant text-primary focus:ring-primary/30"
+                           value="{{ deal.id }}">
                 </td>
                 <td class="py-3 pl-2 pr-2">
                     <span class="text-sm font-medium text-on-surface line-clamp-1">{{ deal.title }}</span>
@@ -53,6 +92,14 @@
                         <span class="text-sm text-on-surface-variant">&mdash;</span>
                     {% endif %}
                 </td>
+                <td class="py-3 pr-2 hidden lg:table-cell">
+                    <div class="text-sm text-on-surface whitespace-nowrap">added {{ deal.first_seen_at | humanize_age }}</div>
+                    {% set added = deal.first_seen_at %}
+                    {% set seen = deal.last_seen_at %}
+                    {% if seen and (not added or seen[:16] != added[:16]) %}
+                    <div class="text-xs text-on-surface-variant whitespace-nowrap">seen {{ seen | humanize_age }}</div>
+                    {% endif %}
+                </td>
                 <td class="py-3 pr-4" onclick="event.stopPropagation()">
                     {% with deal_id_encoded=deal.id | urlencode, deal_dom_id=deal.id | replace(':', '-'), current_status=deal.status %}
                         {% include "partials/deal_row_actions.html" %}
@@ -62,7 +109,7 @@
             {% endfor %}
         {% else %}
             <tr>
-                <td colspan="8" class="py-16 text-center">
+                <td colspan="9" class="py-16 text-center">
                     <span class="material-symbols-outlined text-[40px] text-outline-variant mb-3 block">search_off</span>
                     <p class="text-on-surface-variant text-sm">No deals found</p>
                 </td>
@@ -70,6 +117,7 @@
         {% endif %}
     </tbody>
 </table>
+</div>
 
 {% if total_pages is defined and total_pages > 1 %}
 {% set fp = filter_params | default("") %}
@@ -100,4 +148,3 @@
     </div>
 </div>
 {% endif %}
-

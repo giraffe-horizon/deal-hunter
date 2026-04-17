@@ -59,6 +59,8 @@ class DealService:
         min_score: int | None = None,
         category: str | None = None,
         status: str | None = None,
+        sort: str | None = None,
+        direction: str | None = None,
         page: int = 1,
         per_page: int = 50,
         score_threshold: int = 70,
@@ -84,6 +86,8 @@ class DealService:
             min_score=min_score,
             category=category,
             status=status,
+            sort=sort,
+            direction=direction,
             limit=per_page,
             offset=offset,
         )
@@ -102,6 +106,8 @@ class DealService:
             min_score=min_score,
             category=category,
             status=status,
+            sort=sort,
+            direction=direction,
         )
 
         sparklines = self.get_sparklines(deals)
@@ -136,6 +142,8 @@ class DealService:
         min_score: int | None,
         category: str | None,
         status: str | None,
+        sort: str | None = None,
+        direction: str | None = None,
     ) -> str:
         """Build query-string fragment for pagination links."""
         parts: list[str] = []
@@ -149,6 +157,10 @@ class DealService:
             parts.append(f"&category={category}")
         if status:
             parts.append(f"&status={status}")
+        if sort:
+            parts.append(f"&sort={sort}")
+        if direction:
+            parts.append(f"&dir={direction}")
         return "".join(parts)
 
     # ── Stats ───────────────────────────────────────────────

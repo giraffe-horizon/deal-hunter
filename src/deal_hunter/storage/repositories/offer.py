@@ -1,9 +1,10 @@
 """Offer repository — query + mutation wrapper for the offers table."""
 
+from collections.abc import Iterator
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 
 from deal_hunter.storage.models import Offer
@@ -11,6 +12,16 @@ from deal_hunter.storage.models import Offer
 
 class OfferRepository:
     """Query and mutation wrapper for the offers table."""
+
+    SORT_COLUMNS: dict[str, Any] = {
+        "title": Offer.raw_title,
+        "price": Offer.current_price_pln,
+        "source": Offer.source,
+        "profile": Offer.profile,
+        "score": Offer.score,
+        "status": Offer.status,
+        "date": Offer.first_seen_at,
+    }
 
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -111,10 +122,12 @@ class OfferRepository:
         min_score: int | None = None,
         category: str | None = None,
         status: str | None = None,
+        sort: str | None = None,
+        direction: str | None = None,
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[dict]:
-        """Query offers with optional filters and pagination."""
+        """Query offers with optional filters, sorting, and pagination."""
         stmt = select(Offer)
         stmt = self._apply_filters(
             stmt,
@@ -124,12 +137,79 @@ class OfferRepository:
             category=category,
             status=status,
         )
-        stmt = stmt.order_by(Offer.score.desc())
+        stmt = stmt.order_by(*self._sort_clause(sort, direction))
         if limit is not None:
             stmt = stmt.limit(limit)
             if offset is not None:
                 stmt = stmt.offset(offset)
         return [self._to_dict(d) for d in self.session.scalars(stmt)]
+
+    def get_filtered_ids(
+        self,
+        *,
+        profile: str | None = None,
+        source: str | None = None,
+        min_score: int | None = None,
+        category: str | None = None,
+        status: str | None = None,
+    ) -> list[str]:
+        """Return offer ids matching filters (ordering irrelevant — used for selection)."""
+        stmt = select(Offer.id)
+        stmt = self._apply_filters(
+            stmt,
+            profile=profile,
+            source=source,
+            min_score=min_score,
+            category=category,
+            status=status,
+        )
+        return list(self.session.scalars(stmt))
+
+    def bulk_update_status(self, ids: list[str], status: str) -> int:
+        """Bulk-update status for a list of offer ids. Returns rows updated."""
+        if not ids:
+            return 0
+        stmt = update(Offer).where(Offer.id.in_(ids)).values(status=status)
+        result = self.session.execute(stmt)
+        return result.rowcount or 0
+
+    def iter_filtered(
+        self,
+        *,
+        chunk: int = 1000,
+        profile: str | None = None,
+        source: str | None = None,
+        min_score: int | None = None,
+        category: str | None = None,
+        status: str | None = None,
+        sort: str | None = None,
+        direction: str | None = None,
+    ) -> Iterator[dict]:
+        """Stream offers matching filters without materializing whole set in memory."""
+        stmt = select(Offer)
+        stmt = self._apply_filters(
+            stmt,
+            profile=profile,
+            source=source,
+            min_score=min_score,
+            category=category,
+            status=status,
+        )
+        stmt = stmt.order_by(*self._sort_clause(sort, direction))
+        stmt = stmt.execution_options(yield_per=chunk)
+        for offer in self.session.scalars(stmt):
+            yield self._to_dict(offer)
+
+    def _sort_clause(self, sort: str | None, direction: str | None) -> list[Any]:
+        """Build ORDER BY clause with NULLS LAST and stable id tiebreaker."""
+        col = self.SORT_COLUMNS.get(sort or "", None) if sort else None
+        desc = (direction or "desc").lower() == "desc"
+        if col is None:
+            col = Offer.score
+            desc = True
+        null_marker = col.is_(None)
+        ordered = col.desc() if desc else col.asc()
+        return [null_marker, ordered, Offer.id]
 
     def count(
         self,

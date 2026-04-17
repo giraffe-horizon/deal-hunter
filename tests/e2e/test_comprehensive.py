@@ -59,8 +59,8 @@ class TestDealsExplorerFilters:
         rows = page.locator("#deals-table tbody tr")
         assert rows.count() >= 1
         for i in range(rows.count()):
-            # Status badge (first span in row-actions wrapper, col 8).
-            badge = rows.nth(i).locator("td:nth-child(8) div[id^='row-actions-'] > span").first
+            # Status badge (first span in row-actions wrapper, col 9 — Date column inserted at 8).
+            badge = rows.nth(i).locator("td:nth-child(9) div[id^='row-actions-'] > span").first
             assert "Watching" in badge.inner_text()
 
     def test_pagination_preserves_filters(self, page, base_url, seeded_db):

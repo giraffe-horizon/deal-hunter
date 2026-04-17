@@ -81,6 +81,24 @@ class WatchlistRepository:
         self.session.flush()
         return True
 
+    def bulk_upsert(self, ids: list[str], target_price: int) -> int:
+        """Insert or update watchlist entries for a list of deal ids."""
+        if not ids:
+            return 0
+        now = datetime.now().isoformat()
+        rows = [
+            {"deal_id": deal_id, "target_price": target_price, "created_at": now} for deal_id in ids
+        ]
+        self.session.execute(
+            text(
+                "INSERT INTO watchlist (deal_id, target_price, created_at)"
+                " VALUES (:deal_id, :target_price, :created_at)"
+                " ON CONFLICT(deal_id) DO UPDATE SET target_price = excluded.target_price"
+            ),
+            rows,
+        )
+        return len(rows)
+
     def check_trigger(self, deal_id: str, current_price: int) -> dict | None:
         """Check if current price meets watchlist target. Returns entry if triggered."""
         item = (
