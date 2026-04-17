@@ -1,6 +1,30 @@
 # CHANGELOG
 
 
+## v0.15.1 (2026-04-17)
+
+### Bug Fixes
+
+- **dashboard**: Split Watch bookmarks from Price Alerts + fix button swaps
+  ([`aa5fbf4`](https://github.com/giraffe-horizon/deal-hunter/commit/aa5fbf41b84e2478ea988e71848974f83de851d5))
+
+Previously the dashboard's "Watch" button set offers.status='watching' but the /watchlist page
+  showed target-price alerts from an unrelated SQLite table, so clicking Watch and visiting
+  Watchlist showed nothing related. On top of that, clicking Watch/Skip on a row wiped the action
+  buttons, and clicking them on the detail page wiped the Target form.
+
+- Repurpose /watchlist as a bookmark page listing offers with status='watching' (same semantics the
+  Telegram bot already uses). - Move the price-alert page (formerly /watchlist) to /alerts with a
+  "Price Alerts" label; backing table stays named watchlist (no DB migration needed). - Wrap the
+  deals-table status badge + actions in a single #row-actions-{id} div that swaps via outerHTML, so
+  Watch/Skip buttons stay visible after a click. - Split detail-page controls into
+  #watch-skip-controls + sibling Target form; button responses re-render the same wrapper. - Log
+  dashboard Watch/Skip clicks to the feedback table (parity with bot commands). - Update sidebar
+  (Watchlist + Price Alerts) and refresh tests/e2e URLs.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+
+
 ## v0.15.0 (2026-04-14)
 
 ### Bug Fixes
