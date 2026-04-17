@@ -4,26 +4,10 @@
 {% block page_title %}Watchlist{% endblock %}
 {% block content %}
 
-{% if items %}
+{% if deals %}
 <div class="bg-surface-container-low rounded-card overflow-hidden">
-    <div class="overflow-x-auto">
-    <table class="w-full">
-        <thead>
-            <tr class="text-left text-xs font-label text-on-surface-variant uppercase tracking-wider">
-                <th class="pb-3 pl-6 pt-4">Deal</th>
-                <th class="pb-3 pt-4">Current Price</th>
-                <th class="pb-3 pt-4">Target Price</th>
-                <th class="pb-3 pt-4 hidden md:table-cell">Trend</th>
-                <th class="pb-3 pt-4">Status</th>
-                <th class="pb-3 pr-6 pt-4">Actions</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-surface-variant/30">
-            {% for item in items %}
-            {% include "partials/watchlist_row.html" %}
-            {% endfor %}
-        </tbody>
-    </table>
+    <div id="deals-table" class="overflow-x-auto">
+        {% include "partials/deals_table.html" %}
     </div>
 </div>
 
@@ -31,7 +15,7 @@
 <script src="/static/js/sparklines.js"></script>
 {% else %}
 {% from "macros.html" import empty_state %}
-{{ empty_state("bookmark_border", "No watchlist items", "Set target prices on deal pages to start tracking.") }}
+{{ empty_state("bookmark_border", "No watched deals", "Click the eye icon on any deal to bookmark it here.") }}
 {% endif %}
 
 {% endblock %}
