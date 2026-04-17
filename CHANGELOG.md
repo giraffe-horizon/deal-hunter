@@ -1,6 +1,43 @@
 # CHANGELOG
 
 
+## v0.15.2 (2026-04-17)
+
+### Bug Fixes
+
+- **dashboard**: Repair filters, row actions, and HTMX target resolution
+  ([`e54f26c`](https://github.com/giraffe-horizon/deal-hunter/commit/e54f26cba06daeb190e4e31978b699ec5b1b4f29))
+
+Three user-visible bugs:
+
+1. Deals Explorer filters 422'd on submit. HTMX <select> sends empty strings when "All" is picked,
+  but FastAPI's `min_score: int | None` rejects "" with 422 int_parsing. Switched affected query
+  params to `str | None` and added a `_parse_optional_int` helper.
+
+2. Watchlist pagination linked back to /deals because the pagination partial hardcoded the URL.
+  Threaded a `page_url` template var.
+
+3. Watch/Skip/Remove buttons silently did nothing on every deal whose id contains `:` (i.e. all of
+  them). DOM ids were `{{ deal.id | urlencode }}` which contains `%`, invalid in CSS selectors —
+  HTMX couldn't resolve hx-target and swallowed the error. Added a DOM-safe `deal_dom_id` (':' ->
+  '-') used for ids and selectors, keeping the urlencoded form only for URL paths. Same fix applied
+  to the alert row.
+
+Also fixes the alert Remove button (needed `hx-swap="delete"` + `type="button"` to actually detach
+  the <tr>), and repairs the e2e harness (`dashboard:app` -> `deal_hunter.api:app`, `price_points`
+  column names) that was stale after the package restructure.
+
+Tests: - New tests/e2e/test_comprehensive.py: 20 end-to-end scenarios covering filters (incl. the
+  422 regression), row-action swaps, watchlist, full price-alert lifecycle, CSRF, compare, profile
+  tabs, health, sidebar nav. - Repaired pre-existing e2e tests after the PR #13 rename
+  (#action-buttons -> #watch-skip-controls, column-index shifts, /price-trends ->
+  /deals?view=drops).
+
+707 unit + 91 e2e tests pass.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+
+
 ## v0.15.1 (2026-04-17)
 
 ### Bug Fixes
