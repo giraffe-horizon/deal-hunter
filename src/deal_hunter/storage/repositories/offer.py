@@ -2,9 +2,10 @@
 
 from collections.abc import Iterator
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import func, select, text, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from deal_hunter.storage.models import Offer
@@ -171,7 +172,9 @@ class OfferRepository:
             return 0
         stmt = update(Offer).where(Offer.id.in_(ids)).values(status=status)
         result = self.session.execute(stmt)
-        return result.rowcount or 0
+        # `update()` returns a CursorResult at runtime, but the 2.0-typed
+        # Session.execute signature widens it to Result; cast for mypy.
+        return cast("CursorResult[Any]", result).rowcount or 0
 
     def iter_filtered(
         self,

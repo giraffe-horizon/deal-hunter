@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session
 
 from deal_hunter.storage.models import Feedback
@@ -29,7 +29,7 @@ class FeedbackRepository:
             return 0
         now = datetime.now().isoformat()
         self.session.bulk_insert_mappings(
-            Feedback,
+            inspect(Feedback),
             [{"deal_id": deal_id, "action": action, "created_at": now} for deal_id in ids],
         )
         return len(ids)
