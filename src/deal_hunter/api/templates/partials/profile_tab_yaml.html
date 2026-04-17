@@ -1,6 +1,3 @@
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5/lib/codemirror.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5/theme/material-darker.min.css">
-
 <div id="yaml-errors" class="mb-4"></div>
 
 <div class="bg-surface-container-low rounded-card p-6">
@@ -23,8 +20,6 @@
     <textarea id="yaml-editor">{{ yaml_content }}</textarea>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5/lib/codemirror.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5/mode/yaml/yaml.min.js"></script>
 <script>
 var editor = CodeMirror.fromTextArea(document.getElementById('yaml-editor'), {
     mode: 'yaml',
