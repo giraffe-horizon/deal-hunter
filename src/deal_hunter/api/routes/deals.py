@@ -21,6 +21,18 @@ _STATUS_TO_FEEDBACK_ACTION = {
     "active": "restore",
 }
 
+
+def _parse_optional_int(raw: str | None) -> int | None:
+    # HTMX <select> sends `name=` (empty string) when "All" is picked. FastAPI
+    # would 422 on `int | None`; treat empty/whitespace as "no filter".
+    if raw is None or not raw.strip():
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
 router = APIRouter()
 
 
@@ -30,7 +42,7 @@ def deals_page(
     view: str = "",
     profile: str | None = None,
     source: str | None = None,
-    min_score: int | None = None,
+    min_score: str | None = None,
     category: str | None = None,
     status: str | None = None,
     page: int = 1,
@@ -43,11 +55,12 @@ def deals_page(
     if view == "drops":
         return _price_drops_view(request, svc, days)
 
+    min_score_int = _parse_optional_int(min_score)
     is_htmx = bool(request.headers.get("HX-Request"))
     data = svc.get_deals_page(
         profile=profile,
         source=source,
-        min_score=min_score,
+        min_score=min_score_int,
         category=category,
         status=status,
         page=page,
@@ -68,6 +81,7 @@ def deals_page(
                 "total_pages": data.total_pages,
                 "total_filtered": data.total_filtered,
                 "filter_params": data.filter_params,
+                "page_url": "/deals",
             },
         )
 
@@ -88,13 +102,14 @@ def deals_page(
             "categories": data.categories,
             "selected_profile": profile or None,
             "selected_source": source or None,
-            "selected_min_score": min_score,
+            "selected_min_score": min_score_int,
             "selected_category": category or None,
             "selected_status": status or None,
             "page": data.page,
             "total_pages": data.total_pages,
             "total_filtered": data.total_filtered,
             "filter_params": data.filter_params,
+            "page_url": "/deals",
         },
     )
 
@@ -119,6 +134,7 @@ def watchlist_page(
         request,
         template_name,
         {
+            "page_url": "/watchlist",
             "deals": data.deals,
             "sparklines": data.sparklines,
             "page": data.page,
@@ -215,11 +231,16 @@ def api_update_deal_status(
         return JSONResponse({"error": "Deal not found"}, status_code=404)
     FeedbackRepository(session).record(deal_id, _STATUS_TO_FEEDBACK_ACTION[validated.status])
     encoded_id = deal_id.replace(":", "%3A")
+    dom_id = deal_id.replace(":", "-")
     if inline:
         return templates.TemplateResponse(
             request,
             "partials/deal_row_actions.html",
-            {"deal_id_encoded": encoded_id, "current_status": validated.status},
+            {
+                "deal_id_encoded": encoded_id,
+                "deal_dom_id": dom_id,
+                "current_status": validated.status,
+            },
         )
     # Return HTML fragment for HTMX swap — must include full action buttons
     # so the user can change status again
@@ -241,7 +262,7 @@ def api_update_deal_status(
 def api_deals(
     profile: str | None = None,
     source: str | None = None,
-    min_score: int | None = None,
+    min_score: str | None = None,
     category: str | None = None,
     status: str | None = None,
     session: Session = Depends(get_db),
@@ -249,7 +270,7 @@ def api_deals(
     return OfferRepository(session).get_filtered(
         profile=profile or None,
         source=source or None,
-        min_score=min_score,
+        min_score=_parse_optional_int(min_score),
         category=category or None,
         status=status or None,
     )

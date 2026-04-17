@@ -30,8 +30,8 @@ def test_filter_by_source_pepper(page, base_url):
     count = rows.count()
     assert count >= 1
 
-    # Every visible source badge should say "pepper"
-    source_cells = page.locator("#deals-table tbody tr td:nth-child(4) span")
+    # Source is col 5 (after checkbox, title, price, trend). Badge text = "pepper".
+    source_cells = page.locator("#deals-table tbody tr td:nth-child(5) span")
     for i in range(source_cells.count()):
         assert source_cells.nth(i).inner_text().strip() == "pepper"
 
@@ -44,9 +44,11 @@ def test_filter_by_status_watching(page, base_url):
     count = rows.count()
     assert count >= 1
 
-    status_cells = page.locator("#deals-table tbody tr td:nth-child(7) span")
-    for i in range(status_cells.count()):
-        assert "Watching" in status_cells.nth(i).inner_text()
+    # Status is col 8; the row-actions wrapper's first span is the status badge.
+    status_badges = page.locator(
+        "#deals-table tbody tr td:nth-child(8) div[id^='row-actions-'] > span"
+    ).first
+    assert "Watching" in status_badges.inner_text()
 
 
 def test_deal_row_click_navigates_to_detail(page, base_url):

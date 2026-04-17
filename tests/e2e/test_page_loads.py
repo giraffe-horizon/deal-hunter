@@ -7,8 +7,8 @@ pytestmark = pytest.mark.e2e
 PAGES = [
     ("/deals", "Deals Explorer"),
     ("/watchlist", "Watchlist"),
+    ("/alerts", "Price Alerts"),
     ("/health", "System Health"),
-    ("/price-trends", "Price Trends"),
     ("/profiles", "Profiles"),
     ("/profiles/new", "New Profile"),
     ("/tuner", "Scoring Tuner"),
@@ -53,9 +53,13 @@ def test_profile_detail_loads(page, base_url):
 
 
 def test_tuner_profile_loads(page, base_url):
-    """Scoring Tuner with a profile renders correctly."""
+    """/tuner/<name> redirects to profile page with Tuner tab active."""
     page.goto(base_url + "/tuner/bikes")
-    assert "Scoring Tuner" in page.content()
+    page.wait_for_load_state("networkidle")
+    assert "tab=tuner" in page.url
+    content = page.content()
+    assert "Tuner" in content
+    assert "bikes" in content
 
 
 def test_deals_page_has_title(page, base_url):

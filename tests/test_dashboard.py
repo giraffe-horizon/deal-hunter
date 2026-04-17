@@ -128,6 +128,18 @@ class TestDealsPage:
         assert "Test Carbon Bike XL" in all_text
         assert "Test Carbon Bike XL" in empty_text
 
+    def test_empty_string_filters_do_not_422(self, client):
+        # HTMX <select> sends `min_score=` (empty string) when "All Scores" is
+        # picked. FastAPI used to 422 on `int | None`; this regression-tests
+        # the parser that accepts empty values.
+        resp = client.get("/deals?profile=&source=&min_score=&category=&status=")
+        assert resp.status_code == 200
+        assert "Test Carbon Bike XL" in resp.text
+
+    def test_empty_min_score_via_api(self, client):
+        resp = client.get("/api/deals?min_score=&profile=")
+        assert resp.status_code == 200
+
     def test_htmx_partial_response(self, client):
         response = client.get("/deals", headers={"HX-Request": "true"})
         assert response.status_code == 200
@@ -671,7 +683,7 @@ class TestApiUpdateStatus:
             data={"status": "watching", "inline": "1"},
         )
         text = response.text
-        assert 'id="row-actions-pepper%3A99999"' in text
+        assert 'id="row-actions-pepper-99999"' in text
         assert "Watching" in text
         # After going to 'watching', Skip + Unwatch (Restore) buttons remain.
         assert "hx-post" in text
@@ -916,6 +928,32 @@ class TestWatchlistPage:
         client.post("/api/deals/pepper:99999/status", data={"status": "watching"})
         text = client.get("/watchlist").text
         assert "Test Carbon Bike XL" in text
+
+    def test_watchlist_pagination_targets_self_not_deals(self, client, dashboard_session):
+        """Pagination links on /watchlist must point to /watchlist, not /deals."""
+        from deal_hunter.storage.repositories import OfferRepository
+
+        repo = OfferRepository(dashboard_session)
+        # Force pagination by seeding > DEALS_PER_PAGE watching offers (51 to ensure 2 pages).
+        for i in range(60):
+            repo.upsert(
+                id=f"pepper:wl-{i}",
+                title=f"Watched Item {i}",
+                price=100,
+                link=f"https://example.com/wl/{i}",
+                source="pepper",
+                description="",
+                image_url="",
+                profile="bikes",
+                score=70,
+                category="road",
+            )
+            repo.update_status(f"pepper:wl-{i}", "watching")
+        dashboard_session.commit()
+
+        text = client.get("/watchlist").text
+        assert 'hx-get="/watchlist?page=2' in text
+        assert 'hx-get="/deals?page=2' not in text
 
 
 class TestAlertsPage:

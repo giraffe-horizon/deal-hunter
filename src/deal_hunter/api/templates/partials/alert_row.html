@@ -1,5 +1,8 @@
-{# Single price-alert row — used both in the main table and as HTMX swap target #}
-<tr id="alert-row-{{ item.deal_id | urlencode }}">
+{# Single price-alert row — used both in the main table and as HTMX swap target.
+   DOM ids use ':' -> '-' because '%' from urlencode is not a valid CSS
+   selector character and breaks HTMX's hx-target resolution. #}
+{% set alert_dom_id = item.deal_id | replace(':', '-') %}
+<tr id="alert-row-{{ alert_dom_id }}">
     <td class="py-3 pl-6">
         <a href="/deals/{{ item.deal_id | urlencode }}" class="text-sm font-medium text-primary hover:underline">
             {{ item.title or item.deal_id }}
@@ -14,7 +17,7 @@
     <td class="py-3" onclick="event.stopPropagation()">
         <form class="inline-target-form flex items-center gap-1"
               hx-patch="/api/alerts/{{ item.deal_id | urlencode }}"
-              hx-target="#alert-row-{{ item.deal_id | urlencode }}"
+              hx-target="#alert-row-{{ alert_dom_id }}"
               hx-swap="outerHTML">
             <input type="number" name="target_price" value="{{ item.target_price }}"
                    min="1" step="1"
@@ -39,9 +42,10 @@
         {% endif %}
     </td>
     <td class="py-3 pr-6">
-        <button hx-delete="/api/alerts/{{ item.deal_id | urlencode }}"
-                hx-target="#alert-row-{{ item.deal_id | urlencode }}"
-                hx-swap="outerHTML"
+        <button type="button"
+                hx-delete="/api/alerts/{{ item.deal_id | urlencode }}"
+                hx-target="closest tr"
+                hx-swap="delete"
                 class="text-xs font-label px-3 py-1.5 rounded-card bg-surface-container-high text-on-surface-variant hover:bg-error-container/20 hover:text-error transition-colors">
             Remove
         </button>

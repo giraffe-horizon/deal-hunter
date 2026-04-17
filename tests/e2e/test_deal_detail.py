@@ -44,14 +44,14 @@ def test_watch_button_updates_status(page, base_url):
     page.goto(base_url + DEAL_URL)
     page.wait_for_load_state("networkidle")
 
-    watch_btn = page.locator("#action-buttons button:has-text('Watch')")
+    watch_btn = page.locator("#watch-skip-controls button:has-text('Watch')")
     watch_btn.click()
     # Wait for HTMX swap to complete
     page.wait_for_load_state("networkidle")
 
     # After clicking Watch, the status badge in the header should show "Watching"
     # or the action buttons area should reflect the new state
-    content = page.locator("#action-buttons").inner_text()
+    content = page.locator("#watch-skip-controls").inner_text()
     assert "Watch" in content or "Watching" in content
 
 
@@ -60,27 +60,27 @@ def test_skip_button_updates_status(page, base_url):
     page.goto(base_url + DEAL_URL)
     page.wait_for_load_state("networkidle")
 
-    skip_btn = page.locator("#action-buttons button:has-text('Skip')")
+    skip_btn = page.locator("#watch-skip-controls button:has-text('Skip')")
     skip_btn.click()
     page.wait_for_load_state("networkidle")
 
-    content = page.locator("#action-buttons").inner_text()
+    content = page.locator("#watch-skip-controls").inner_text()
     assert "Skip" in content or "Rejected" in content
 
 
 def test_open_link_button_present(page, base_url):
     """Open Link button is present with the correct href."""
     page.goto(base_url + DEAL_URL)
-    link = page.locator("#action-buttons a:has-text('Open Link')")
+    link = page.locator("#watch-skip-controls a:has-text('Open Link')")
     assert link.count() == 1
     href = link.get_attribute("href")
     assert href == "https://example.com/deal/99999"
 
 
 def test_watchlist_target_price_form(page, base_url):
-    """The target price form with input and submit button exists."""
+    """The target price form (sibling of #watch-skip-controls) exists."""
     page.goto(base_url + DEAL_URL)
-    form = page.locator("#action-buttons form")
+    form = page.locator("form[hx-post='/api/alerts']")
     assert form.count() == 1
     price_input = form.locator("input[name='target_price']")
     assert price_input.count() == 1
