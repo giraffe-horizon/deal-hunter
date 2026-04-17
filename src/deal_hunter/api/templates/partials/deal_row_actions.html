@@ -4,10 +4,14 @@
   buttons together (no vanishing controls after a click).
 
   Context inputs:
-    deal_id_encoded  - urlencoded deal id (string)
+    deal_id_encoded  - urlencoded deal id (for URL paths only)
+    deal_dom_id      - DOM-safe deal id (':' replaced with '-') — used for
+                       DOM id/CSS selector, since '%' from urlencode is
+                       invalid in CSS selectors and breaks HTMX's target
+                       resolution.
     current_status   - "active" | "watching" | "rejected"
 #}
-<div id="row-actions-{{ deal_id_encoded }}" class="flex items-center gap-2">
+<div id="row-actions-{{ deal_dom_id }}" class="flex items-center gap-2">
   {% if current_status == 'watching' %}
     <span class="text-xs font-label px-2.5 py-1 rounded-full bg-primary-container text-primary font-medium">Watching</span>
   {% elif current_status == 'rejected' %}
@@ -19,7 +23,7 @@
     {% if current_status != 'watching' %}
     <button hx-post="/api/deals/{{ deal_id_encoded }}/status"
             hx-vals='{"status":"watching","inline":"1"}'
-            hx-target="#row-actions-{{ deal_id_encoded }}"
+            hx-target="#row-actions-{{ deal_dom_id }}"
             hx-swap="outerHTML"
             class="p-1 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-primary-container/30"
             title="Watch">
@@ -29,7 +33,7 @@
     {% if current_status != 'rejected' %}
     <button hx-post="/api/deals/{{ deal_id_encoded }}/status"
             hx-vals='{"status":"rejected","inline":"1"}'
-            hx-target="#row-actions-{{ deal_id_encoded }}"
+            hx-target="#row-actions-{{ deal_dom_id }}"
             hx-swap="outerHTML"
             class="p-1 text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-error-container/30"
             title="Skip">
@@ -39,7 +43,7 @@
     {% if current_status in ('watching', 'rejected') %}
     <button hx-post="/api/deals/{{ deal_id_encoded }}/status"
             hx-vals='{"status":"active","inline":"1"}'
-            hx-target="#row-actions-{{ deal_id_encoded }}"
+            hx-target="#row-actions-{{ deal_dom_id }}"
             hx-swap="outerHTML"
             class="p-1 text-on-surface-variant hover:text-on-surface transition-colors rounded-full hover:bg-surface-container-highest"
             title="{% if current_status == 'watching' %}Unwatch{% else %}Restore{% endif %}">

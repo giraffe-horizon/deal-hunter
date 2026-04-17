@@ -54,7 +54,7 @@
                     {% endif %}
                 </td>
                 <td class="py-3 pr-4" onclick="event.stopPropagation()">
-                    {% with deal_id_encoded=deal.id | urlencode, current_status=deal.status %}
+                    {% with deal_id_encoded=deal.id | urlencode, deal_dom_id=deal.id | replace(':', '-'), current_status=deal.status %}
                         {% include "partials/deal_row_actions.html" %}
                     {% endwith %}
                 </td>
@@ -79,7 +79,7 @@
     </p>
     <div class="flex items-center gap-1">
         {% if page > 1 %}
-            <a hx-get="/deals?page={{ page - 1 }}{{ fp }}" hx-target="#deals-table" hx-swap="innerHTML" hx-push-url="true" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">
+            <a hx-get="{{ page_url | default('/deals') }}?page={{ page - 1 }}{{ fp }}" hx-target="#deals-table" hx-swap="innerHTML" hx-push-url="true" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 <span class="material-symbols-outlined text-[16px] align-middle">chevron_left</span>
             </a>
         {% endif %}
@@ -87,13 +87,13 @@
             {% if p == page %}
                 <span class="px-3 py-1.5 text-xs font-label rounded-card bg-primary text-on-primary font-medium">{{ p }}</span>
             {% elif p <= 3 or p >= total_pages - 1 or (p >= page - 1 and p <= page + 1) %}
-                <a hx-get="/deals?page={{ p }}{{ fp }}" hx-target="#deals-table" hx-swap="innerHTML" hx-push-url="true" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">{{ p }}</a>
+                <a hx-get="{{ page_url | default('/deals') }}?page={{ p }}{{ fp }}" hx-target="#deals-table" hx-swap="innerHTML" hx-push-url="true" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">{{ p }}</a>
             {% elif p == 4 or p == total_pages - 2 %}
                 <span class="px-1 text-xs text-on-surface-variant">&hellip;</span>
             {% endif %}
         {% endfor %}
         {% if page < total_pages %}
-            <a hx-get="/deals?page={{ page + 1 }}{{ fp }}" hx-target="#deals-table" hx-swap="innerHTML" hx-push-url="true" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">
+            <a hx-get="{{ page_url | default('/deals') }}?page={{ page + 1 }}{{ fp }}" hx-target="#deals-table" hx-swap="innerHTML" hx-push-url="true" class="px-3 py-1.5 text-xs font-label rounded-card bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-colors">
                 <span class="material-symbols-outlined text-[16px] align-middle">chevron_right</span>
             </a>
         {% endif %}

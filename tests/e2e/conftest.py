@@ -112,17 +112,17 @@ def seeded_db(e2e_state_dir):
     # Price history for deal1 — insert directly with different timestamps
     session.execute(
         text(
-            "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
-            " VALUES (:deal_id, :price, :recorded_at)"
+            "INSERT OR IGNORE INTO price_points (offer_id, price_pln, recorded_at)"
+            " VALUES (:offer_id, :price_pln, :recorded_at)"
         ),
-        {"deal_id": "pepper:99999", "price": 9500, "recorded_at": "2026-03-20T10:00:00"},
+        {"offer_id": "pepper:99999", "price_pln": 9500, "recorded_at": "2026-03-20T10:00:00"},
     )
     session.execute(
         text(
-            "INSERT OR IGNORE INTO price_points (deal_id, price, recorded_at)"
-            " VALUES (:deal_id, :price, :recorded_at)"
+            "INSERT OR IGNORE INTO price_points (offer_id, price_pln, recorded_at)"
+            " VALUES (:offer_id, :price_pln, :recorded_at)"
         ),
-        {"deal_id": "pepper:99999", "price": 8500, "recorded_at": "2026-03-25T10:00:00"},
+        {"offer_id": "pepper:99999", "price_pln": 8500, "recorded_at": "2026-03-25T10:00:00"},
     )
 
     session.commit()
@@ -195,7 +195,7 @@ def live_server(seeded_db, test_profiles, health_json, e2e_state_dir):
             sys.executable,
             "-m",
             "uvicorn",
-            "dashboard:app",
+            "deal_hunter.api:app",
             "--host",
             "127.0.0.1",
             "--port",

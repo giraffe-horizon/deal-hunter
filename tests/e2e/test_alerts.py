@@ -44,9 +44,11 @@ def test_alerts_page_shows_added_deal(page, base_url):
     # Navigate to alerts page
     page.goto(base_url + "/alerts")
     page.wait_for_load_state("networkidle")
-    content = page.content()
-    assert "Test Carbon Bike XL" in content
-    assert "7 000 zl" in content
+    assert "Test Carbon Bike XL" in page.content()
+    # Target price is shown as an editable <input value=...> rather than
+    # pre-formatted text, so assert on the input value instead of a PLN string.
+    target_input = page.locator("tr#alert-row-pepper-99999 input[name='target_price']")
+    assert target_input.input_value() == "7000"
 
 
 def test_remove_alert(page, base_url):
