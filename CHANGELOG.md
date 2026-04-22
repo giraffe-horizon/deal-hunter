@@ -1,6 +1,28 @@
 # CHANGELOG
 
 
+## v0.15.3 (2026-04-22)
+
+### Bug Fixes
+
+- **telegram**: Shorten callback payloads for long deal ids
+  ([`b5126e8`](https://github.com/giraffe-horizon/deal-hunter/commit/b5126e853090e98f36e4c4153e810f4af7a54415))
+
+### Chores
+
+- **base**: Update CodeMirror integration
+  ([`f1f9d79`](https://github.com/giraffe-horizon/deal-hunter/commit/f1f9d79c7364e2e2de19f2e436dabfcf64def332))
+
+* Added CodeMirror styles and scripts to base.html for YAML editing. * Removed redundant CodeMirror
+  links from profile_tab_yaml.html. * Ensured consistent loading of CodeMirror resources across
+  templates.
+
+### Testing
+
+- **pepper**: Freeze parser time for dated fixtures
+  ([`662ede6`](https://github.com/giraffe-horizon/deal-hunter/commit/662ede64da230a6bfc6d8449d6c8e05d55fb4ab5))
+
+
 ## v0.15.2 (2026-04-17)
 
 ### Bug Fixes
