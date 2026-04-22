@@ -20,15 +20,21 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.answer("Nieznana akcja")
         return
 
-    action, deal_id = data.split(":", 1)
+    action, deal_ref = data.split(":", 1)
 
     if action not in ("watch", "skip"):
         await query.answer("Nieznana akcja")
         return
 
     with get_session() as session:
+        repo = OfferRepository(session)
+        deal_id = repo.resolve_callback_deal_id(deal_ref)
+        if not deal_id:
+            await query.answer("Nie znaleziono oferty w bazie")
+            return
+
         status = "watching" if action == "watch" else "rejected"
-        found = OfferRepository(session).update_status(deal_id, status)
+        found = repo.update_status(deal_id, status)
         if not found:
             await query.answer("Nie znaleziono oferty w bazie")
             return
