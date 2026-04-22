@@ -1,5 +1,6 @@
 """Offer repository — query + mutation wrapper for the offers table."""
 
+import hashlib
 from datetime import datetime
 from typing import Any
 
@@ -180,6 +181,28 @@ class OfferRepository:
             return False
         offer.status = status
         return True
+
+    def resolve_callback_deal_id(self, deal_ref: str) -> str | None:
+        """Resolve raw or shortened Telegram callback deal reference to offer id."""
+        if self.session.get(Offer, deal_ref):
+            return deal_ref
+
+        if not deal_ref.startswith("id:"):
+            return None
+
+        token = deal_ref[3:]
+        if not token:
+            return None
+
+        matches: list[str] = []
+        for offer_id in self.session.scalars(select(Offer.id)):
+            digest = hashlib.blake2s(offer_id.encode("utf-8"), digest_size=8).hexdigest()
+            if digest == token:
+                matches.append(offer_id)
+                if len(matches) > 1:
+                    return None
+
+        return matches[0] if matches else None
 
     def get_by_status(self, status: str, limit: int = 20) -> list[dict]:
         """Get offers filtered by status, ordered by last_seen_at descending."""
