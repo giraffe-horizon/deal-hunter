@@ -1,7 +1,9 @@
 """Tests for Pepper.pl parser — Vue3 JSON and HTML fallback."""
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -24,6 +26,17 @@ def _parse_articles(html: str):
     return soup.find_all("article", class_=re.compile(r"thread"))
 
 
+class _FrozenDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        frozen = cls(2026, 3, 25, 12, 0, 0, tzinfo=UTC)
+        return frozen if tz is None else frozen.astimezone(tz)
+
+
+def _patch_pepper_datetime():
+    return patch("deal_hunter.sources.pepper.datetime", _FrozenDatetime)
+
+
 class TestParseVue3:
     """Tests for PepperSource._parse_vue3."""
 
@@ -35,7 +48,8 @@ class TestParseVue3:
         articles = _parse_articles(html)
         assert len(articles) == 1
 
-        deal = self.source._parse_vue3(articles[0])
+        with _patch_pepper_datetime():
+            deal = self.source._parse_vue3(articles[0])
         assert deal is not None
         assert deal.title == "Sony WH-1000XM5 słuchawki bezprzewodowe ANC"
         assert deal.price == 1099
@@ -53,7 +67,8 @@ class TestParseVue3:
         articles = _parse_articles(html)
         assert len(articles) == 1
 
-        deal = self.source._parse_vue3(articles[0])
+        with _patch_pepper_datetime():
+            deal = self.source._parse_vue3(articles[0])
         assert deal is None
 
     def test_no_vue3_div_returns_none(self):
@@ -74,7 +89,8 @@ class TestParseHtml:
         articles = _parse_articles(html)
         assert len(articles) == 1
 
-        deal = self.source._parse_html(articles[0], "https://www.pepper.pl")
+        with _patch_pepper_datetime():
+            deal = self.source._parse_html(articles[0], "https://www.pepper.pl")
         assert deal is not None
         assert deal.title == "Sennheiser Momentum 4 Wireless ANC"
         assert deal.price == 1299
@@ -90,7 +106,8 @@ class TestParseHtml:
         articles = _parse_articles(html)
         assert len(articles) == 1
 
-        deal = self.source._parse_html(articles[0], "https://www.pepper.pl")
+        with _patch_pepper_datetime():
+            deal = self.source._parse_html(articles[0], "https://www.pepper.pl")
         assert deal is None
 
 
@@ -102,7 +119,8 @@ class TestParseDeals:
 
     def test_multi_deal_page(self):
         html = _load_fixture("pepper_multi.html")
-        deals = self.source._parse_deals(html)
+        with _patch_pepper_datetime():
+            deals = self.source._parse_deals(html)
         assert len(deals) == 2
 
         # First deal parsed via Vue3

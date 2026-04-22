@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from deal_hunter.notifiers.telegram import build_deal_keyboard
+from deal_hunter.notifiers.telegram.keyboards import build_callback_data
 from deal_hunter.sources.base import Deal
 from deal_hunter.storage.models import Base
 from deal_hunter.storage.repositories import (
@@ -194,6 +195,12 @@ class TestInlineKeyboard:
         assert skip_btn["callback_data"] == "skip:pepper:123"
         assert "Skip" in skip_btn["text"]
 
+    def test_long_deal_id_is_shortened_for_callback_limit(self):
+        long_id = "rowertour:Rower_gravel_Cannondale_Topstone_Carbon_3_GRX_1x12"
+        callback = build_callback_data("watch", long_id)
+        assert len(callback.encode("utf-8")) <= 64
+        assert callback.startswith("watch:id:")
+
 
 # ── Callback parsing ────────────────────────────────────────────────
 
@@ -309,6 +316,38 @@ class TestBotHandlers:
             await handle_callback(update, context)
 
         query.answer.assert_called_once_with("Nie znaleziono oferty w bazie")
+
+    @pytest.mark.asyncio
+    async def test_handle_callback_watch_with_shortened_deal_id(self, engine):
+        from deal_hunter.bot.main import handle_callback
+
+        long_id = "rowertour:Rower_gravel_Cannondale_Topstone_Carbon_3_GRX_1x12"
+        with Session(engine) as session:
+            _seed_deal(session, deal_id=long_id)
+            session.commit()
+
+        query = AsyncMock()
+        query.data = build_callback_data("watch", long_id)
+        update = MagicMock()
+        update.callback_query = query
+        context = MagicMock()
+
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _mock_session():
+            with Session(engine) as s:
+                yield s
+                s.commit()
+
+        with patch("deal_hunter.bot.callbacks.get_session", _mock_session):
+            await handle_callback(update, context)
+
+        query.answer.assert_called_once_with("\u2b50 Dodano do obserwowanych")
+
+        with Session(engine) as s:
+            deal = DealRepository(s).get_by_id(long_id)
+            assert deal["status"] == "watching"
 
     @pytest.mark.asyncio
     async def test_cmd_status(self, engine):
