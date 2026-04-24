@@ -70,5 +70,5 @@ def test_deals_page_has_title(page, base_url):
 
 def test_static_assets_load(page, base_url):
     """Static JS files are served correctly."""
-    response = page.goto(base_url + "/static/js/compare.js")
+    response = page.goto(base_url + "/static/js/bulk_actions.js")
     assert response.status == 200

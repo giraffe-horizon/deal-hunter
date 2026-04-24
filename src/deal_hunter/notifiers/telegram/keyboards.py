@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import hashlib
+from deal_hunter.storage.models import compute_callback_token
 
 _MAX_CALLBACK_DATA_LEN = 64
 _SHORT_ID_PREFIX = "id:"
-_SHORT_ID_DIGEST_BYTES = 8
 
 
 def make_callback_token(deal_id: str) -> str:
     """Return a stable short token for long deal ids."""
-    return hashlib.blake2s(deal_id.encode("utf-8"), digest_size=_SHORT_ID_DIGEST_BYTES).hexdigest()
+    return compute_callback_token(deal_id)
 
 
 def build_callback_data(action: str, deal_id: str) -> str:

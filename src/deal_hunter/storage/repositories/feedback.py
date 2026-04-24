@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session
 
 from deal_hunter.storage.models import Feedback
@@ -22,6 +22,17 @@ class FeedbackRepository:
             created_at=datetime.now().isoformat(),
         )
         self.session.add(fb)
+
+    def record_many(self, ids: list[str], action: str) -> int:
+        """Record the same feedback action for many deal ids. Returns rows inserted."""
+        if not ids:
+            return 0
+        now = datetime.now().isoformat()
+        self.session.bulk_insert_mappings(
+            inspect(Feedback),
+            [{"deal_id": deal_id, "action": action, "created_at": now} for deal_id in ids],
+        )
+        return len(ids)
 
     def get_stats(self) -> dict[str, int]:
         """Get counts of feedback actions."""

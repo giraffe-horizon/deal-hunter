@@ -1,7 +1,14 @@
 """SQLAlchemy ORM models for Deal Hunter."""
 
+import hashlib
+
 from sqlalchemy import JSON, ForeignKey, Index, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+def compute_callback_token(deal_id: str) -> str:
+    """Stable short token for a deal id — used in Telegram callback payloads."""
+    return hashlib.blake2s(deal_id.encode("utf-8"), digest_size=8).hexdigest()
 
 
 class Base(DeclarativeBase):
@@ -34,6 +41,7 @@ class Offer(Base):
     availability: Mapped[str | None] = mapped_column(String, default=None)
     attributes_hint: Mapped[dict | None] = mapped_column(JSON, default=None)
     is_active: Mapped[int] = mapped_column(default=1, server_default="1")
+    callback_token: Mapped[str | None] = mapped_column(String, default=None)
 
     prices: Mapped[list["PricePoint"]] = relationship(back_populates="offer")
     feedback_entries: Mapped[list["Feedback"]] = relationship(back_populates="offer")
@@ -44,7 +52,10 @@ class Offer(Base):
     )
     events: Mapped[list["DealEvent"]] = relationship(back_populates="offer")
 
-    __table_args__ = (Index("idx_offers_profile_score", "profile", "score"),)
+    __table_args__ = (
+        Index("idx_offers_profile_score", "profile", "score"),
+        Index("ix_offers_callback_token", "callback_token"),
+    )
 
 
 class PricePoint(Base):

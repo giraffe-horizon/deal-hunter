@@ -18,6 +18,9 @@ class DealsPageData:
     total_pages: int
     total_filtered: int
     filter_params: str
+    # Same filters as `filter_params`, minus sort/dir, as a dict — templates
+    # use this to compose sort-column links without reparsing the string.
+    filter_params_no_sort: dict[str, str] = field(default_factory=dict)
     # Stats (only populated for full page, not HTMX partials)
     total_deals: int = 0
     high_score_pct: int = 0
@@ -59,6 +62,8 @@ class DealService:
         min_score: int | None = None,
         category: str | None = None,
         status: str | None = None,
+        sort: str | None = None,
+        direction: str | None = None,
         page: int = 1,
         per_page: int = 50,
         score_threshold: int = 70,
@@ -84,6 +89,8 @@ class DealService:
             min_score=min_score,
             category=category,
             status=status,
+            sort=sort,
+            direction=direction,
             limit=per_page,
             offset=offset,
         )
@@ -102,6 +109,15 @@ class DealService:
             min_score=min_score,
             category=category,
             status=status,
+            sort=sort,
+            direction=direction,
+        )
+        filter_params_no_sort = self._build_filter_params_dict(
+            profile=profile,
+            source=source,
+            min_score=min_score,
+            category=category,
+            status=status,
         )
 
         sparklines = self.get_sparklines(deals)
@@ -113,6 +129,7 @@ class DealService:
             total_pages=total_pages,
             total_filtered=total_filtered,
             filter_params=filter_params,
+            filter_params_no_sort=filter_params_no_sort,
         )
 
         if include_stats:
@@ -136,6 +153,8 @@ class DealService:
         min_score: int | None,
         category: str | None,
         status: str | None,
+        sort: str | None = None,
+        direction: str | None = None,
     ) -> str:
         """Build query-string fragment for pagination links."""
         parts: list[str] = []
@@ -149,7 +168,34 @@ class DealService:
             parts.append(f"&category={category}")
         if status:
             parts.append(f"&status={status}")
+        if sort:
+            parts.append(f"&sort={sort}")
+        if direction:
+            parts.append(f"&dir={direction}")
         return "".join(parts)
+
+    @staticmethod
+    def _build_filter_params_dict(
+        *,
+        profile: str | None,
+        source: str | None,
+        min_score: int | None,
+        category: str | None,
+        status: str | None,
+    ) -> dict[str, str]:
+        """Structured filter state (excluding sort/dir) for template URL composition."""
+        out: dict[str, str] = {}
+        if profile:
+            out["profile"] = profile
+        if source:
+            out["source"] = source
+        if min_score is not None:
+            out["min_score"] = str(min_score)
+        if category:
+            out["category"] = category
+        if status:
+            out["status"] = status
+        return out
 
     # ── Stats ───────────────────────────────────────────────
 

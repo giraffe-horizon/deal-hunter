@@ -112,27 +112,45 @@
     </div>
 </div>
 
-<!-- Floating Compare Bar -->
-<div id="compare-bar" class="hidden fixed bottom-0 left-0 lg:left-64 right-0 z-20 bg-primary-container border-t border-surface-variant/30 px-6 py-3">
-    <div class="flex items-center justify-between max-w-7xl mx-auto">
+<!-- Bulk Action Bar (populated by bulk_actions.js when selection is non-empty) -->
+<div id="bulk-action-bar" class="hidden fixed bottom-0 left-0 lg:left-64 right-0 z-20 bg-primary-container border-t border-surface-variant/30 px-6 py-3">
+    <div class="flex items-center justify-between max-w-7xl mx-auto gap-3 flex-wrap">
         <span class="text-sm font-label text-on-primary-container">
-            <span id="compare-count">0</span> deals selected
+            <span id="bulk-count">0</span> selected<span id="bulk-scope-note"></span>
         </span>
-        <div class="flex items-center gap-3">
-            <button onclick="clearCompare()" class="text-sm font-label text-on-primary-container/70 hover:text-on-primary-container">
-                Clear
-            </button>
-            <button onclick="goCompare()" id="compare-btn"
-                    class="px-4 py-2 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">
-                Compare
-            </button>
+        <div class="flex items-center gap-2 flex-wrap">
+            <button data-bulk-action="watch" class="px-3 py-1.5 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">Watch</button>
+            <button data-bulk-action="skip" class="px-3 py-1.5 bg-error-container text-error rounded-card text-sm font-medium hover:bg-error-container/80 transition-colors">Skip</button>
+            <button data-bulk-action="restore" class="px-3 py-1.5 bg-surface-container text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-high transition-colors">Restore</button>
+            <button data-bulk-action="set-target" class="px-3 py-1.5 bg-tertiary-container text-tertiary rounded-card text-sm font-medium hover:bg-tertiary-container/80 transition-colors">Set Target</button>
+            <button data-bulk-action="compare" class="px-3 py-1.5 bg-surface-container text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-high transition-colors" title="Compare 2–4 deals">Compare</button>
+            <button data-bulk-action="export-csv" class="px-3 py-1.5 bg-surface-container text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-high transition-colors">CSV</button>
+            <button data-bulk-action="export-json" class="px-3 py-1.5 bg-surface-container text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-high transition-colors">JSON</button>
+            <button id="bulk-clear-btn" class="text-sm font-label text-on-primary-container/70 hover:text-on-primary-container">Clear</button>
+        </div>
+    </div>
+</div>
+
+<div id="bulk-toast" class="hidden fixed bottom-20 right-6 z-30 bg-surface-container-high text-on-surface rounded-card px-4 py-3 shadow-lg text-sm"></div>
+
+<!-- Confirmation / prompt dialog mount -->
+<div id="confirm-dialog-mount" class="hidden fixed inset-0 z-40 bg-black/40 items-center justify-center">
+    <div class="bg-surface rounded-card shadow-xl max-w-md w-full mx-4 p-6">
+        <h3 id="confirm-title" class="text-lg font-headline font-semibold mb-2"></h3>
+        <p id="confirm-body" class="text-sm text-on-surface-variant mb-3"></p>
+        <div id="confirm-input-slot" class="mb-4"></div>
+        <div class="flex justify-end gap-2">
+            <button id="confirm-cancel" class="px-3 py-1.5 bg-surface-container text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-high transition-colors">Cancel</button>
+            <button id="confirm-ok" class="px-3 py-1.5 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">Confirm</button>
         </div>
     </div>
 </div>
 
 <script src="/static/js/charts.js"></script>
 <script src="/static/js/sparklines.js"></script>
-<script src="/static/js/compare.js"></script>
+<script src="/static/js/confirm.js"></script>
+<script src="/static/js/selection.js"></script>
+<script src="/static/js/bulk_actions.js"></script>
 {% endif %}
 </div>
 

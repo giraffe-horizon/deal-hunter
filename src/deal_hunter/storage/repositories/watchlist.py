@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import text
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from deal_hunter.storage.models import WatchlistItem
@@ -80,6 +81,22 @@ class WatchlistRepository:
         item.target_price = target_price
         self.session.flush()
         return True
+
+    def bulk_upsert(self, ids: list[str], target_price: int) -> int:
+        """Insert or update watchlist entries for a list of deal ids."""
+        if not ids:
+            return 0
+        now = datetime.now().isoformat()
+        rows = [
+            {"deal_id": deal_id, "target_price": target_price, "created_at": now} for deal_id in ids
+        ]
+        stmt = sqlite_insert(WatchlistItem).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[WatchlistItem.deal_id],
+            set_={"target_price": stmt.excluded.target_price},
+        )
+        self.session.execute(stmt)
+        return len(rows)
 
     def check_trigger(self, deal_id: str, current_price: int) -> dict | None:
         """Check if current price meets watchlist target. Returns entry if triggered."""

@@ -1,16 +1,31 @@
 """Deal-related routes: listing, detail, compare, API endpoints."""
 
+import csv
+import io
+import json
+from collections.abc import Iterator
 from dataclasses import asdict
+from typing import Literal
 
-from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from deal_hunter.api import templates
 from deal_hunter.api.dependencies import get_db, get_profiles
-from deal_hunter.api.schemas import StatusUpdate
+from deal_hunter.api.schemas import BulkRequest, StatusUpdate
 from deal_hunter.api.view_services import DEALS_PER_PAGE, SCORE_THRESHOLD, DealService
-from deal_hunter.storage.repositories import FeedbackRepository, OfferRepository, PriceRepository
+from deal_hunter.storage.repositories import (
+    FeedbackRepository,
+    OfferRepository,
+    PriceRepository,
+    WatchlistRepository,
+)
+
+SortColumn = Literal["title", "price", "source", "profile", "score", "status", "date"]
+SortDirection = Literal["asc", "desc"]
+BULK_MAX_ROWS = 100_000
+COMPARE_MAX_IDS = 4
 
 # Map dashboard status changes to the feedback-log "action" string used by the
 # Telegram bot. Keeping the vocabulary aligned lets /status stats aggregate
@@ -45,6 +60,8 @@ def deals_page(
     min_score: str | None = None,
     category: str | None = None,
     status: str | None = None,
+    sort: SortColumn | None = None,
+    dir: SortDirection | None = None,  # noqa: A002
     page: int = 1,
     days: int = 7,
     session: Session = Depends(get_db),
@@ -63,6 +80,8 @@ def deals_page(
         min_score=min_score_int,
         category=category,
         status=status,
+        sort=sort,
+        direction=dir,
         page=page,
         per_page=DEALS_PER_PAGE,
         score_threshold=SCORE_THRESHOLD,
@@ -81,6 +100,9 @@ def deals_page(
                 "total_pages": data.total_pages,
                 "total_filtered": data.total_filtered,
                 "filter_params": data.filter_params,
+                "filter_params_no_sort": data.filter_params_no_sort,
+                "sort": sort,
+                "direction": dir,
                 "page_url": "/deals",
             },
         )
@@ -105,10 +127,13 @@ def deals_page(
             "selected_min_score": min_score_int,
             "selected_category": category or None,
             "selected_status": status or None,
+            "sort": sort,
+            "direction": dir,
             "page": data.page,
             "total_pages": data.total_pages,
             "total_filtered": data.total_filtered,
             "filter_params": data.filter_params,
+            "filter_params_no_sort": data.filter_params_no_sort,
             "page_url": "/deals",
         },
     )
@@ -141,6 +166,7 @@ def watchlist_page(
             "total_pages": data.total_pages,
             "total_filtered": data.total_filtered,
             "filter_params": data.filter_params,
+            "filter_params_no_sort": data.filter_params_no_sort,
         },
     )
 
@@ -279,3 +305,173 @@ def api_deals(
 @router.get("/api/stats")
 def api_stats(session: Session = Depends(get_db)) -> dict:
     return DealService(session).get_stats(score_threshold=SCORE_THRESHOLD)
+
+
+def _filters_from_query(
+    profile: str | None,
+    source: str | None,
+    min_score: str | None,
+    category: str | None,
+    status: str | None,
+) -> dict:
+    """Normalize query-string filter args to OfferRepository keyword args."""
+    return {
+        "profile": profile or None,
+        "source": source or None,
+        "min_score": _parse_optional_int(min_score),
+        "category": category or None,
+        "status": status or None,
+    }
+
+
+@router.get("/api/deals/count")
+def api_deals_count(
+    profile: str | None = None,
+    source: str | None = None,
+    min_score: str | None = None,
+    category: str | None = None,
+    status: str | None = None,
+    session: Session = Depends(get_db),
+) -> dict:
+    count = OfferRepository(session).count(
+        **_filters_from_query(profile, source, min_score, category, status)
+    )
+    return {"count": count}
+
+
+@router.get("/api/deals/ids")
+def api_deals_ids(
+    profile: str | None = None,
+    source: str | None = None,
+    min_score: str | None = None,
+    category: str | None = None,
+    status: str | None = None,
+    session: Session = Depends(get_db),
+) -> dict:
+    ids = OfferRepository(session).get_filtered_ids(
+        **_filters_from_query(profile, source, min_score, category, status)
+    )
+    return {"ids": ids, "count": len(ids)}
+
+
+def _resolve_bulk_ids(payload: BulkRequest, session: Session) -> list[str]:
+    """Materialize the list of deal ids referenced by an ids-mode or filter-mode request."""
+    if payload.ids is not None:
+        return list(payload.ids)
+    assert payload.filter is not None
+    ids = OfferRepository(session).get_filtered_ids(**payload.filter.to_kwargs())
+    excluded = set(payload.excluded)
+    return [i for i in ids if i not in excluded]
+
+
+@router.post("/api/deals/bulk")
+def api_deals_bulk(
+    payload: BulkRequest,
+    session: Session = Depends(get_db),
+) -> Response:
+    ids = _resolve_bulk_ids(payload, session)
+    if len(ids) > BULK_MAX_ROWS:
+        raise HTTPException(status_code=413, detail=f"Too many rows ({len(ids)} > {BULK_MAX_ROWS})")
+
+    if payload.action == "compare":
+        capped = ids[:COMPARE_MAX_IDS]
+        if not capped:
+            raise HTTPException(status_code=400, detail="No ids to compare")
+        redirect = "/compare?ids=" + ",".join(capped)
+        return JSONResponse({"redirect": redirect})
+
+    if not ids:
+        return JSONResponse({"updated": 0})
+
+    if payload.action == "set-status":
+        assert payload.status is not None
+        updated = OfferRepository(session).bulk_update_status(ids, payload.status)
+        FeedbackRepository(session).record_many(ids, _STATUS_TO_FEEDBACK_ACTION[payload.status])
+        return JSONResponse({"updated": updated, "action": "set-status", "status": payload.status})
+
+    if payload.action == "set-target":
+        assert payload.target_price is not None
+        updated = WatchlistRepository(session).bulk_upsert(ids, payload.target_price)
+        return JSONResponse(
+            {"updated": updated, "action": "set-target", "target_price": payload.target_price}
+        )
+
+    raise HTTPException(status_code=400, detail="Unknown action")
+
+
+_EXPORT_COLUMNS = [
+    "id",
+    "title",
+    "price",
+    "source",
+    "profile",
+    "category",
+    "status",
+    "score",
+    "first_seen_at",
+    "last_seen_at",
+    "link",
+]
+
+
+def _project(row: dict) -> dict:
+    return {col: row.get(col) for col in _EXPORT_COLUMNS}
+
+
+def _export_csv_iter(session: Session, filters: dict) -> Iterator[str]:
+    """Yield CSV chunks from a live request session, cursor-streaming under yield_per."""
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=_EXPORT_COLUMNS)
+    writer.writeheader()
+    yield buf.getvalue()
+    buf.seek(0)
+    buf.truncate()
+
+    for row in OfferRepository(session).iter_filtered(chunk=1000, **filters):
+        writer.writerow(_project(row))
+        if buf.tell() >= 8192:
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate()
+    if buf.tell():
+        yield buf.getvalue()
+
+
+def _export_json_iter(session: Session, filters: dict) -> Iterator[str]:
+    """Yield a JSON array one element at a time — no full materialization."""
+    yield "["
+    first = True
+    for row in OfferRepository(session).iter_filtered(chunk=1000, **filters):
+        sep = "" if first else ","
+        first = False
+        yield sep + json.dumps(_project(row), default=str)
+    yield "]"
+
+
+@router.get("/api/deals/export")
+def api_deals_export(
+    format: str = "csv",  # noqa: A002
+    profile: str | None = None,
+    source: str | None = None,
+    min_score: str | None = None,
+    category: str | None = None,
+    status: str | None = None,
+    session: Session = Depends(get_db),
+) -> StreamingResponse:
+    if format not in {"csv", "json"}:
+        raise HTTPException(status_code=422, detail="format must be csv or json")
+
+    filters = _filters_from_query(profile, source, min_score, category, status)
+
+    if format == "csv":
+        return StreamingResponse(
+            _export_csv_iter(session, filters),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=deals.csv"},
+        )
+
+    return StreamingResponse(
+        _export_json_iter(session, filters),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=deals.json"},
+    )

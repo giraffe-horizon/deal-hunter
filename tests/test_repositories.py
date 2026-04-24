@@ -3,7 +3,7 @@
 from datetime import datetime
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from deal_hunter.storage.models import Base, SeenDeal
@@ -554,3 +554,175 @@ class TestSeenDealRepository:
         assert "pepper:1" in ids
         assert "pepper:2" in ids
         assert "pepper:3" not in ids
+
+
+# ── Bulk operations & sorting (2026-04-17) ────────────────────────────────
+
+
+class TestDealRepositorySortAndBulk:
+    """Sorting allowlist, filter-only id query, bulk status update, streaming iter."""
+
+    @pytest.fixture(autouse=True)
+    def _seed(self, session, deal_repo):
+        base = datetime(2026, 4, 10, 12, 0, 0)
+        for payload in [
+            dict(id="pepper:1", title="Alpha", price=1000, score=90, first_seen_offset=0),
+            dict(id="pepper:2", title="Bravo", price=3000, score=60, first_seen_offset=1),
+            dict(id="pepper:3", title="Charlie", price=2000, score=40, first_seen_offset=2),
+        ]:
+            first_seen = (base.replace(day=10 + payload["first_seen_offset"])).isoformat()
+            deal_repo.upsert(
+                **_make_deal(
+                    id=payload["id"],
+                    title=payload["title"],
+                    price=payload["price"],
+                    score=payload["score"],
+                    first_seen=first_seen,
+                    last_seen=first_seen,
+                )
+            )
+        session.flush()
+
+    def test_sort_by_price_asc(self, deal_repo):
+        deals = deal_repo.get_filtered(sort="price", direction="asc")
+        assert [d["id"] for d in deals] == ["pepper:1", "pepper:3", "pepper:2"]
+
+    def test_sort_by_title_desc(self, deal_repo):
+        deals = deal_repo.get_filtered(sort="title", direction="desc")
+        assert [d["title"] for d in deals] == ["Charlie", "Bravo", "Alpha"]
+
+    def test_sort_unknown_falls_back_to_score(self, deal_repo):
+        deals = deal_repo.get_filtered(sort="bogus", direction="asc")
+        # Fallback path uses score desc regardless of direction arg.
+        assert [d["score"] for d in deals] == [90, 60, 40]
+
+    def test_sort_by_date_nulls_last(self, session, deal_repo):
+        # Null first_seen_at should appear at the end regardless of direction.
+        deal_repo.upsert(**_make_deal(id="pepper:null", title="Null", first_seen=""))
+        session.execute(text("UPDATE offers SET first_seen_at = NULL WHERE id = 'pepper:null'"))
+        session.flush()
+        asc = deal_repo.get_filtered(sort="date", direction="asc")
+        desc = deal_repo.get_filtered(sort="date", direction="desc")
+        assert asc[-1]["id"] == "pepper:null"
+        assert desc[-1]["id"] == "pepper:null"
+
+    def test_id_tiebreaker_is_stable(self, session, deal_repo):
+        # Force equal scores so ordering falls through to the id tiebreaker.
+        for deal_id in ["pepper:1", "pepper:2", "pepper:3"]:
+            d = session.get(Deal, deal_id)
+            d.score = 50
+        session.flush()
+        deals = deal_repo.get_filtered(sort="score", direction="desc")
+        assert [d["id"] for d in deals] == ["pepper:1", "pepper:2", "pepper:3"]
+
+    def test_get_filtered_ids_respects_filter(self, deal_repo):
+        ids = deal_repo.get_filtered_ids(min_score=70)
+        assert ids == ["pepper:1"]
+
+    def test_get_filtered_ids_empty(self, deal_repo):
+        assert deal_repo.get_filtered_ids(min_score=9999) == []
+
+    def test_bulk_update_status(self, session, deal_repo):
+        n = deal_repo.bulk_update_status(["pepper:1", "pepper:2"], "watching")
+        session.flush()
+        assert n == 2
+        assert deal_repo.get_by_id("pepper:1")["status"] == "watching"
+        assert deal_repo.get_by_id("pepper:2")["status"] == "watching"
+        assert deal_repo.get_by_id("pepper:3")["status"] == "active"
+
+    def test_bulk_update_status_empty_list(self, deal_repo):
+        assert deal_repo.bulk_update_status([], "watching") == 0
+
+    def test_iter_filtered_chunks_stream_all_rows(self, deal_repo):
+        rows = list(deal_repo.iter_filtered(chunk=1))
+        assert len(rows) == 3
+        assert {r["id"] for r in rows} == {"pepper:1", "pepper:2", "pepper:3"}
+
+
+class TestWatchlistBulkUpsert:
+    @pytest.fixture
+    def repo(self, session):
+        return WatchlistRepository(session)
+
+    def test_bulk_upsert_inserts_new(self, session, repo):
+        n = repo.bulk_upsert(["p:1", "p:2", "p:3"], target_price=1234)
+        session.flush()
+        assert n == 3
+        items = repo.get_all()
+        assert len(items) == 3
+        assert {i["target_price"] for i in items} == {1234}
+
+    def test_bulk_upsert_updates_existing(self, session, repo):
+        repo.add("p:1", 5000)
+        session.flush()
+        n = repo.bulk_upsert(["p:1"], target_price=1000)
+        session.flush()
+        assert n == 1
+        assert repo.get_item("p:1")["target_price"] == 1000
+
+    def test_bulk_upsert_empty(self, repo):
+        assert repo.bulk_upsert([], 100) == 0
+
+
+class TestFeedbackBulkRecord:
+    @pytest.fixture
+    def repo(self, session):
+        return FeedbackRepository(session)
+
+    def test_record_many(self, session, repo):
+        n = repo.record_many(["p:1", "p:2", "p:3"], "watch")
+        session.flush()
+        assert n == 3
+        stats = repo.get_stats()
+        assert stats["watch"] == 3
+
+    def test_record_many_empty(self, repo):
+        assert repo.record_many([], "watch") == 0
+
+
+class TestCallbackTokenResolver:
+    """Telegram callback resolver — indexed lookup path + collision safety."""
+
+    def test_direct_id_hits_raw_path(self, session, deal_repo):
+        deal_repo.upsert(**_make_deal(id="pepper:direct"))
+        session.flush()
+        assert deal_repo.resolve_callback_deal_id("pepper:direct") == "pepper:direct"
+
+    def test_indexed_token_lookup(self, session, deal_repo):
+        from deal_hunter.storage.models import compute_callback_token
+
+        deal_repo.upsert(**_make_deal(id="pepper:token-me"))
+        session.flush()
+        token = compute_callback_token("pepper:token-me")
+        assert deal_repo.resolve_callback_deal_id(f"id:{token}") == "pepper:token-me"
+
+    def test_collision_returns_none(self, session, deal_repo):
+        """Two distinct offers sharing a token must resolve to None, not guess."""
+        deal_repo.upsert(**_make_deal(id="pepper:a"))
+        deal_repo.upsert(**_make_deal(id="pepper:b"))
+        session.flush()
+        # Force both rows to claim the same callback_token.
+        session.execute(
+            text("UPDATE offers SET callback_token = 'collide' WHERE id IN ('pepper:a','pepper:b')")
+        )
+        session.flush()
+        assert deal_repo.resolve_callback_deal_id("id:collide") is None
+
+    def test_unknown_token_returns_none(self, session, deal_repo):
+        deal_repo.upsert(**_make_deal(id="pepper:a"))
+        session.flush()
+        assert deal_repo.resolve_callback_deal_id("id:deadbeefdeadbeef") is None
+
+    def test_fallback_rehashes_null_token_rows(self, session, deal_repo):
+        """Rows with NULL callback_token (e.g., unmigrated) still resolve."""
+        from deal_hunter.storage.models import compute_callback_token
+
+        deal_repo.upsert(**_make_deal(id="pepper:legacy"))
+        session.flush()
+        session.execute(text("UPDATE offers SET callback_token = NULL WHERE id = 'pepper:legacy'"))
+        session.flush()
+        token = compute_callback_token("pepper:legacy")
+        assert deal_repo.resolve_callback_deal_id(f"id:{token}") == "pepper:legacy"
+
+    def test_missing_id_prefix_returns_none(self, deal_repo):
+        assert deal_repo.resolve_callback_deal_id("no-prefix-token") is None
