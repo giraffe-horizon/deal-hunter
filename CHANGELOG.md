@@ -1,12 +1,25 @@
 # CHANGELOG
 
 
+## v0.16.0 (2026-04-24)
+
+
 ## v0.15.3 (2026-04-22)
 
 ### Bug Fixes
 
+- **lint**: Satisfy mypy on bulk_insert_mappings + rowcount
+  ([`3e43f2e`](https://github.com/giraffe-horizon/deal-hunter/commit/3e43f2ee7b54f99a0467c9206d8f5df441c96e5e))
+
+- bulk_insert_mappings in SQLAlchemy 2.0 typings expects a Mapper, not a mapped class; wrap Feedback
+  in inspect(). - Session.execute(update()) is typed as Result[Any] but returns a CursorResult at
+  runtime — cast to access rowcount.
+
 - **telegram**: Shorten callback payloads for long deal ids
   ([`b5126e8`](https://github.com/giraffe-horizon/deal-hunter/commit/b5126e853090e98f36e4c4153e810f4af7a54415))
+
+- **telegram**: Shorten callback payloads for long deal ids
+  ([`bf75248`](https://github.com/giraffe-horizon/deal-hunter/commit/bf752481fc7178683c64ecc06f2ac14811ef11d1))
 
 ### Chores
 
@@ -17,10 +30,42 @@
   links from profile_tab_yaml.html. * Ensured consistent loading of CodeMirror resources across
   templates.
 
+### Features
+
+- **deals**: Sortable columns, date column, select-all + bulk ops
+  ([`e39b72e`](https://github.com/giraffe-horizon/deal-hunter/commit/e39b72ef124f8d5b668f342954955487682c31a5))
+
+Deals Explorer gets a full bulk-operations surface alongside clickable sort headers and a new Date
+  column. Row checkboxes feed a shared selection state that supports both concrete-ids mode and
+  select-all-filtered-with-excludes mode; the bulk bar exposes Watch / Skip / Restore / Set Target /
+  Compare / Export-CSV/JSON against `/api/deals/bulk` (100k-row hard cap, CSRF-gated). Sort state is
+  URL-owned (`?sort=col&dir=asc|desc`) and invalidates selection on change; pagination preserves it.
+
+Repositories gain `bulk_update_status`, `bulk_upsert`, `record_many`, `get_filtered_ids`, and
+  `iter_filtered` for streaming export under a request-scoped session. Tests cover the new repo
+  paths, bulk endpoint, export, sort + date column, and end-to-end flows.
+
+### Refactoring
+
+- **deals**: Address review findings on bulk ops branch
+  ([`7c75c73`](https://github.com/giraffe-horizon/deal-hunter/commit/7c75c738b587d24d2906ac91163d3f7596c7e0d4))
+
+Indexed Telegram callback resolution (new callback_token column + migration 005), genuinely
+  streaming CSV/JSON export, promise-based Prompt modal in place of window.prompt(), confirmation
+  threshold now applies to bulk Watch as well, FilterParams.to_kwargs() dedupe, sqlite
+  on_conflict_do_update replaces raw SQL upsert, structured sort-link composition, pydantic length
+  ceilings on bulk payload lists. New tests cover collision safety, rollback semantics, and
+  migration round-trip.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
 ### Testing
 
 - **pepper**: Freeze parser time for dated fixtures
   ([`662ede6`](https://github.com/giraffe-horizon/deal-hunter/commit/662ede64da230a6bfc6d8449d6c8e05d55fb4ab5))
+
+- **pepper**: Freeze parser time for dated fixtures
+  ([`df496f2`](https://github.com/giraffe-horizon/deal-hunter/commit/df496f20624e8be477c62413608be2327fa2155b))
 
 
 ## v0.15.2 (2026-04-17)
