@@ -100,6 +100,7 @@ def deals_page(
                 "total_pages": data.total_pages,
                 "total_filtered": data.total_filtered,
                 "filter_params": data.filter_params,
+                "filter_params_no_sort": data.filter_params_no_sort,
                 "sort": sort,
                 "direction": dir,
                 "page_url": "/deals",
@@ -132,6 +133,7 @@ def deals_page(
             "total_pages": data.total_pages,
             "total_filtered": data.total_filtered,
             "filter_params": data.filter_params,
+            "filter_params_no_sort": data.filter_params_no_sort,
             "page_url": "/deals",
         },
     )
@@ -164,6 +166,7 @@ def watchlist_page(
             "total_pages": data.total_pages,
             "total_filtered": data.total_filtered,
             "filter_params": data.filter_params,
+            "filter_params_no_sort": data.filter_params_no_sort,
         },
     )
 
@@ -304,6 +307,23 @@ def api_stats(session: Session = Depends(get_db)) -> dict:
     return DealService(session).get_stats(score_threshold=SCORE_THRESHOLD)
 
 
+def _filters_from_query(
+    profile: str | None,
+    source: str | None,
+    min_score: str | None,
+    category: str | None,
+    status: str | None,
+) -> dict:
+    """Normalize query-string filter args to OfferRepository keyword args."""
+    return {
+        "profile": profile or None,
+        "source": source or None,
+        "min_score": _parse_optional_int(min_score),
+        "category": category or None,
+        "status": status or None,
+    }
+
+
 @router.get("/api/deals/count")
 def api_deals_count(
     profile: str | None = None,
@@ -314,11 +334,7 @@ def api_deals_count(
     session: Session = Depends(get_db),
 ) -> dict:
     count = OfferRepository(session).count(
-        profile=profile or None,
-        source=source or None,
-        min_score=_parse_optional_int(min_score),
-        category=category or None,
-        status=status or None,
+        **_filters_from_query(profile, source, min_score, category, status)
     )
     return {"count": count}
 
@@ -333,11 +349,7 @@ def api_deals_ids(
     session: Session = Depends(get_db),
 ) -> dict:
     ids = OfferRepository(session).get_filtered_ids(
-        profile=profile or None,
-        source=source or None,
-        min_score=_parse_optional_int(min_score),
-        category=category or None,
-        status=status or None,
+        **_filters_from_query(profile, source, min_score, category, status)
     )
     return {"ids": ids, "count": len(ids)}
 
@@ -347,13 +359,7 @@ def _resolve_bulk_ids(payload: BulkRequest, session: Session) -> list[str]:
     if payload.ids is not None:
         return list(payload.ids)
     assert payload.filter is not None
-    ids = OfferRepository(session).get_filtered_ids(
-        profile=payload.filter.profile,
-        source=payload.filter.source,
-        min_score=payload.filter.min_score,
-        category=payload.filter.category,
-        status=payload.filter.status,
-    )
+    ids = OfferRepository(session).get_filtered_ids(**payload.filter.to_kwargs())
     excluded = set(payload.excluded)
     return [i for i in ids if i not in excluded]
 
@@ -408,14 +414,38 @@ _EXPORT_COLUMNS = [
 ]
 
 
-def _csv_stream(rows: list[dict]) -> io.StringIO:
+def _project(row: dict) -> dict:
+    return {col: row.get(col) for col in _EXPORT_COLUMNS}
+
+
+def _export_csv_iter(session: Session, filters: dict) -> Iterator[str]:
+    """Yield CSV chunks from a live request session, cursor-streaming under yield_per."""
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=_EXPORT_COLUMNS)
     writer.writeheader()
-    for row in rows:
-        writer.writerow(row)
+    yield buf.getvalue()
     buf.seek(0)
-    return buf
+    buf.truncate()
+
+    for row in OfferRepository(session).iter_filtered(chunk=1000, **filters):
+        writer.writerow(_project(row))
+        if buf.tell() >= 8192:
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate()
+    if buf.tell():
+        yield buf.getvalue()
+
+
+def _export_json_iter(session: Session, filters: dict) -> Iterator[str]:
+    """Yield a JSON array one element at a time — no full materialization."""
+    yield "["
+    first = True
+    for row in OfferRepository(session).iter_filtered(chunk=1000, **filters):
+        sep = "" if first else ","
+        first = False
+        yield sep + json.dumps(_project(row), default=str)
+    yield "]"
 
 
 @router.get("/api/deals/export")
@@ -431,39 +461,17 @@ def api_deals_export(
     if format not in {"csv", "json"}:
         raise HTTPException(status_code=422, detail="format must be csv or json")
 
-    # Materialize projected rows under the request session — StreamingResponse
-    # runs after the handler returns, which would close the Depends-yielded
-    # session. `yield_per` still caps peak memory inside the DB cursor.
-    rows = [
-        {col: row.get(col) for col in _EXPORT_COLUMNS}
-        for row in OfferRepository(session).iter_filtered(
-            chunk=1000,
-            profile=profile or None,
-            source=source or None,
-            min_score=_parse_optional_int(min_score),
-            category=category or None,
-            status=status or None,
-        )
-    ]
+    filters = _filters_from_query(profile, source, min_score, category, status)
 
     if format == "csv":
-        buf = _csv_stream(rows)
-
-        def csv_iter() -> Iterator[str]:
-            while chunk := buf.read(8192):
-                yield chunk
-
         return StreamingResponse(
-            csv_iter(),
+            _export_csv_iter(session, filters),
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": "attachment; filename=deals.csv"},
         )
 
-    def json_iter() -> Iterator[str]:
-        yield json.dumps(rows, default=str)
-
     return StreamingResponse(
-        json_iter(),
+        _export_json_iter(session, filters),
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=deals.json"},
     )

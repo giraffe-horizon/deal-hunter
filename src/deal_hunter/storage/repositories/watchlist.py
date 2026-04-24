@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import text
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from deal_hunter.storage.models import WatchlistItem
@@ -89,14 +90,12 @@ class WatchlistRepository:
         rows = [
             {"deal_id": deal_id, "target_price": target_price, "created_at": now} for deal_id in ids
         ]
-        self.session.execute(
-            text(
-                "INSERT INTO watchlist (deal_id, target_price, created_at)"
-                " VALUES (:deal_id, :target_price, :created_at)"
-                " ON CONFLICT(deal_id) DO UPDATE SET target_price = excluded.target_price"
-            ),
-            rows,
+        stmt = sqlite_insert(WatchlistItem).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[WatchlistItem.deal_id],
+            set_={"target_price": stmt.excluded.target_price},
         )
+        self.session.execute(stmt)
         return len(rows)
 
     def check_trigger(self, deal_id: str, current_price: int) -> dict | None:

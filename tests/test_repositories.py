@@ -678,3 +678,51 @@ class TestFeedbackBulkRecord:
 
     def test_record_many_empty(self, repo):
         assert repo.record_many([], "watch") == 0
+
+
+class TestCallbackTokenResolver:
+    """Telegram callback resolver — indexed lookup path + collision safety."""
+
+    def test_direct_id_hits_raw_path(self, session, deal_repo):
+        deal_repo.upsert(**_make_deal(id="pepper:direct"))
+        session.flush()
+        assert deal_repo.resolve_callback_deal_id("pepper:direct") == "pepper:direct"
+
+    def test_indexed_token_lookup(self, session, deal_repo):
+        from deal_hunter.storage.models import compute_callback_token
+
+        deal_repo.upsert(**_make_deal(id="pepper:token-me"))
+        session.flush()
+        token = compute_callback_token("pepper:token-me")
+        assert deal_repo.resolve_callback_deal_id(f"id:{token}") == "pepper:token-me"
+
+    def test_collision_returns_none(self, session, deal_repo):
+        """Two distinct offers sharing a token must resolve to None, not guess."""
+        deal_repo.upsert(**_make_deal(id="pepper:a"))
+        deal_repo.upsert(**_make_deal(id="pepper:b"))
+        session.flush()
+        # Force both rows to claim the same callback_token.
+        session.execute(
+            text("UPDATE offers SET callback_token = 'collide' WHERE id IN ('pepper:a','pepper:b')")
+        )
+        session.flush()
+        assert deal_repo.resolve_callback_deal_id("id:collide") is None
+
+    def test_unknown_token_returns_none(self, session, deal_repo):
+        deal_repo.upsert(**_make_deal(id="pepper:a"))
+        session.flush()
+        assert deal_repo.resolve_callback_deal_id("id:deadbeefdeadbeef") is None
+
+    def test_fallback_rehashes_null_token_rows(self, session, deal_repo):
+        """Rows with NULL callback_token (e.g., unmigrated) still resolve."""
+        from deal_hunter.storage.models import compute_callback_token
+
+        deal_repo.upsert(**_make_deal(id="pepper:legacy"))
+        session.flush()
+        session.execute(text("UPDATE offers SET callback_token = NULL WHERE id = 'pepper:legacy'"))
+        session.flush()
+        token = compute_callback_token("pepper:legacy")
+        assert deal_repo.resolve_callback_deal_id(f"id:{token}") == "pepper:legacy"
+
+    def test_missing_id_prefix_returns_none(self, deal_repo):
+        assert deal_repo.resolve_callback_deal_id("no-prefix-token") is None

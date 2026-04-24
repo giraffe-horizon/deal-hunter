@@ -73,10 +73,15 @@
         return res.json();
     }
 
+    // Always confirm destructive (rejected), and confirm ANY bulk status
+    // change above this many rows — accidental bulk-watch on hundreds of
+    // rows is nearly as disruptive as accidental bulk-restore.
+    const BULK_CONFIRM_THRESHOLD = 50;
+
     async function actionSetStatus(status, label) {
         const snap = window.Selection.snapshot();
         if (snap.count === 0) return;
-        if (status === "rejected" || (status === "active" && snap.count > 50)) {
+        if (status === "rejected" || snap.count > BULK_CONFIRM_THRESHOLD) {
             const ok = await window.Confirm({
                 title: `${label} ${snap.count} deal${snap.count === 1 ? "" : "s"}?`,
                 body: "This will update every deal in the current selection.",
@@ -94,8 +99,14 @@
     async function actionSetTarget() {
         const snap = window.Selection.snapshot();
         if (snap.count === 0) return;
-        const raw = prompt(`Target price (PLN) for ${snap.count} deal${snap.count === 1 ? "" : "s"}:`);
-        if (!raw) return;
+        const raw = await window.Prompt({
+            title: `Set target price on ${snap.count} deal${snap.count === 1 ? "" : "s"}`,
+            body: "Target price in PLN (integer). Existing targets will be overwritten.",
+            okLabel: "Next",
+            placeholder: "e.g. 2500",
+            inputType: "number",
+        });
+        if (raw === null || raw === "") return;
         const target = parseInt(raw, 10);
         if (!target || target <= 0) {
             showToast("Invalid price.", "error");

@@ -6,16 +6,17 @@
     {% set active = (sort == col) %}
     {% set next_dir = 'asc' if (active and direction == 'desc') else 'desc' if active else 'desc' %}
     {% set base_url = page_url | default('/deals') %}
-    {% set fp = filter_params | default('') %}
-    {# Strip existing sort/dir out of the carried-over filter params so we don't duplicate. #}
-    {% set fp_clean = [] %}
-    {% for part in fp.split('&') %}
-        {% if part and not part.startswith('sort=') and not part.startswith('dir=') %}{% set _ = fp_clean.append(part) %}{% endif %}
+    {# Compose sort URL from the structured filter dict — avoids string parsing
+       and keeps the URL well-formed regardless of how filter_params was built. #}
+    {% set fp_dict = filter_params_no_sort | default({}) %}
+    {% set query_tail = '' %}
+    {% for key, value in fp_dict.items() %}
+        {% set query_tail = query_tail ~ '&' ~ key ~ '=' ~ (value | urlencode) %}
     {% endfor %}
-    {% set fp_q = ('&' ~ fp_clean | join('&')) if fp_clean else '' %}
+    {% set sort_url = base_url ~ '?sort=' ~ col ~ '&dir=' ~ next_dir ~ query_tail %}
     <th class="pb-3 {{ extra_classes }}">
-        <a href="{{ base_url }}?sort={{ col }}&dir={{ next_dir }}{{ fp_q }}"
-           hx-get="{{ base_url }}?sort={{ col }}&dir={{ next_dir }}{{ fp_q }}"
+        <a href="{{ sort_url }}"
+           hx-get="{{ sort_url }}"
            hx-target="#deals-table"
            hx-swap="innerHTML"
            hx-push-url="true"

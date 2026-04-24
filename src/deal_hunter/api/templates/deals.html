@@ -133,11 +133,12 @@
 
 <div id="bulk-toast" class="hidden fixed bottom-20 right-6 z-30 bg-surface-container-high text-on-surface rounded-card px-4 py-3 shadow-lg text-sm"></div>
 
-<!-- Confirmation dialog mount -->
+<!-- Confirmation / prompt dialog mount -->
 <div id="confirm-dialog-mount" class="hidden fixed inset-0 z-40 bg-black/40 items-center justify-center">
     <div class="bg-surface rounded-card shadow-xl max-w-md w-full mx-4 p-6">
         <h3 id="confirm-title" class="text-lg font-headline font-semibold mb-2"></h3>
-        <p id="confirm-body" class="text-sm text-on-surface-variant mb-5"></p>
+        <p id="confirm-body" class="text-sm text-on-surface-variant mb-3"></p>
+        <div id="confirm-input-slot" class="mb-4"></div>
         <div class="flex justify-end gap-2">
             <button id="confirm-cancel" class="px-3 py-1.5 bg-surface-container text-on-surface rounded-card text-sm font-medium hover:bg-surface-container-high transition-colors">Cancel</button>
             <button id="confirm-ok" class="px-3 py-1.5 bg-primary text-on-primary rounded-card text-sm font-medium hover:bg-primary-dim transition-colors">Confirm</button>

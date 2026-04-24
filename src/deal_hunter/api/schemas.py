@@ -38,18 +38,32 @@ class FilterParams(BaseModel):
     category: str | None = None
     status: str | None = None
 
+    def to_kwargs(self) -> dict:
+        """Unpack as keyword args for OfferRepository filter methods."""
+        return {
+            "profile": self.profile,
+            "source": self.source,
+            "min_score": self.min_score,
+            "category": self.category,
+            "status": self.status,
+        }
+
 
 BulkAction = Literal["set-status", "set-target", "compare"]
 BulkStatus = Literal["watching", "rejected", "active"]
+
+# Keep in sync with routes.deals.BULK_MAX_ROWS — cheap pre-parse rejection
+# so pydantic refuses multi-MB payloads before the handler inspects them.
+BULK_PAYLOAD_MAX_IDS = 100_000
 
 
 class BulkRequest(BaseModel):
     """Unified bulk-op payload. Either `ids` OR `filter` must be present."""
 
     action: BulkAction
-    ids: list[str] | None = None
+    ids: list[str] | None = Field(default=None, max_length=BULK_PAYLOAD_MAX_IDS)
     filter: FilterParams | None = None
-    excluded: list[str] = Field(default_factory=list)
+    excluded: list[str] = Field(default_factory=list, max_length=BULK_PAYLOAD_MAX_IDS)
     status: BulkStatus | None = None
     target_price: int | None = Field(default=None, gt=0)
 

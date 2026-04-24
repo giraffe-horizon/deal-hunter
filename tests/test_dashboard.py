@@ -1778,6 +1778,37 @@ class TestBulkEndpoint:
         )
         assert resp.status_code == 413
 
+    def test_set_status_rolls_back_when_feedback_fails(self, dashboard_session, monkeypatch):
+        """If FeedbackRepository.record_many raises mid-transaction, the earlier
+        bulk status write must not be visible after rollback. Exercises the
+        contract documented by `deal_hunter.storage.database.get_session`."""
+        from sqlalchemy.orm import Session as _Session
+
+        from deal_hunter.storage.repositories import FeedbackRepository
+
+        before = DealRepository(dashboard_session).get_by_id("pepper:99999")["status"]
+
+        def boom(self, ids, action):
+            raise RuntimeError("simulated feedback write failure")
+
+        monkeypatch.setattr(FeedbackRepository, "record_many", boom)
+
+        # Open a fresh session bound to the same engine and emulate the
+        # commit-or-rollback contract of `storage.database.get_session`.
+        session2 = _Session(dashboard_session.bind)
+        try:
+            DealRepository(session2).bulk_update_status(["pepper:99999"], "watching")
+            FeedbackRepository(session2).record_many(["pepper:99999"], "watch")
+            session2.commit()
+        except RuntimeError:
+            session2.rollback()
+        finally:
+            session2.close()
+
+        with _Session(dashboard_session.bind) as fresh:
+            after = DealRepository(fresh).get_by_id("pepper:99999")["status"]
+        assert after == before, "status change must roll back when feedback write fails"
+
 
 class TestDealsExport:
     """GET /api/deals/export — streaming CSV / JSON dump."""

@@ -1,6 +1,5 @@
 """Offer repository — query + mutation wrapper for the offers table."""
 
-import hashlib
 from collections.abc import Iterator
 from datetime import datetime
 from typing import Any, cast
@@ -9,7 +8,7 @@ from sqlalchemy import func, select, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
-from deal_hunter.storage.models import Offer
+from deal_hunter.storage.models import Offer, compute_callback_token
 
 
 class OfferRepository:
@@ -69,6 +68,8 @@ class OfferRepository:
             existing.score = score
             existing.current_price_pln = current_price_pln
             # Do NOT reset status — preserve user-set status (watching, rejected, etc.)
+            if not existing.callback_token:
+                existing.callback_token = compute_callback_token(id)
             if old_price and current_price_pln and old_price != current_price_pln:
                 self._record_price(id, current_price_pln, now)
             return existing
@@ -87,6 +88,7 @@ class OfferRepository:
             status=status,
             first_seen_at=first_seen_at or now,
             last_seen_at=now,
+            callback_token=compute_callback_token(id),
         )
         self.session.add(offer)
         if current_price_pln:
@@ -266,7 +268,12 @@ class OfferRepository:
         return True
 
     def resolve_callback_deal_id(self, deal_ref: str) -> str | None:
-        """Resolve raw or shortened Telegram callback deal reference to offer id."""
+        """Resolve raw or shortened Telegram callback deal reference to offer id.
+
+        Fast path is an indexed lookup on `callback_token`. Falls back to a
+        linear rescan when the column is NULL (older rows before the
+        005 migration has run on that session).
+        """
         if self.session.get(Offer, deal_ref):
             return deal_ref
 
@@ -277,15 +284,22 @@ class OfferRepository:
         if not token:
             return None
 
-        matches: list[str] = []
-        for offer_id in self.session.scalars(select(Offer.id)):
-            digest = hashlib.blake2s(offer_id.encode("utf-8"), digest_size=8).hexdigest()
-            if digest == token:
-                matches.append(offer_id)
-                if len(matches) > 1:
-                    return None
+        matches = list(
+            self.session.scalars(select(Offer.id).where(Offer.callback_token == token).limit(2))
+        )
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            return None  # ambiguous — refuse to guess
 
-        return matches[0] if matches else None
+        # Fallback: recompute for any rows that haven't been backfilled yet.
+        stale = list(self.session.scalars(select(Offer.id).where(Offer.callback_token.is_(None))))
+        if not stale:
+            return None
+        stale_matches = [i for i in stale if compute_callback_token(i) == token]
+        if len(stale_matches) == 1:
+            return stale_matches[0]
+        return None
 
     def get_by_status(self, status: str, limit: int = 20) -> list[dict]:
         """Get offers filtered by status, ordered by last_seen_at descending."""
