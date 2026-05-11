@@ -11,6 +11,8 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
+from deal_hunter.core.notification_config import load_global_config, resolve_for_profile
+from deal_hunter.core.settings import get_settings
 from deal_hunter.services.alerter import AlertService
 from deal_hunter.services.price_tracker import PriceTracker
 from deal_hunter.services.runtime import (
@@ -24,6 +26,7 @@ from deal_hunter.services.runtime import (
 from deal_hunter.storage.database import get_session
 from deal_hunter.storage.repositories import (
     AlertQueueRepository,
+    OfferRepository,
     PriceRepository,
     SeenDealRepository,
     WatchlistRepository,
@@ -119,9 +122,12 @@ def run_profile(
         price_repo = PriceRepository(session)
         watchlist_repo = WatchlistRepository(session)
         alert_repo = AlertQueueRepository(session)
+        offer_repo = OfferRepository(session)
+        global_notif = load_global_config(get_settings().base_dir / "config" / "notifications.yaml")
+        notification_config = resolve_for_profile(global_notif, profile)
 
         price_tracker = PriceTracker(price_repo)
-        alert_service = AlertService(telegram, alert_repo)
+        alert_service = AlertService(telegram, alert_repo, offer_repo=offer_repo)
 
         seen_ids = seen_repo.get_seen_ids(profile_name)
 
@@ -202,7 +208,12 @@ def run_profile(
 
         # Send price drop alerts (higher priority)
         alert_service.send_price_drop_alerts(
-            price_drop_alerts, profile, profile_name, tg_topic, max_alerts
+            price_drop_alerts,
+            profile,
+            profile_name,
+            tg_topic,
+            max_alerts,
+            notification_config=notification_config,
         )
 
         # Send deal alerts
