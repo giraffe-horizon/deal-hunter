@@ -71,8 +71,10 @@
         }
     </script>
 
-    <!-- Chart.js -->
+    <!-- Chart.js + dashboard chart helpers (loaded in head so inline page
+         scripts that call createSparkline / createTrendSparkline can see them) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/js/charts.js"></script>
 
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
@@ -173,7 +175,6 @@
     </div>
 
     <script src="/static/js/sidebar.js"></script>
-    <script src="/static/js/charts.js"></script>
     <script src="/static/js/sparklines.js"></script>
 </body>
 </html>
