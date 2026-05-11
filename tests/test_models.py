@@ -76,6 +76,7 @@ class TestTableCreation:
             "attributes_hint",
             "is_active",
             "callback_token",
+            "muted_until",
         }
 
     def test_price_points_columns(self, engine):
