@@ -489,3 +489,83 @@ async def test_cmd_target_missing_args():
     update.message.reply_html.assert_called_once()
     msg = update.message.reply_html.call_args[0][0]
     assert "/target" in msg.lower()
+
+
+@pytest.mark.asyncio
+async def test_callback_mute_sets_permanent_mute():
+    from contextlib import contextmanager
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from deal_hunter.bot.main import handle_callback
+    from deal_hunter.storage.models import Base
+    from deal_hunter.storage.repositories import OfferRepository
+
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    with Session(eng) as session:
+        _seed_deal(session, "pepper:123", price=100)
+        session.commit()
+
+    update = MagicMock()
+    update.callback_query = MagicMock()
+    update.callback_query.data = "mute:pepper:123"
+    update.callback_query.answer = AsyncMock()
+    context = MagicMock()
+
+    @contextmanager
+    def _mock_session():
+        with Session(eng) as s:
+            yield s
+            s.commit()
+
+    with patch("deal_hunter.bot.callbacks.get_session", _mock_session):
+        await handle_callback(update, context)
+
+    update.callback_query.answer.assert_called_once()
+    with Session(eng) as session:
+        deal = OfferRepository(session).get_by_id("pepper:123")
+        assert deal["muted_until"] is not None
+        assert deal["muted_until"].startswith("9999")  # permanent sentinel
+
+
+@pytest.mark.asyncio
+async def test_callback_snooze_sets_future_timestamp():
+    from contextlib import contextmanager
+    from datetime import datetime
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from deal_hunter.bot.main import handle_callback
+    from deal_hunter.storage.models import Base
+    from deal_hunter.storage.repositories import OfferRepository
+
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    with Session(eng) as session:
+        _seed_deal(session, "pepper:123", price=100)
+        session.commit()
+
+    update = MagicMock()
+    update.callback_query = MagicMock()
+    update.callback_query.data = "snooze:pepper:123"
+    update.callback_query.answer = AsyncMock()
+    context = MagicMock()
+
+    @contextmanager
+    def _mock_session():
+        with Session(eng) as s:
+            yield s
+            s.commit()
+
+    with patch("deal_hunter.bot.callbacks.get_session", _mock_session):
+        await handle_callback(update, context)
+
+    with Session(eng) as session:
+        deal = OfferRepository(session).get_by_id("pepper:123")
+        until = deal["muted_until"]
+        assert until is not None
+        assert until > datetime.now().isoformat()
+        assert not until.startswith("9999")
