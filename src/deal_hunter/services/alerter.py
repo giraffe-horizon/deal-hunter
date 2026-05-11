@@ -132,7 +132,7 @@ class AlertService:
                         "diff_percent": pda["price_change"]["diff_percent"],
                     }
                 )
-                self.alert_repo.queue(profile_name, "price_drop", payload)
+                self.alert_repo.queue(profile_name, "price_drop", payload, deal_id=pda["deal"].id)
             logger.info(f"Queued {count} price drop alerts (quiet hours)")
         else:
             for pda in drops[:count]:
@@ -178,7 +178,7 @@ class AlertService:
                         "minus": a["minus"][:4],
                     }
                 )
-                self.alert_repo.queue(profile_name, "deal", payload)
+                self.alert_repo.queue(profile_name, "deal", payload, deal_id=a["deal"].id)
             logger.info(f"Queued {count} deal alerts (quiet hours)")
             return count
 

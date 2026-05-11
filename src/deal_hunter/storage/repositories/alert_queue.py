@@ -14,13 +14,21 @@ class AlertQueueRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def queue(self, profile: str, alert_type: str, payload_json: str) -> None:
+    def queue(
+        self,
+        profile: str,
+        alert_type: str,
+        payload_json: str,
+        *,
+        deal_id: str | None = None,
+    ) -> None:
         """Queue an alert for later sending."""
         alert = AlertQueue(
             profile=profile,
             alert_type=alert_type,
             payload=payload_json,
             created_at=datetime.now().isoformat(),
+            deal_id=deal_id,
         )
         self.session.add(alert)
 
@@ -37,6 +45,7 @@ class AlertQueueRepository:
                 "alert_type": a.alert_type,
                 "payload": a.payload,
                 "created_at": a.created_at,
+                "deal_id": a.deal_id,
             }
             for a in self.session.scalars(stmt)
         ]
@@ -53,3 +62,14 @@ class AlertQueueRepository:
             ),
             {"now": now, **{f"id_{i}": aid for i, aid in enumerate(alert_ids)}},
         )
+
+    def last_price_drop_sent_at(self, deal_id: str) -> str | None:
+        """Return MAX(sent_at) for price_drop alerts on this deal, or None."""
+        from sqlalchemy import func as _func
+
+        stmt = select(_func.max(AlertQueue.sent_at)).where(
+            AlertQueue.alert_type == "price_drop",
+            AlertQueue.deal_id == deal_id,
+            AlertQueue.sent_at.isnot(None),
+        )
+        return self.session.execute(stmt).scalar()
