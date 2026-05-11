@@ -3,12 +3,16 @@
  *
  * Selects every element with class .sparkline-canvas, reads price data
  * from its data-prices attribute (JSON array), and calls createSparkline()
- * from charts.js if at least two data points are available.
+ * from charts.js. createSparkline destroys any existing Chart on the
+ * canvas first, so this is safe to call repeatedly.
  *
- * Safe to call multiple times (e.g. after HTMX swaps) — only canvases
- * without an existing Chart instance will be initialised.
+ * Idempotent: re-running the script (e.g. if loaded twice) does not
+ * register duplicate htmx:afterSwap listeners.
  */
 (function () {
+    if (window.__dhSparklinesBound) return;
+    window.__dhSparklinesBound = true;
+
     function initSparklines() {
         document.querySelectorAll('.sparkline-canvas').forEach(function (el) {
             var prices = JSON.parse(el.dataset.prices || '[]');
