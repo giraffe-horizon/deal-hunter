@@ -267,6 +267,37 @@ class OfferRepository:
         offer.status = status
         return True
 
+    def set_muted_until(self, deal_id: str, until: str) -> bool:
+        """Set offer's muted_until ISO string. Returns False if the offer doesn't exist."""
+        offer = self.session.get(Offer, deal_id)
+        if not offer:
+            return False
+        offer.muted_until = until
+        return True
+
+    def clear_muted_until(self, deal_id: str) -> bool:
+        """Clear offer's muted_until (set to NULL). Returns False if missing."""
+        offer = self.session.get(Offer, deal_id)
+        if not offer:
+            return False
+        offer.muted_until = None
+        return True
+
+    def get_muted(self, *, now: str | None = None, include_expired: bool = False) -> list[dict]:
+        """Return offers with muted_until set.
+
+        When `include_expired` is False (default), only offers whose `muted_until`
+        is strictly greater than `now` (or current time) are returned.
+        """
+        from datetime import datetime as _dt
+
+        stmt = select(Offer).where(Offer.muted_until.isnot(None))
+        if not include_expired:
+            now_str = now or _dt.now().isoformat()
+            stmt = stmt.where(Offer.muted_until > now_str)
+        stmt = stmt.order_by(Offer.muted_until.desc())
+        return [self._to_dict(d) for d in self.session.scalars(stmt)]
+
     def resolve_callback_deal_id(self, deal_ref: str) -> str | None:
         """Resolve raw or shortened Telegram callback deal reference to offer id.
 
@@ -393,6 +424,7 @@ class OfferRepository:
             "score": offer.score,
             "category": offer.category,
             "status": offer.status,
+            "muted_until": offer.muted_until,
             "first_seen": offer.first_seen_at,
             "last_seen": offer.last_seen_at,
             # New keys — surfaced for product-aware callers:

@@ -726,3 +726,80 @@ class TestCallbackTokenResolver:
 
     def test_missing_id_prefix_returns_none(self, deal_repo):
         assert deal_repo.resolve_callback_deal_id("no-prefix-token") is None
+
+
+def test_set_muted_until_with_timestamp(dashboard_session):
+    from deal_hunter.storage.repositories import OfferRepository
+
+    repo = OfferRepository(dashboard_session)
+    ok = repo.set_muted_until("pepper:99999", "2026-06-01T12:00:00")
+    assert ok is True
+    dashboard_session.flush()
+    deal = repo.get_by_id("pepper:99999")
+    assert deal["muted_until"] == "2026-06-01T12:00:00"
+
+
+def test_set_muted_until_returns_false_for_missing_deal(dashboard_session):
+    from deal_hunter.storage.repositories import OfferRepository
+
+    assert OfferRepository(dashboard_session).set_muted_until("nope:0", "x") is False
+
+
+def test_clear_muted_until_resets_to_null(dashboard_session):
+    from deal_hunter.storage.repositories import OfferRepository
+
+    repo = OfferRepository(dashboard_session)
+    repo.set_muted_until("pepper:99999", "2026-06-01T12:00:00")
+    dashboard_session.flush()
+    ok = repo.clear_muted_until("pepper:99999")
+    assert ok is True
+    dashboard_session.flush()
+    assert repo.get_by_id("pepper:99999")["muted_until"] is None
+
+
+def test_get_muted_returns_only_future_muted_when_include_expired_false(dashboard_session):
+    from deal_hunter.storage.repositories import OfferRepository
+
+    repo = OfferRepository(dashboard_session)
+    # Seed: one expired snooze, one active snooze.
+    repo.upsert(
+        id="muted:active",
+        title="Active mute",
+        price=100,
+        link="",
+        source="x",
+        description="",
+        image_url="",
+        profile="bikes",
+        score=0,
+        category="",
+        status="active",
+        first_seen="2026-05-01T00:00:00",
+        last_seen="2026-05-01T00:00:00",
+    )
+    repo.upsert(
+        id="muted:expired",
+        title="Expired mute",
+        price=100,
+        link="",
+        source="x",
+        description="",
+        image_url="",
+        profile="bikes",
+        score=0,
+        category="",
+        status="active",
+        first_seen="2026-05-01T00:00:00",
+        last_seen="2026-05-01T00:00:00",
+    )
+    repo.set_muted_until("muted:active", "2099-01-01T00:00:00")
+    repo.set_muted_until("muted:expired", "2020-01-01T00:00:00")
+    dashboard_session.flush()
+
+    active_only = repo.get_muted(now="2026-05-11T00:00:00", include_expired=False)
+    all_muted = repo.get_muted(now="2026-05-11T00:00:00", include_expired=True)
+    ids_active = {d["id"] for d in active_only}
+    ids_all = {d["id"] for d in all_muted}
+    assert "muted:active" in ids_active
+    assert "muted:expired" not in ids_active
+    assert {"muted:active", "muted:expired"}.issubset(ids_all)
