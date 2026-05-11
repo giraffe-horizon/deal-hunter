@@ -1,6 +1,6 @@
 """Tests for repository layer."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -225,7 +225,8 @@ def price_repo(session):
 
 def _seed_deal_with_prices(session, deal_id="pepper:100", prices=None):
     """Insert a deal and its price history for testing."""
-    now = datetime.now().isoformat()
+    now = datetime.now()
+    now_iso = now.isoformat()
     deal = Deal(
         id=deal_id,
         raw_title="Price Test",
@@ -237,14 +238,17 @@ def _seed_deal_with_prices(session, deal_id="pepper:100", prices=None):
         score=80,
         category="road",
         status="active",
-        first_seen_at=now,
-        last_seen_at=now,
+        first_seen_at=now_iso,
+        last_seen_at=now_iso,
     )
     session.add(deal)
     session.flush()
     if prices:
+        # Stamp prices on the last N days so they always fall inside any
+        # reasonable get_drops(days=...) window. Newest price = today.
         for i, p in enumerate(prices):
-            ts = f"2026-04-{10 + i:02d}T10:00:00"
+            offset_days = len(prices) - 1 - i
+            ts = (now - timedelta(days=offset_days)).isoformat()
             ph = PriceHistory(offer_id=deal_id, price_pln=p, recorded_at=ts)
             session.add(ph)
     session.flush()
