@@ -1,4 +1,25 @@
 services:
+  deal-hunter-migrate:
+    # One-shot service that runs `alembic upgrade head` and exits.
+    # All long-running services depend on it via `service_completed_successfully`
+    # so the database schema is always at the latest revision before the cron,
+    # bot or dashboard touches it. Safe to re-run (no-op if already current).
+    build: .
+    container_name: deal-hunter-migrate
+    env_file: .env
+    environment:
+      - TZ=${TZ:-Europe/Warsaw}
+    entrypoint: ["tini", "--"]
+    command:
+      - alembic
+      - -c
+      - /app/src/deal_hunter/storage/migrations/alembic.ini
+      - upgrade
+      - head
+    volumes:
+      - ./state:/app/state
+    restart: "no"
+
   deal-hunter:
     # image: ghcr.io/giraffe-horizon/deal-hunter:latest  # pre-built
     build: .  # or build locally
@@ -13,6 +34,9 @@ services:
     volumes:
       - ./profiles:/app/profiles
       - ./state:/app/state
+    depends_on:
+      deal-hunter-migrate:
+        condition: service_completed_successfully
 
   deal-hunter-bot:
     # image: ghcr.io/giraffe-horizon/deal-hunter:latest  # pre-built
@@ -28,7 +52,10 @@ services:
       - ./profiles:/app/profiles
       - ./state:/app/state
     depends_on:
-      - deal-hunter
+      deal-hunter-migrate:
+        condition: service_completed_successfully
+      deal-hunter:
+        condition: service_started
 
   deal-hunter-web:
     build: .
@@ -45,4 +72,7 @@ services:
       - ./profiles:/app/profiles
       - ./state:/app/state
     depends_on:
-      - deal-hunter
+      deal-hunter-migrate:
+        condition: service_completed_successfully
+      deal-hunter:
+        condition: service_started
