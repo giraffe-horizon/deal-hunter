@@ -16,6 +16,9 @@ class PriceTrackingConfig:
     min_drop_percent: int = 10
     min_drop_amount: int = 200
     track_increases: bool = False
+    # New: notification-cooldown overrides. None = inherit from global config.
+    cooldown_days: int | None = None
+    alert_through_cooldown_if_ath_low: bool | None = None
 
 
 @dataclass

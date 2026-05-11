@@ -103,3 +103,28 @@ def test_no_previous_price(session, price_repo):
     tracker = PriceTracker(price_repo)
     result = tracker.check_price_change(deal)
     assert result is None
+
+
+def test_get_config_reads_cooldown_fields():
+    from deal_hunter.services.price_tracker import PriceTracker
+
+    profile = {
+        "price_tracking": {
+            "enabled": True,
+            "cooldown_days": 14,
+            "alert_through_cooldown_if_ath_low": False,
+        }
+    }
+    cfg = PriceTracker.get_config(profile)
+    assert cfg.cooldown_days == 14
+    assert cfg.alert_through_cooldown_if_ath_low is False
+
+
+def test_get_config_defaults_for_cooldown_fields():
+    from deal_hunter.services.price_tracker import PriceTracker
+
+    cfg = PriceTracker.get_config({})
+    # Sentinel None = "fall back to global"; the resolver in notification_config
+    # decides the actual value.
+    assert cfg.cooldown_days is None
+    assert cfg.alert_through_cooldown_if_ath_low is None
