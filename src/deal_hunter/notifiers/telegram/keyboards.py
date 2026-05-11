@@ -21,17 +21,29 @@ def build_callback_data(action: str, deal_id: str) -> str:
     return f"{action}:{_SHORT_ID_PREFIX}{make_callback_token(deal_id)}"
 
 
-def build_deal_keyboard(deal_link: str, deal_id: str) -> dict:
+def build_deal_keyboard(deal_link: str, deal_id: str, snooze_days: int = 30) -> dict:
     """Build inline keyboard for a deal alert.
 
-    Returns Telegram InlineKeyboardMarkup dict with Otwórz/Obserwuj/Skip buttons.
+    Two rows:
+      Row 1 — Otwórz, Obserwuj, Skip (existing behavior).
+      Row 2 — Drzemka <Nd>, Wycisz   (new: notification controls).
     """
     return {
         "inline_keyboard": [
             [
                 {"text": "\U0001f517 Otwórz", "url": deal_link},
-                {"text": "\u2b50 Obserwuj", "callback_data": build_callback_data("watch", deal_id)},
+                {"text": "⭐ Obserwuj", "callback_data": build_callback_data("watch", deal_id)},
                 {"text": "\U0001f44e Skip", "callback_data": build_callback_data("skip", deal_id)},
-            ]
+            ],
+            [
+                {
+                    "text": f"\U0001f4a4 Drzemka {snooze_days}d",
+                    "callback_data": build_callback_data("snooze", deal_id),
+                },
+                {
+                    "text": "\U0001f515 Wycisz",
+                    "callback_data": build_callback_data("mute", deal_id),
+                },
+            ],
         ]
     }
