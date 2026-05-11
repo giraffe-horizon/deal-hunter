@@ -42,6 +42,7 @@ class Offer(Base):
     attributes_hint: Mapped[dict | None] = mapped_column(JSON, default=None)
     is_active: Mapped[int] = mapped_column(default=1, server_default="1")
     callback_token: Mapped[str | None] = mapped_column(String, default=None)
+    muted_until: Mapped[str | None] = mapped_column(String, default=None)
 
     prices: Mapped[list["PricePoint"]] = relationship(back_populates="offer")
     feedback_entries: Mapped[list["Feedback"]] = relationship(back_populates="offer")
@@ -55,6 +56,7 @@ class Offer(Base):
     __table_args__ = (
         Index("idx_offers_profile_score", "profile", "score"),
         Index("ix_offers_callback_token", "callback_token"),
+        Index("ix_offers_muted_until", "muted_until"),
     )
 
 
@@ -95,6 +97,9 @@ class AlertQueue(Base):
     payload: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     sent_at: Mapped[str | None] = mapped_column(String, default=None)
+    deal_id: Mapped[str | None] = mapped_column(String, default=None)
+
+    __table_args__ = (Index("ix_alert_queue_deal_id", "deal_id"),)
 
 
 class WatchlistItem(Base):
