@@ -1,6 +1,139 @@
 # CHANGELOG
 
 
+## v0.17.0 (2026-05-11)
+
+### Documentation
+
+- Add notification management implementation plan
+  ([`f206fdb`](https://github.com/giraffe-horizon/deal-hunter/commit/f206fdb61957ea0cc5f77e042f4671bda5cbc468))
+
+14 tasks, TDD per task: migration -> config loader -> repo methods -> filter function -> alerter
+  integration -> Telegram keyboard -> bot callbacks/commands -> dashboard /notifications page +
+  watchlist filter.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+- Add notification management settings design spec
+  ([`ee60825`](https://github.com/giraffe-horizon/deal-hunter/commit/ee608255ddff83ba32d52cbc26436215ce6030a3))
+
+Per-deal cooldown + permanent mute + temporary snooze, with global defaults that any profile YAML
+  can override. Telegram inline buttons, bot commands, and dashboard /notifications page.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+### Features
+
+- **alerter**: Apply mute + cooldown filter before queue/send
+  ([`51fe6f6`](https://github.com/giraffe-horizon/deal-hunter/commit/51fe6f6c7e181cb6ee739aaa751b2509c957fdea))
+
+Wire should_send_price_drop into AlertService.send_price_drop_alerts; pass offer_repo and
+  notification_config through hunt_service.py.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **bot**: /mute /snooze /unmute /muted commands
+  ([`4ed9ebf`](https://github.com/giraffe-horizon/deal-hunter/commit/4ed9ebffa8991d263eb7bf666b1e1689f4205203))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **bot**: Handle mute + snooze callbacks
+  ([`3158e25`](https://github.com/giraffe-horizon/deal-hunter/commit/3158e25f3bdae116b3a0b1866dd25d5db9af3360))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **config**: Add NotificationConfig loader + global defaults file
+  ([`c1a3b61`](https://github.com/giraffe-horizon/deal-hunter/commit/c1a3b618aaafd37daeba9f61edbc433db1c92690))
+
+- **dashboard**: /notifications page + per-deal mute APIs
+  ([`784b2a1`](https://github.com/giraffe-horizon/deal-hunter/commit/784b2a1216274c488f9a9dc9fb5b30368c0180cb))
+
+Add a new dashboard route at /notifications for global notification config (cooldown_days,
+  alert_through_cooldown_if_ath_low, default_snooze_days) backed by config/notifications.yaml, plus
+  POST /api/deals/{deal_id}/mute and /unmute endpoints for per-deal permanent mute and snooze.
+  Register router, add sidebar nav link, add 7 passing tests.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Wyciszone filter + muted badge in deals table
+  ([`feb0eb7`](https://github.com/giraffe-horizon/deal-hunter/commit/feb0eb724070387e866d9d2763077b7e8d8a851d))
+
+Add ?muted=1 mode to /watchlist that queries OfferRepository.get_muted() directly; add filter-chip
+  nav between Obserwowane and Wyciszone views; render 🔕 Wyciszono / 💤 Drzemka badges inline next to
+  deal titles when muted_until is set.
+
+- **db**: Add muted_until + alert_queue.deal_id (migration 006)
+  ([`70a1f3b`](https://github.com/giraffe-horizon/deal-hunter/commit/70a1f3b0f9c501285e450f8ec9a85131c9b7c74a))
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+- **price-tracking**: Add cooldown_days + ath-override fields
+  ([`9cbb09a`](https://github.com/giraffe-horizon/deal-hunter/commit/9cbb09a5083839ee7e643b9bceb0df8564c7ca79))
+
+- **repo**: Add mute/unmute/get_muted to OfferRepository
+  ([`c10d6e8`](https://github.com/giraffe-horizon/deal-hunter/commit/c10d6e8e7808ee4d2d4d63ddd176777d6d25135f))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **repo**: Alert_queue accepts deal_id + last_price_drop_sent_at
+  ([`d5c36b5`](https://github.com/giraffe-horizon/deal-hunter/commit/d5c36b5d4295fbf083dea5f9cf2e20ca0479b8a8))
+
+Add deal_id keyword arg to AlertQueueRepository.queue(), expose deal_id in get_pending() dicts, and
+  add last_price_drop_sent_at(deal_id) for cooldown lookups. Thread deal_id through both queue
+  callsites in alerter.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **services**: Add notification_filter.should_send_price_drop
+  ([`c9eb8aa`](https://github.com/giraffe-horizon/deal-hunter/commit/c9eb8aa36dcac90b344bad408b6e37d17786779a))
+
+Pure decision function that determines whether a price-drop alert should be sent, checking mute
+  state, cooldown window, and ATH override in order.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **telegram**: Add Drzemka/Wycisz buttons to deal keyboard
+  ([`beab630`](https://github.com/giraffe-horizon/deal-hunter/commit/beab630c467574ec2a10ccf997469a0fdf1592c5))
+
+Extends build_deal_keyboard with a second row containing Drzemka (snooze) and Wycisz (mute) inline
+  buttons, threads snooze_days kwarg through send_alert, send_price_drop_alert, and
+  send_watchlist_alert.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **validation**: Validate cooldown_days + ath-override fields
+  ([`53e07de`](https://github.com/giraffe-horizon/deal-hunter/commit/53e07de54d120a43273678f8d36c65018eff0f97))
+
+### Refactoring
+
+- **charts**: Improve chart initialization and cleanup
+  ([`37284dd`](https://github.com/giraffe-horizon/deal-hunter/commit/37284ddc305e7936761450d0716b3d329026ebe8))
+
+* Made chart creation idempotent by ensuring existing charts are destroyed before creating new ones.
+  * Updated the shared Chart.js configuration to prevent duplicate event listeners when the script
+  is loaded multiple times. * Removed redundant script inclusions from various HTML templates to
+  streamline the loading process.
+
+### Testing
+
+- **models**: Include muted_until in expected offers columns
+  ([`145ff5a`](https://github.com/giraffe-horizon/deal-hunter/commit/145ff5a40cc2ffa29a876ac27800f2c7bd66c8a1))
+
+Migration 006 added the muted_until column; the schema introspection test was still pinned to the
+  pre-migration column set.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+- **price**: Use relative timestamps in _seed_deal_with_prices
+  ([`d3a5c90`](https://github.com/giraffe-horizon/deal-hunter/commit/d3a5c90fc6d20ce773b722955f2fd868f845132d))
+
+The hardcoded 2026-04-10/11 timestamps started falling outside the 30-day get_drops() window as of
+  2026-05-11, making the four TestPriceRepositoryDrops cases flake. Switch to "today minus N days"
+  so they always sit inside any reasonable window.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+
 ## v0.16.0 (2026-04-24)
 
 

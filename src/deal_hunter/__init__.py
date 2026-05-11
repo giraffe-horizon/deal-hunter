@@ -3,6 +3,6 @@
 import contextlib
 import importlib.metadata
 
-__version__ = "0.16.0"  # maintained by semantic-release
+__version__ = "0.17.0"  # maintained by semantic-release
 with contextlib.suppress(importlib.metadata.PackageNotFoundError):
     __version__ = importlib.metadata.version("deal-hunter")
