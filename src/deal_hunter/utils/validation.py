@@ -98,6 +98,16 @@ def validate_profile(profile: dict) -> list[str]:
                     errors.append("'price_tracking.min_drop_amount' must be non-negative")
             if "track_increases" in pt and not isinstance(pt["track_increases"], bool):
                 errors.append("'price_tracking.track_increases' must be a boolean")
+            if "cooldown_days" in pt:
+                v = pt["cooldown_days"]
+                if not isinstance(v, int) or isinstance(v, bool) or v < 0 or v > 365:
+                    errors.append("'price_tracking.cooldown_days' must be int between 0 and 365")
+            if "alert_through_cooldown_if_ath_low" in pt and not isinstance(
+                pt["alert_through_cooldown_if_ath_low"], bool
+            ):
+                errors.append(
+                    "'price_tracking.alert_through_cooldown_if_ath_low' must be a boolean"
+                )
 
     # quiet_hours validation
     if "quiet_hours" in profile:

@@ -286,3 +286,43 @@ class TestQuietHoursValidation:
     def test_no_quiet_hours_is_valid(self):
         errors = validate_profile(self.VALID_PROFILE)
         assert not errors
+
+
+class TestAlertQueueDealId:
+    """Tests for the new deal_id column on alert_queue."""
+
+    def test_queue_persists_deal_id(self, session, alert_repo):
+        alert_repo.queue("bikes", "price_drop", "{}", deal_id="pepper:42")
+        session.flush()
+        pending = alert_repo.get_pending()
+        assert len(pending) == 1
+        assert pending[0]["deal_id"] == "pepper:42"
+
+    def test_last_price_drop_sent_at_returns_none_when_never_sent(self, session, alert_repo):
+        assert alert_repo.last_price_drop_sent_at("pepper:42") is None
+
+    def test_last_price_drop_sent_at_returns_most_recent(self, session, alert_repo):
+        # Queue + mark sent (older).
+        alert_repo.queue("bikes", "price_drop", "{}", deal_id="pepper:42")
+        session.flush()
+        ids_first = [a["id"] for a in alert_repo.get_pending()]
+        alert_repo.mark_sent(ids_first)
+        session.flush()
+
+        # Queue + mark sent (newer).
+        alert_repo.queue("bikes", "price_drop", "{}", deal_id="pepper:42")
+        session.flush()
+        ids_second = [a["id"] for a in alert_repo.get_pending()]
+        alert_repo.mark_sent(ids_second)
+        session.flush()
+
+        sent_at = alert_repo.last_price_drop_sent_at("pepper:42")
+        assert sent_at is not None
+
+    def test_last_price_drop_sent_at_ignores_other_alert_types(self, session, alert_repo):
+        alert_repo.queue("bikes", "deal", "{}", deal_id="pepper:42")
+        session.flush()
+        ids = [a["id"] for a in alert_repo.get_pending()]
+        alert_repo.mark_sent(ids)
+        session.flush()
+        assert alert_repo.last_price_drop_sent_at("pepper:42") is None

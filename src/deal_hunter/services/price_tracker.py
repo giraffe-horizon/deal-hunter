@@ -29,6 +29,8 @@ class PriceTracker:
             min_drop_percent=pt.get("min_drop_percent", 10),
             min_drop_amount=pt.get("min_drop_amount", 200),
             track_increases=pt.get("track_increases", False),
+            cooldown_days=pt.get("cooldown_days"),
+            alert_through_cooldown_if_ath_low=pt.get("alert_through_cooldown_if_ath_low"),
         )
 
     def check_price_change(self, deal: Deal, profile: dict | None = None) -> PriceChange | None:

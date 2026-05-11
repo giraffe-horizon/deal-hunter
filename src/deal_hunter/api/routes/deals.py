@@ -143,9 +143,31 @@ def deals_page(
 def watchlist_page(
     request: Request,
     page: int = 1,
+    muted: str | None = None,
     session: Session = Depends(get_db),
 ) -> HTMLResponse:
-    """Bookmark-style watchlist — lists offers with status='watching'."""
+    """Bookmark-style watchlist — lists offers with status='watching' or muted."""
+    is_htmx = bool(request.headers.get("HX-Request"))
+    template_name = "partials/deals_table.html" if is_htmx else "watchlist.html"
+
+    if muted == "1":
+        deals = OfferRepository(session).get_muted(include_expired=False)
+        return templates.TemplateResponse(
+            request,
+            template_name,
+            {
+                "page_url": "/watchlist",
+                "deals": deals,
+                "sparklines": {},
+                "page": 1,
+                "total_pages": 1,
+                "total_filtered": len(deals),
+                "filter_params": "&muted=1",
+                "filter_params_no_sort": {"muted": "1"},
+                "view_mode": "muted",
+            },
+        )
+
     data = DealService(session).get_deals_page(
         status="watching",
         page=page,
@@ -153,8 +175,6 @@ def watchlist_page(
         score_threshold=SCORE_THRESHOLD,
         include_stats=False,
     )
-    is_htmx = bool(request.headers.get("HX-Request"))
-    template_name = "partials/deals_table.html" if is_htmx else "watchlist.html"
     return templates.TemplateResponse(
         request,
         template_name,
@@ -167,6 +187,7 @@ def watchlist_page(
             "total_filtered": data.total_filtered,
             "filter_params": data.filter_params,
             "filter_params_no_sort": data.filter_params_no_sort,
+            "view_mode": "watching",
         },
     )
 

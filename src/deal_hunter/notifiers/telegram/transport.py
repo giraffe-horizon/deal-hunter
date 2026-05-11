@@ -55,6 +55,7 @@ class TelegramNotifier:
         emoji: str = "\U0001f525",
         size_warning: str = "",
         currency: str = "PLN",
+        snooze_days: int = 30,
     ) -> None:
         """Send individual deal alert (messages in Polish for end users)."""
         msg = format_deal_alert(
@@ -67,7 +68,7 @@ class TelegramNotifier:
             size_warning=size_warning,
             currency=currency,
         )
-        keyboard = build_deal_keyboard(deal.link, deal.id)
+        keyboard = build_deal_keyboard(deal.link, deal.id, snooze_days=snooze_days)
         self._send_message(msg, topic_id=topic_id, reply_markup=keyboard)
 
     def send_summary(
@@ -90,10 +91,11 @@ class TelegramNotifier:
         topic_id: int | None = None,
         emoji: str = "\U0001f50d",
         currency: str = "PLN",
+        snooze_days: int = 30,
     ) -> None:
         """Send a price drop alert (messages in Polish for end users)."""
         msg = format_price_drop(deal, price_change, emoji=emoji, currency=currency)
-        keyboard = build_deal_keyboard(deal.link, deal.id)
+        keyboard = build_deal_keyboard(deal.link, deal.id, snooze_days=snooze_days)
         self._send_message(msg, topic_id=topic_id, reply_markup=keyboard)
 
     def send_watchlist_alert(
@@ -103,10 +105,11 @@ class TelegramNotifier:
         current_price: int,
         topic_id: int | None = None,
         currency: str = "PLN",
+        snooze_days: int = 30,
     ) -> None:
         """Send watchlist target price alert (messages in Polish for end users)."""
         msg = format_watchlist_alert(deal, target_price, current_price, currency=currency)
-        keyboard = build_deal_keyboard(deal.link, deal.id)
+        keyboard = build_deal_keyboard(deal.link, deal.id, snooze_days=snooze_days)
         self._send_message(msg, topic_id=topic_id, reply_markup=keyboard)
 
     def send_digest(

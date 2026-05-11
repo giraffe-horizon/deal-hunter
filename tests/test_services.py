@@ -311,3 +311,73 @@ class TestHealthTracker:
         failing = tracker.get_failing_sources(sources)
         assert "pepper" in failing
         assert "ceneo" not in failing
+
+
+def test_alert_service_filters_muted_deal_before_send(monkeypatch):
+    """A deal with muted_until in the future must not enter alert_queue nor reach Telegram."""
+    import pytest as _pytest
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from deal_hunter.core.notification_config import NotificationConfig
+    from deal_hunter.services.alerter import AlertService
+    from deal_hunter.storage.models import Base
+    from deal_hunter.storage.repositories import AlertQueueRepository, OfferRepository
+
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    with Session(eng) as session:
+        offer_repo = OfferRepository(session)
+        alert_repo = AlertQueueRepository(session)
+        offer_repo.upsert(
+            id="pepper:42",
+            title="Test",
+            price=100,
+            link="",
+            source="x",
+            description="",
+            image_url="",
+            profile="bikes",
+            score=0,
+            category="",
+            status="active",
+            first_seen="2026-05-01T00:00:00",
+            last_seen="2026-05-01T00:00:00",
+        )
+        offer_repo.set_muted_until("pepper:42", "2099-01-01T00:00:00")
+        session.commit()
+
+        telegram = type(
+            "FakeTG",
+            (),
+            {
+                "send_price_drop_alert": lambda *a, **k: _pytest.fail("must not be called"),
+            },
+        )()
+        svc = AlertService(telegram, alert_repo, offer_repo=offer_repo)
+
+        deal = type("D", (), {"id": "pepper:42", "title": "Test", "link": ""})()
+        drops = [
+            {
+                "deal": deal,
+                "price_change": {
+                    "type": "drop",
+                    "old_price": 200,
+                    "new_price": 100,
+                    "diff_pln": 100,
+                    "diff_percent": 50.0,
+                    "is_lowest_ever": False,
+                },
+            }
+        ]
+        cfg = NotificationConfig(7, True, 30)
+        sent = svc.send_price_drop_alerts(
+            drops,
+            profile={},
+            profile_name="bikes",
+            topic_id=None,
+            max_alerts=5,
+            notification_config=cfg,
+        )
+        assert sent == 0
+        assert alert_repo.get_pending() == []

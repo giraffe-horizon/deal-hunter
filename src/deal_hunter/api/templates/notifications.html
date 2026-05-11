@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% set active_page = "notifications" %}
+{% block title %}Notifications — DealMonitor{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+{% block content %}
+
+<div class="bg-surface-container-low rounded-card p-6 max-w-2xl">
+    <h2 class="font-headline text-lg font-semibold mb-4">Global notification defaults</h2>
+    <p class="text-sm text-on-surface-variant mb-6">
+        These defaults apply to every profile. Individual profile YAML files can
+        override <code>cooldown_days</code> and
+        <code>alert_through_cooldown_if_ath_low</code> in their
+        <code>price_tracking:</code> block.
+    </p>
+
+    <form id="notif-form"
+          hx-post="/api/notifications/global"
+          hx-swap="none"
+          hx-on::after-request="this.querySelector('#saved-msg').classList.remove('hidden')"
+          class="space-y-5">
+        <div>
+            <label class="block text-sm font-medium mb-1" for="cooldown_days">
+                Cooldown (days)
+            </label>
+            <input id="cooldown_days" name="cooldown_days" type="number" min="0" max="365"
+                   value="{{ config.cooldown_days }}"
+                   class="w-32 bg-surface-container rounded-card px-3 py-2 text-sm" />
+            <p class="text-xs text-on-surface-variant mt-1">
+                Silence repeat price-drop alerts for the same deal for this many days.
+            </p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium mb-1">
+                <input type="checkbox" name="alert_through_cooldown_if_ath_low"
+                       value="true"
+                       {% if config.alert_through_cooldown_if_ath_low %}checked{% endif %} />
+                Alert through cooldown on new all-time low
+            </label>
+            <p class="text-xs text-on-surface-variant">
+                If checked, a drop that hits a new historical low breaks through the
+                cooldown window.
+            </p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium mb-1" for="default_snooze_days">
+                Default snooze (days)
+            </label>
+            <input id="default_snooze_days" name="default_snooze_days" type="number" min="1" max="365"
+                   value="{{ config.default_snooze_days }}"
+                   class="w-32 bg-surface-container rounded-card px-3 py-2 text-sm" />
+            <p class="text-xs text-on-surface-variant mt-1">
+                Default duration for the "Drzemka" button on Telegram alerts.
+            </p>
+        </div>
+
+        <div class="pt-2">
+            <button type="submit"
+                    class="bg-primary text-on-primary px-4 py-2 rounded-card text-sm font-medium">
+                Save
+            </button>
+            <span id="saved-msg" class="hidden text-sm text-on-surface-variant ml-3">Saved.</span>
+        </div>
+    </form>
+</div>
+
+{% endblock %}

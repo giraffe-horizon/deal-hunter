@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+from datetime import datetime, timedelta
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -134,3 +135,99 @@ async def cmd_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 break
 
         await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=True)
+
+
+_PERMANENT_MUTE_SENTINEL = "9999-12-31T00:00:00"
+
+
+async def cmd_mute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/mute <deal_id> — permanent mute for a specific deal."""
+    if not context.args:
+        await update.message.reply_text("Użycie: /mute <deal_id>")
+        return
+    deal_id = context.args[0]
+    with get_session() as session:
+        ok = OfferRepository(session).set_muted_until(deal_id, _PERMANENT_MUTE_SENTINEL)
+        if not ok:
+            await update.message.reply_text(f"Nie znaleziono oferty: {html.escape(deal_id)}")
+            return
+        FeedbackRepository(session).record(deal_id, "mute")
+    await update.message.reply_text(f"\U0001f515 Wyciszono ofertę {html.escape(deal_id)}")
+
+
+async def cmd_snooze(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/snooze <deal_id> [days] — temporary mute (defaults to global default_snooze_days)."""
+    if not context.args:
+        await update.message.reply_text("Użycie: /snooze <deal_id> [dni]")
+        return
+
+    deal_id = context.args[0]
+    if len(context.args) >= 2:
+        try:
+            days = int(context.args[1])
+        except ValueError:
+            await update.message.reply_text("Liczba dni musi być liczbą całkowitą.")
+            return
+        if days <= 0:
+            await update.message.reply_text("Liczba dni musi być dodatnia.")
+            return
+    else:
+        from deal_hunter.core.notification_config import load_global_config
+        from deal_hunter.core.settings import get_settings
+
+        cfg = load_global_config(get_settings().base_dir / "config" / "notifications.yaml")
+        days = cfg.default_snooze_days
+
+    until = (datetime.now() + timedelta(days=days)).isoformat()
+    with get_session() as session:
+        ok = OfferRepository(session).set_muted_until(deal_id, until)
+        if not ok:
+            await update.message.reply_text(f"Nie znaleziono oferty: {html.escape(deal_id)}")
+            return
+        FeedbackRepository(session).record(deal_id, "snooze")
+    nice_date = datetime.fromisoformat(until).strftime("%d.%m.%Y")
+    await update.message.reply_text(
+        f"\U0001f4a4 Wyciszono ofertę {html.escape(deal_id)} do {nice_date}"
+    )
+
+
+async def cmd_unmute(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/unmute <deal_id> — clear mute on a deal."""
+    if not context.args:
+        await update.message.reply_text("Użycie: /unmute <deal_id>")
+        return
+    deal_id = context.args[0]
+    with get_session() as session:
+        ok = OfferRepository(session).clear_muted_until(deal_id)
+        if not ok:
+            await update.message.reply_text(f"Nie znaleziono oferty: {html.escape(deal_id)}")
+            return
+        FeedbackRepository(session).record(deal_id, "unmute")
+    await update.message.reply_text(f"\U0001f50a Włączono powiadomienia: {html.escape(deal_id)}")
+
+
+async def cmd_muted(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/muted — list currently muted/snoozed deals."""
+    with get_session() as session:
+        deals = OfferRepository(session).get_muted(include_expired=False)
+
+    if not deals:
+        await update.message.reply_text("Brak wyciszonych ofert.")
+        return
+
+    lines = [f"\U0001f515 <b>Wyciszone oferty ({len(deals)})</b>\n"]
+    for d in deals[:20]:
+        until = d.get("muted_until") or ""
+        if until.startswith("9999"):
+            tag = "(stałe)"
+        else:
+            try:
+                tag = "(do " + datetime.fromisoformat(until).strftime("%d.%m.%Y") + ")"
+            except ValueError:
+                tag = ""
+        title = html.escape((d.get("title") or "")[:60])
+        deal_id = html.escape(d.get("id") or "")
+        lines.append(f"• <code>{deal_id}</code> — {title} {tag}")
+
+    msg = "\n".join(lines)
+    await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=True)

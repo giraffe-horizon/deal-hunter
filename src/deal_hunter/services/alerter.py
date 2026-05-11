@@ -9,10 +9,12 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from deal_hunter.core.settings import Settings
+from deal_hunter.services.notification_filter import should_send_price_drop
 
 if TYPE_CHECKING:
+    from deal_hunter.core.notification_config import NotificationConfig
     from deal_hunter.notifiers.telegram import TelegramNotifier
-    from deal_hunter.storage.repositories import AlertQueueRepository
+    from deal_hunter.storage.repositories import AlertQueueRepository, OfferRepository
 
 
 logger = logging.getLogger(__name__)
@@ -62,9 +64,11 @@ class AlertService:
         self,
         telegram: TelegramNotifier | None,
         alert_repo: AlertQueueRepository | None = None,
+        offer_repo: OfferRepository | None = None,
     ) -> None:
         self.telegram = telegram
         self.alert_repo = alert_repo
+        self.offer_repo = offer_repo
 
     def flush_queued(
         self, profile_name: str, profile: dict, topic_id: int | None, max_alerts: int
@@ -108,13 +112,39 @@ class AlertService:
         profile_name: str,
         topic_id: int | None,
         max_alerts: int,
+        notification_config: NotificationConfig | None = None,
     ) -> int:
-        """Send or queue price drop alerts. Returns count sent/queued."""
+        """Filter, then send or queue price drop alerts. Returns count sent/queued."""
         if not drops or not self.telegram:
             return 0
 
+        # Apply per-deal mute + per-profile cooldown filter.
+        if notification_config and self.alert_repo and self.offer_repo:
+            allowed: list[dict] = []
+            for pda in drops:
+                allow, reason = should_send_price_drop(
+                    deal_id=pda["deal"].id,
+                    profile_name=profile_name,
+                    is_all_time_low=bool(pda["price_change"].get("is_lowest_ever")),
+                    config=notification_config,
+                    deal_repo=self.offer_repo,
+                    alert_repo=self.alert_repo,
+                )
+                logger.info(
+                    "price_drop_filter deal=%s allow=%s reason=%s",
+                    pda["deal"].id,
+                    allow,
+                    reason,
+                )
+                if allow:
+                    allowed.append(pda)
+            drops = allowed
+            if not drops:
+                return 0
+
         emoji = profile.get("emoji", "\U0001f50d")
         currency = profile.get("currency", "PLN")
+        snooze_days = notification_config.default_snooze_days if notification_config else 30
 
         drops.sort(key=lambda x: x["price_change"]["diff_percent"], reverse=True)
         count = min(len(drops), max_alerts)
@@ -132,7 +162,7 @@ class AlertService:
                         "diff_percent": pda["price_change"]["diff_percent"],
                     }
                 )
-                self.alert_repo.queue(profile_name, "price_drop", payload)
+                self.alert_repo.queue(profile_name, "price_drop", payload, deal_id=pda["deal"].id)
             logger.info(f"Queued {count} price drop alerts (quiet hours)")
         else:
             for pda in drops[:count]:
@@ -142,6 +172,7 @@ class AlertService:
                     topic_id=topic_id,
                     emoji=emoji,
                     currency=currency,
+                    snooze_days=snooze_days,
                 )
             logger.info(f"Sent {count} price drop alerts for {profile_name}")
         return count
@@ -178,7 +209,7 @@ class AlertService:
                         "minus": a["minus"][:4],
                     }
                 )
-                self.alert_repo.queue(profile_name, "deal", payload)
+                self.alert_repo.queue(profile_name, "deal", payload, deal_id=a["deal"].id)
             logger.info(f"Queued {count} deal alerts (quiet hours)")
             return count
 
