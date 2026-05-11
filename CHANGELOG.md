@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.17.1 (2026-05-11)
+
+### Bug Fixes
+
+- **dashboard**: Chart sizing + script load order
+  ([`27f0cd6`](https://github.com/giraffe-horizon/deal-hunter/commit/27f0cd6298e69741e9eb3bd66e4427ae8b640331))
+
+Load charts.js in <head> so inline page scripts that reference DH_CHART_COLORS /
+  createTrendSparkline can see them at parse time. Wrap trend sparklines and the deal-detail price
+  chart in fixed-height parents so Chart.js (responsive + maintainAspectRatio:false) doesn't expand
+  canvases unboundedly.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+
 ## v0.17.0 (2026-05-11)
 
 ### Documentation
