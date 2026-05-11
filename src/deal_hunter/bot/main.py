@@ -19,7 +19,17 @@ import sys
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler
 
 from deal_hunter.bot.callbacks import handle_callback
-from deal_hunter.bot.commands import cmd_skip, cmd_status, cmd_target, cmd_watch, cmd_watchlist
+from deal_hunter.bot.commands import (
+    cmd_mute,
+    cmd_muted,
+    cmd_skip,
+    cmd_snooze,
+    cmd_status,
+    cmd_target,
+    cmd_unmute,
+    cmd_watch,
+    cmd_watchlist,
+)
 from deal_hunter.core.logging import setup_bot_logging
 from deal_hunter.core.settings import get_settings
 
@@ -28,9 +38,13 @@ logger = logging.getLogger("feedback_bot")
 
 # Re-exports — tests import these from `deal_hunter.bot.main`.
 __all__ = [
+    "cmd_mute",
+    "cmd_muted",
     "cmd_skip",
+    "cmd_snooze",
     "cmd_status",
     "cmd_target",
+    "cmd_unmute",
     "cmd_watch",
     "cmd_watchlist",
     "handle_callback",
@@ -53,6 +67,10 @@ def main() -> None:
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("watchlist", cmd_watchlist))
     app.add_handler(CommandHandler("target", cmd_target))
+    app.add_handler(CommandHandler("mute", cmd_mute))
+    app.add_handler(CommandHandler("snooze", cmd_snooze))
+    app.add_handler(CommandHandler("unmute", cmd_unmute))
+    app.add_handler(CommandHandler("muted", cmd_muted))
 
     logger.info("Feedback bot starting (polling)...")
 
