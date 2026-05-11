@@ -1,0 +1,7 @@
+# Global notification defaults. Per-profile YAML can override
+# `cooldown_days` and `alert_through_cooldown_if_ath_low` in its
+# `price_tracking:` block. `default_snooze_days` is global only.
+price_drop_alerts:
+  cooldown_days: 7
+  alert_through_cooldown_if_ath_low: true
+  default_snooze_days: 30
