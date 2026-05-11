@@ -78,3 +78,15 @@ class BulkRequest(BaseModel):
         if self.action == "set-target" and self.target_price is None:
             raise ValueError("action='set-target' requires 'target_price'")
         return self
+
+
+class GlobalNotificationConfig(BaseModel):
+    cooldown_days: int = Field(ge=0, le=365)
+    alert_through_cooldown_if_ath_low: bool
+    default_snooze_days: int = Field(ge=1, le=365)
+
+
+class MuteRequest(BaseModel):
+    """`days` empty/None → permanent mute; positive int → snooze that many days."""
+
+    days: int | None = Field(default=None, ge=1, le=365)

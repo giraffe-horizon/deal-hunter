@@ -25,13 +25,14 @@ def create_app() -> FastAPI:
     app.middleware("http")(csrf_check)
 
     # Routers — imported locally to avoid eager import at package load time.
-    from deal_hunter.api.routes import alerts, deals, health, profiles, tuner
+    from deal_hunter.api.routes import alerts, deals, health, notifications, profiles, tuner
 
     app.include_router(deals.router)
     app.include_router(profiles.router)
     app.include_router(alerts.router)
     app.include_router(tuner.router)
     app.include_router(health.router)
+    app.include_router(notifications.router)
 
     @app.get("/")
     def index() -> RedirectResponse:
