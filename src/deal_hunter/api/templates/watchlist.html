@@ -4,6 +4,17 @@
 {% block page_title %}Watchlist{% endblock %}
 {% block content %}
 
+<div class="flex gap-2 mb-4">
+    <a href="/watchlist"
+       class="px-3 py-1 rounded-full text-sm transition-colors {% if view_mode != 'muted' %}bg-primary text-on-primary{% else %}bg-surface-container text-on-surface-variant hover:bg-surface-container-high{% endif %}">
+        Obserwowane
+    </a>
+    <a href="/watchlist?muted=1"
+       class="px-3 py-1 rounded-full text-sm transition-colors {% if view_mode == 'muted' %}bg-primary text-on-primary{% else %}bg-surface-container text-on-surface-variant hover:bg-surface-container-high{% endif %}">
+        Wyciszone
+    </a>
+</div>
+
 {% if deals %}
 <div class="bg-surface-container-low rounded-card overflow-hidden">
     <div id="deals-table" class="overflow-x-auto">

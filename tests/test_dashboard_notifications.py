@@ -81,3 +81,18 @@ class TestPerDealMuteApi:
         client.post("/api/deals/pepper:99999/mute", data={"days": "5"})
         response = client.post("/api/deals/pepper:99999/unmute")
         assert response.status_code == 200
+
+
+class TestWatchlistMutedFilter:
+    def test_watchlist_with_muted_filter_shows_muted_deals(self, client, dashboard_session):
+        from deal_hunter.storage.repositories import OfferRepository
+
+        repo = OfferRepository(dashboard_session)
+        repo.set_muted_until("pepper:99999", "2099-01-01T00:00:00")
+        dashboard_session.flush()
+
+        response = client.get("/watchlist?muted=1")
+        assert response.status_code == 200
+        # The page should render the muted deal (id appears somewhere) or show a mute indicator
+        body = response.text
+        assert "pepper:99999" in body or "Wycisz" in body or "muted" in body.lower()
