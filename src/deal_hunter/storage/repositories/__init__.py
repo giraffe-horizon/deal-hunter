@@ -25,6 +25,7 @@ from deal_hunter.storage.repositories.product import (
     ProductRepository,
 )
 from deal_hunter.storage.repositories.seen_deal import SeenDealRepository
+from deal_hunter.storage.repositories.sent_notification import SentNotificationRepository
 from deal_hunter.storage.repositories.watchlist import WatchlistRepository
 
 __all__ = [
@@ -41,5 +42,6 @@ __all__ = [
     "ProductAliasRepository",
     "ProductRepository",
     "SeenDealRepository",
+    "SentNotificationRepository",
     "WatchlistRepository",
 ]
