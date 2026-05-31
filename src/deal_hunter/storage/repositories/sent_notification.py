@@ -80,6 +80,16 @@ class SentNotificationRepository:
             stmt = stmt.where(SentNotification.sent_at >= since)
         return self.session.execute(stmt).scalar() or 0
 
+    def distinct_profiles(self) -> list[str]:
+        """Return sorted list of distinct non-NULL profile values."""
+        stmt = (
+            select(SentNotification.profile)
+            .where(SentNotification.profile.is_not(None))
+            .distinct()
+            .order_by(SentNotification.profile)
+        )
+        return list(self.session.scalars(stmt))
+
     @staticmethod
     def _to_dict(row: SentNotification) -> dict:
         try:

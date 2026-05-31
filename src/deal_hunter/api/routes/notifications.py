@@ -141,9 +141,7 @@ def notifications_history_page(
         managed_profiles = list(_get_mgr().list_all())
     except Exception:
         managed_profiles = []
-    profile_options = sorted(
-        set(managed_profiles) | {r["profile"] for r in repo.list_recent(limit=500) if r["profile"]}
-    )
+    profile_options = sorted(set(managed_profiles) | set(repo.distinct_profiles()))
 
     template = (
         "partials/notifications_history_table.html"

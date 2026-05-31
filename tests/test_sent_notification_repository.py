@@ -162,3 +162,29 @@ class TestCount:
         assert repo.count(alert_type="deal") == 7
         assert repo.count(profile="bikes") == 7
         assert repo.count(alert_type="price_drop", profile="hifi") == 1
+
+
+class TestDistinctProfiles:
+    def test_empty_table_returns_empty_list(self, repo):
+        assert repo.distinct_profiles() == []
+
+    def test_returns_only_non_null_profiles(self, session, repo):
+        repo.record(alert_type="deal", payload_json="{}", profile="bikes")
+        repo.record(alert_type="deal", payload_json="{}", profile="hifi")
+        repo.record(alert_type="digest", payload_json="{}")  # NULL profile
+        session.flush()
+        result = repo.distinct_profiles()
+        assert set(result) == {"bikes", "hifi"}
+
+    def test_deduplicates_repeated_profiles(self, session, repo):
+        for _ in range(5):
+            repo.record(alert_type="deal", payload_json="{}", profile="bikes")
+        session.flush()
+        assert repo.distinct_profiles() == ["bikes"]
+
+    def test_result_is_sorted(self, session, repo):
+        repo.record(alert_type="deal", payload_json="{}", profile="z")
+        repo.record(alert_type="deal", payload_json="{}", profile="a")
+        repo.record(alert_type="deal", payload_json="{}", profile="m")
+        session.flush()
+        assert repo.distinct_profiles() == ["a", "m", "z"]
