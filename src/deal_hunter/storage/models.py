@@ -238,3 +238,19 @@ class FxRate(Base):
     rate_to_pln: Mapped[float] = mapped_column(nullable=False)
     fetched_at: Mapped[str] = mapped_column(String, nullable=False)
     table_no: Mapped[str | None] = mapped_column(String, default=None)
+
+
+class SentNotification(Base):
+    __tablename__ = "sent_notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    alert_type: Mapped[str] = mapped_column(String, nullable=False)
+    deal_id: Mapped[str | None] = mapped_column(String, default=None)
+    profile: Mapped[str | None] = mapped_column(String, default=None)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    sent_at: Mapped[str] = mapped_column(String, nullable=False)
+
+    __table_args__ = (
+        Index("ix_sent_notifications_deal_id_alert_type", "deal_id", "alert_type", "sent_at"),
+        Index("ix_sent_notifications_sent_at", "sent_at"),
+    )
