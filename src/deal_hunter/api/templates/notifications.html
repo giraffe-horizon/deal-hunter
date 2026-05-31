@@ -1,8 +1,11 @@
 {% extends "base.html" %}
 {% set active_page = "notifications" %}
+{% set subnav_active = "settings" %}
 {% block title %}Notifications — DealMonitor{% endblock %}
 {% block page_title %}Notifications{% endblock %}
 {% block content %}
+
+{% include "partials/notifications_subnav.html" %}
 
 <div class="bg-surface-container-low rounded-card p-6 max-w-2xl">
     <h2 class="font-headline text-lg font-semibold mb-4">Global notification defaults</h2>

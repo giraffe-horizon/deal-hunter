@@ -49,6 +49,7 @@ class TestTableCreation:
             "match_reviews",
             "match_decisions",
             "fx_rates",
+            "sent_notifications",
         }
 
     def test_deals_columns(self, engine):
@@ -95,6 +96,17 @@ class TestTableCreation:
     def test_seen_deals_columns(self, engine):
         cols = {c["name"] for c in inspect(engine).get_columns("seen_deals")}
         assert cols == {"id", "deal_id", "profile", "dedup_key", "first_seen_at"}
+
+    def test_sent_notifications_columns(self, engine):
+        cols = {c["name"] for c in inspect(engine).get_columns("sent_notifications")}
+        assert cols == {
+            "id",
+            "alert_type",
+            "deal_id",
+            "profile",
+            "payload",
+            "sent_at",
+        }
 
 
 class TestDealModel:

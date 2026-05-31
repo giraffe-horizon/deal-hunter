@@ -9,12 +9,17 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from deal_hunter.core.settings import Settings
+from deal_hunter.notifiers.telegram.recorder import record_sent_notification
 from deal_hunter.services.notification_filter import should_send_price_drop
 
 if TYPE_CHECKING:
     from deal_hunter.core.notification_config import NotificationConfig
     from deal_hunter.notifiers.telegram import TelegramNotifier
-    from deal_hunter.storage.repositories import AlertQueueRepository, OfferRepository
+    from deal_hunter.storage.repositories import (
+        AlertQueueRepository,
+        OfferRepository,
+        SentNotificationRepository,
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -65,10 +70,12 @@ class AlertService:
         telegram: TelegramNotifier | None,
         alert_repo: AlertQueueRepository | None = None,
         offer_repo: OfferRepository | None = None,
+        sent_repo: SentNotificationRepository | None = None,
     ) -> None:
         self.telegram = telegram
         self.alert_repo = alert_repo
         self.offer_repo = offer_repo
+        self.sent_repo = sent_repo
 
     def flush_queued(
         self, profile_name: str, profile: dict, topic_id: int | None, max_alerts: int
@@ -82,10 +89,11 @@ class AlertService:
             return 0
 
         flush_count = min(len(pending), max_alerts)
+        flushed_ids: list[int] = []
         for alert_data in pending[:flush_count]:
             payload = json.loads(alert_data["payload"])
             if alert_data["alert_type"] == "deal":
-                self.telegram.send_text(
+                ok = self.telegram.send_text(
                     f"\U0001f514 Zakolejkowany alert:\n"
                     f"<b>{html.escape(payload.get('title', ''))}</b>\n"
                     f"\U0001f4b0 {payload.get('price', 0):,} PLN\n"
@@ -94,16 +102,32 @@ class AlertService:
                     topic_id=topic_id,
                 )
             elif alert_data["alert_type"] == "price_drop":
-                self.telegram.send_text(
+                ok = self.telegram.send_text(
                     f"\U0001f514 Zakolejkowany spadek ceny:\n"
                     f"<b>{html.escape(payload.get('title', ''))}</b>\n"
                     f"{payload.get('old_price', 0):,}"
                     f" \u2192 {payload.get('new_price', 0):,} PLN",
                     topic_id=topic_id,
                 )
-        self.alert_repo.mark_sent([p["id"] for p in pending[:flush_count]])
-        logger.info(f"Flushed {flush_count} queued alerts for {profile_name}")
-        return flush_count
+            else:
+                ok = self.telegram.send_text(
+                    f"\U0001f514 Zakolejkowany alert ({alert_data['alert_type']})",
+                    topic_id=topic_id,
+                )
+
+            if ok:
+                record_sent_notification(
+                    alert_type=alert_data["alert_type"],
+                    payload=payload,
+                    deal_id=alert_data.get("deal_id"),
+                    profile=profile_name,
+                )
+                flushed_ids.append(alert_data["id"])
+
+        if flushed_ids:
+            self.alert_repo.mark_sent(flushed_ids)
+        logger.info(f"Flushed {len(flushed_ids)} queued alerts for {profile_name}")
+        return len(flushed_ids)
 
     def send_price_drop_alerts(
         self,
@@ -119,7 +143,7 @@ class AlertService:
             return 0
 
         # Apply per-deal mute + per-profile cooldown filter.
-        if notification_config and self.alert_repo and self.offer_repo:
+        if notification_config and self.offer_repo and self.sent_repo:
             allowed: list[dict] = []
             for pda in drops:
                 allow, reason = should_send_price_drop(
@@ -128,7 +152,7 @@ class AlertService:
                     is_all_time_low=bool(pda["price_change"].get("is_lowest_ever")),
                     config=notification_config,
                     deal_repo=self.offer_repo,
-                    alert_repo=self.alert_repo,
+                    sent_repo=self.sent_repo,
                 )
                 logger.info(
                     "price_drop_filter deal=%s allow=%s reason=%s",
@@ -173,6 +197,7 @@ class AlertService:
                     emoji=emoji,
                     currency=currency,
                     snooze_days=snooze_days,
+                    profile=profile_name,
                 )
             logger.info(f"Sent {count} price drop alerts for {profile_name}")
         return count
@@ -231,6 +256,7 @@ class AlertService:
                 topic_id=topic_id,
                 emoji=emoji,
                 currency=currency,
+                profile=profile_name,
             )
 
         if remaining:
@@ -239,6 +265,7 @@ class AlertService:
                 topic_id=topic_id,
                 emoji=emoji,
                 currency=currency,
+                profile=profile_name,
             )
 
         return len(top_alerts)
@@ -258,4 +285,9 @@ class AlertService:
             lines.append(f"  \u2022 {name}: {count} consecutive failures (last success: {last})")
 
         msg = "\u26a0\ufe0f Deal Hunter: source failures detected!\n\n" + "\n".join(lines)
-        self.telegram.send_text(msg, topic_id=topic_id)
+        if self.telegram.send_text(msg, topic_id=topic_id):
+            record_sent_notification(
+                alert_type="source_failure",
+                payload={"text_preview": msg[:200]},
+                profile=None,
+            )

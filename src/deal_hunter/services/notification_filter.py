@@ -11,7 +11,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from deal_hunter.core.notification_config import NotificationConfig
-    from deal_hunter.storage.repositories import AlertQueueRepository, OfferRepository
+    from deal_hunter.storage.repositories import (
+        OfferRepository,
+        SentNotificationRepository,
+    )
 
 
 def should_send_price_drop(
@@ -21,7 +24,7 @@ def should_send_price_drop(
     is_all_time_low: bool,
     config: NotificationConfig,
     deal_repo: OfferRepository,
-    alert_repo: AlertQueueRepository,
+    sent_repo: SentNotificationRepository,
     now: datetime | None = None,
 ) -> tuple[bool, str]:
     """Returns (allow, reason). reason is for logging."""
@@ -36,14 +39,13 @@ def should_send_price_drop(
     if config.cooldown_days <= 0:
         return True, "ok"
 
-    last_sent = alert_repo.last_price_drop_sent_at(deal_id)
+    last_sent = sent_repo.last_sent_at(deal_id, "price_drop")
     if not last_sent:
         return True, "ok"
 
     try:
         last_sent_dt = datetime.fromisoformat(last_sent)
     except ValueError:
-        # Malformed timestamp — fail open (better to alert than to suppress silently).
         return True, "ok"
 
     cooldown_expires = last_sent_dt + timedelta(days=config.cooldown_days)

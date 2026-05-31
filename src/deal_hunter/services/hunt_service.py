@@ -29,6 +29,7 @@ from deal_hunter.storage.repositories import (
     OfferRepository,
     PriceRepository,
     SeenDealRepository,
+    SentNotificationRepository,
     WatchlistRepository,
 )
 
@@ -123,11 +124,14 @@ def run_profile(
         watchlist_repo = WatchlistRepository(session)
         alert_repo = AlertQueueRepository(session)
         offer_repo = OfferRepository(session)
+        sent_repo = SentNotificationRepository(session)
         global_notif = load_global_config(get_settings().base_dir / "config" / "notifications.yaml")
         notification_config = resolve_for_profile(global_notif, profile)
 
         price_tracker = PriceTracker(price_repo)
-        alert_service = AlertService(telegram, alert_repo, offer_repo=offer_repo)
+        alert_service = AlertService(
+            telegram, alert_repo, offer_repo=offer_repo, sent_repo=sent_repo
+        )
 
         seen_ids = seen_repo.get_seen_ids(profile_name)
 
@@ -184,6 +188,7 @@ def run_profile(
                         current_price=deal.price,
                         topic_id=tg_topic,
                         currency=currency,
+                        profile=profile_name,
                     )
                     watchlist_repo.mark_triggered(deal.id)
                     logger.info(

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% set active_page = "notifications" %}
+{% set subnav_active = "history" %}
+{% block title %}Notification history — DealMonitor{% endblock %}
+{% block page_title %}Notification history{% endblock %}
+{% block content %}
+
+{% include "partials/notifications_subnav.html" %}
+
+<form method="get" action="/notifications/history"
+      class="flex flex-wrap items-end gap-3 mb-4">
+    <div>
+        <label class="block text-xs font-medium text-on-surface-variant mb-1" for="alert_type">Type</label>
+        <select name="alert_type" id="alert_type"
+                class="bg-surface-container rounded-card px-3 py-2 text-sm">
+            <option value="">Wszystkie</option>
+            {% for t in ["deal", "price_drop", "summary", "watchlist", "digest", "source_failure", "chart"] %}
+                <option value="{{ t }}" {% if alert_type == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="block text-xs font-medium text-on-surface-variant mb-1" for="profile">Profile</label>
+        <select name="profile" id="profile"
+                class="bg-surface-container rounded-card px-3 py-2 text-sm">
+            <option value="">Wszystkie</option>
+            {% for p in profile_options %}
+                <option value="{{ p }}" {% if profile == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit"
+            class="bg-primary text-on-primary px-4 py-2 rounded-card text-sm font-medium">
+        Filter
+    </button>
+</form>
+
+<div id="history-table" class="bg-surface-container-low rounded-card overflow-hidden">
+    {% include "partials/notifications_history_table.html" %}
+</div>
+
+{% if total_pages > 1 %}
+<div class="flex justify-center gap-2 mt-4">
+    {% if page > 1 %}
+        <a href="?page={{ page - 1 }}{% if alert_type %}&alert_type={{ alert_type }}{% endif %}{% if profile %}&profile={{ profile }}{% endif %}"
+           class="px-3 py-1 rounded-card text-sm bg-surface-container">← Prev</a>
+    {% endif %}
+    <span class="text-sm self-center text-on-surface-variant">Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}{% if alert_type %}&alert_type={{ alert_type }}{% endif %}{% if profile %}&profile={{ profile }}{% endif %}"
+           class="px-3 py-1 rounded-card text-sm bg-surface-container">Next →</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

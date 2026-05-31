@@ -6,6 +6,7 @@ import logging
 
 from deal_hunter.core.settings import get_settings
 from deal_hunter.notifiers.telegram import TelegramNotifier
+from deal_hunter.notifiers.telegram.recorder import record_sent_notification
 from deal_hunter.services.runtime import get_topic_id
 from deal_hunter.storage.database import get_session
 from deal_hunter.storage.repositories import PriceRepository
@@ -54,13 +55,22 @@ def run_digest() -> None:
         from deal_hunter.visualization.charts import generate_digest_chart
 
         chart_path = generate_digest_chart(drops)
-        telegram.send_photo(
+        if _send_digest_chart(
+            telegram,
             str(chart_path),
             caption="\U0001f4ca Najwi\u0119ksze spadki cen (ostatni tydzie\u0144)",
-            topic_id=topic_id,
-        )
-        print("Digest chart sent to Telegram.")
+        ):
+            print("Digest chart sent to Telegram.")
     except ImportError:
         logger.info("matplotlib not installed — skipping digest chart")
     except Exception as e:
         logger.warning(f"Failed to generate digest chart: {e}")
+
+
+def _send_digest_chart(telegram: TelegramNotifier, chart_path: str, *, caption: str) -> bool:
+    """Send digest chart + record the dispatch. Returns True on success."""
+    topic_id = get_topic_id()
+    if telegram.send_photo(chart_path, caption=caption, topic_id=topic_id):
+        record_sent_notification(alert_type="chart", payload={"caption": caption})
+        return True
+    return False

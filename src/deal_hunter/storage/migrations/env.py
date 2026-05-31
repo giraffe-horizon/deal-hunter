@@ -16,7 +16,10 @@ from deal_hunter.storage.models import Base  # noqa: E402
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False is essential under pytest: without it,
+    # fileConfig() disables the caplog handler attached to non-alembic loggers
+    # and any subsequent caplog-based assertion in the same session breaks.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
