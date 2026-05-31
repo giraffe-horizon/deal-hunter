@@ -381,3 +381,125 @@ def test_alert_service_filters_muted_deal_before_send(monkeypatch):
         )
         assert sent == 0
         assert alert_repo.get_pending() == []
+
+
+class TestAlertServiceRecording:
+    """Verifies the alerter threads `profile` and records generic sends."""
+
+    def _setup(self, monkeypatch):
+        from deal_hunter.notifiers.telegram import transport as tr
+
+        captured: list[dict] = []
+
+        def _capture(**kw):
+            captured.append(kw)
+
+        # Patch BOTH the transport import and the alerter import (alerter
+        # imports record_sent_notification directly).
+        monkeypatch.setattr(tr, "record_sent_notification", _capture)
+        from deal_hunter.services import alerter as alerter_mod
+
+        monkeypatch.setattr(alerter_mod, "record_sent_notification", _capture)
+        return captured
+
+    def test_send_deal_alerts_passes_profile(self, monkeypatch):
+        from deal_hunter.services.alerter import AlertService
+
+        self._setup(monkeypatch)
+
+        recorded_kwargs: list[dict] = []
+
+        class FakeTG:
+            def send_alert(self, *a, **k):
+                recorded_kwargs.append(k)
+
+            def send_summary(self, *a, **k):
+                recorded_kwargs.append(k)
+
+        svc = AlertService(FakeTG())
+        deal = type("D", (), {"id": "pepper:1", "title": "x", "price": 100, "link": ""})()
+        svc.send_deal_alerts(
+            [{"deal": deal, "score": 80, "plus": [], "minus": []}],
+            profile={},
+            profile_name="bikes",
+            topic_id=None,
+            max_alerts=5,
+        )
+        assert recorded_kwargs[0]["profile"] == "bikes"
+
+    def test_flush_queued_records_each_flushed_alert(self, monkeypatch):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        from deal_hunter.services.alerter import AlertService
+        from deal_hunter.storage.models import Base
+        from deal_hunter.storage.repositories import AlertQueueRepository
+
+        captured = self._setup(monkeypatch)
+        eng = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(eng)
+        with Session(eng) as session:
+            alert_repo = AlertQueueRepository(session)
+            alert_repo.queue(
+                "bikes",
+                "price_drop",
+                '{"deal_id":"pepper:1","title":"x","old_price":200,"new_price":100}',
+                deal_id="pepper:1",
+            )
+            session.commit()
+
+            class FakeTG:
+                def send_text(self, *_a, **_k):
+                    return True  # success
+
+            svc = AlertService(FakeTG(), alert_repo)
+            sent = svc.flush_queued("bikes", profile={}, topic_id=None, max_alerts=5)
+            assert sent == 1
+        assert len(captured) == 1
+        assert captured[0]["alert_type"] == "price_drop"
+        assert captured[0]["deal_id"] == "pepper:1"
+        assert captured[0]["profile"] == "bikes"
+
+    def test_flush_queued_does_not_record_or_mark_sent_on_send_failure(self, monkeypatch):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        from deal_hunter.services.alerter import AlertService
+        from deal_hunter.storage.models import Base
+        from deal_hunter.storage.repositories import AlertQueueRepository
+
+        captured = self._setup(monkeypatch)
+        eng = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(eng)
+        with Session(eng) as session:
+            alert_repo = AlertQueueRepository(session)
+            alert_repo.queue("bikes", "deal", "{}", deal_id="pepper:1")
+            session.commit()
+
+            class FakeTG:
+                def send_text(self, *_a, **_k):
+                    return False  # failure
+
+            sent = AlertService(FakeTG(), alert_repo).flush_queued("bikes", {}, None, 5)
+            # Failed send → not recorded AND not marked-sent (still pending next run).
+            assert sent == 0
+            assert len(alert_repo.get_pending(profile="bikes")) == 1
+        assert captured == []
+
+    def test_send_source_failure_alert_records(self, monkeypatch):
+        from deal_hunter.services.alerter import AlertService
+
+        captured = self._setup(monkeypatch)
+
+        class FakeTG:
+            def send_text(self, *_a, **_k):
+                return True
+
+        svc = AlertService(FakeTG())
+        svc.send_source_failure_alert(
+            ["pepper"], {"pepper": {"consecutive_failures": 5, "last_success": "n"}}, None
+        )
+        assert len(captured) == 1
+        assert captured[0]["alert_type"] == "source_failure"
+        assert captured[0]["profile"] is None
+        assert "text_preview" in captured[0]["payload"]

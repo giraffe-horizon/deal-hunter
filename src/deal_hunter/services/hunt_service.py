@@ -184,6 +184,7 @@ def run_profile(
                         current_price=deal.price,
                         topic_id=tg_topic,
                         currency=currency,
+                        profile=profile_name,
                     )
                     watchlist_repo.mark_triggered(deal.id)
                     logger.info(
