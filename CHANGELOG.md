@@ -1,6 +1,138 @@
 # CHANGELOG
 
 
+## v0.18.0 (2026-05-31)
+
+### Bug Fixes
+
+- **migrations**: Preserve existing loggers in env.py fileConfig
+  ([`d7798bb`](https://github.com/giraffe-horizon/deal-hunter/commit/d7798bb97d5cded1954db9306611561dda950f1e))
+
+Without `disable_existing_loggers=False`, alembic's fileConfig() nukes the caplog handler attached
+  to non-alembic loggers, breaking any caplog-based assertion that runs in the same pytest session
+  after a migration test (e.g. test_recorder.py).
+
+Surfaced during smoke test of the sent-notifications branch (Task 4 of the plan), but the root cause
+  is pre-existing.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+### Chores
+
+- **ci**: Remove Claude Code workflows
+  ([`0e10c52`](https://github.com/giraffe-horizon/deal-hunter/commit/0e10c5295dfa3a49e1fac9d4b2a32545f2e4875e))
+
+Drops the two GitHub Actions workflows that called the anthropic/claude-code-action: claude.yml
+  (interactive @claude trigger) and claude-code-review.yml (auto-review on PR open/sync).
+
+Remaining workflows: ci.yml (lint + tests), docker.yml (image build), release.yml.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+- **docker**: Auto-run alembic migrations via one-shot compose service
+  ([`160d24a`](https://github.com/giraffe-horizon/deal-hunter/commit/160d24a1e81b4bb762201a3f0716ee9e82aa2a64))
+
+Adds `deal-hunter-migrate` — a short-lived container that runs `alembic upgrade head` against the
+  mounted `./state` volume and exits. The cron, bot, and dashboard services now depend on it via
+  `condition: service_completed_successfully`, so deploys that bring in new schema (e.g. migration
+  006's `offers.muted_until`) never hit "no such column" 500s on first request.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+### Documentation
+
+- Add sent-notifications design spec
+  ([`2fe7cff`](https://github.com/giraffe-horizon/deal-hunter/commit/2fe7cff4431a88536dafdec169152fc04c57a74a))
+
+Persist every successful Telegram send into a new sent_notifications table, expose a dashboard
+  /notifications/history view, and re-point the per-deal cooldown query at the new table (fixing the
+  latent bug where cooldown only fires during quiet hours).
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+- Add sent-notifications implementation plan
+  ([`99c0b4d`](https://github.com/giraffe-horizon/deal-hunter/commit/99c0b4d28a659f32854ee9c49d39d775856455d3))
+
+10 tasks, TDD per task: migration -> repository -> recorder -> transport returns bool -> typed
+  senders record -> alerter plumbing + generic-send recording -> chart-send recording -> cooldown
+  query switch -> dashboard /notifications/history -> smoke test.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+### Features
+
+- **alerter**: Thread profile + record flush_queued/source_failure
+  ([`126d3b5`](https://github.com/giraffe-horizon/deal-hunter/commit/126d3b5db3b51dca7cd71ba79b761544fc5524da))
+
+- Import record_sent_notification in alerter and call it from flush_queued (only on successful send,
+  fixes silent drop on Telegram failure) and send_source_failure_alert. - flush_queued now only
+  marks alerts as sent when Telegram confirms success, preventing silent loss on transient failures.
+  - Thread profile=profile_name through send_price_drop_alerts, send_deal_alerts (send_alert +
+  send_summary), and hunt_service.send_watchlist_alert. - Add TestAlertServiceRecording (4 tests)
+  covering all new behaviour.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **charts**: Record chart sends in digest_service + chart_service
+  ([`8de1cb2`](https://github.com/giraffe-horizon/deal-hunter/commit/8de1cb27178e8376edc079902bbd736f330ceaa9))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **dashboard**: Add /notifications/history page + Settings|History sub-nav
+  ([`c856eca`](https://github.com/giraffe-horizon/deal-hunter/commit/c856ecacb81bd0440618a0c1ff4a5ada3456468f))
+
+Adds a paginated, filterable notification history page at /notifications/history backed by
+  SentNotificationRepository.list_recent/count, with a shared sub-nav partial that links the
+  Settings and History pages together on both templates.
+
+- **db**: Add sent_notifications table (migration 007)
+  ([`aeea675`](https://github.com/giraffe-horizon/deal-hunter/commit/aeea675bb94af2fa791807b69cb4bb37c67da2ee))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **filter**: Cooldown reads from sent_notifications; drop alert_queue lookup
+  ([`e0be91f`](https://github.com/giraffe-horizon/deal-hunter/commit/e0be91ff717b3f3e2341c9a28e7f3924498776b7))
+
+Re-points should_send_price_drop at SentNotificationRepository.last_sent_at so the cooldown fires
+  for all direct-sent alerts, not just quiet-hours-queued ones. Removes
+  AlertQueueRepository.last_price_drop_sent_at (no longer needed).
+
+- **repo**: Add SentNotificationRepository
+  ([`bab83b9`](https://github.com/giraffe-horizon/deal-hunter/commit/bab83b99dffbfb61cfc23630b76f77eea888404f))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **telegram**: Add fire-and-forget sent-notification recorder
+  ([`d3c98cc`](https://github.com/giraffe-horizon/deal-hunter/commit/d3c98cc7c0a8b6cd79de4dc57bd9632231b83598))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **telegram**: Transport methods return bool (success)
+  ([`7ba8ea1`](https://github.com/giraffe-horizon/deal-hunter/commit/7ba8ea1c90765efbe3392fa6cfebeb612896b809))
+
+_send_message, send_photo, and send_text now return True on HTTP 200 and False after all retry
+  attempts are exhausted, enabling callers to conditionally record a successful send.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+- **telegram**: Typed send_* methods record on success
+  ([`7231289`](https://github.com/giraffe-horizon/deal-hunter/commit/7231289bac64d14fef3c4a268452e28c58e5a483))
+
+Each of the five typed send_* methods now imports record_sent_notification and calls it after a
+  successful _send_message return, passing the appropriate alert_type, payload shape, deal_id, and
+  profile. Failures skip recording. Added TestRecordingFromTypedSends (6 tests) to verify the
+  wiring.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+### Performance Improvements
+
+- **repo**: Add distinct_profiles() for history profile dropdown
+  ([`597d7e8`](https://github.com/giraffe-horizon/deal-hunter/commit/597d7e8b1271f6d78d125e92fde508700a6153b0))
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+
 ## v0.17.1 (2026-05-11)
 
 ### Bug Fixes
