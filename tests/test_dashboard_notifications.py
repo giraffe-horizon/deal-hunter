@@ -96,3 +96,85 @@ class TestWatchlistMutedFilter:
         # The page should render the muted deal (id appears somewhere) or show a mute indicator
         body = response.text
         assert "pepper:99999" in body or "Wycisz" in body or "muted" in body.lower()
+
+
+class TestNotificationsHistoryPage:
+    def test_history_page_renders_empty_state(self, client):
+        response = client.get("/notifications/history")
+        assert response.status_code == 200
+        # No rows; either an "empty" element or the title
+        assert "Notification history" in response.text or "Brak" in response.text
+
+    def test_history_page_shows_recent_send(self, client, dashboard_session):
+        from datetime import datetime
+
+        from deal_hunter.storage.repositories import SentNotificationRepository
+
+        SentNotificationRepository(dashboard_session).record(
+            alert_type="price_drop",
+            payload_json='{"title": "TestDeal99"}',
+            deal_id="pepper:99999",
+            profile="bikes",
+            sent_at=datetime.now().isoformat(),
+        )
+        dashboard_session.flush()
+
+        response = client.get("/notifications/history")
+        assert response.status_code == 200
+        assert "TestDeal99" in response.text or "pepper:99999" in response.text
+
+    def test_history_filter_by_alert_type(self, client, dashboard_session):
+        from deal_hunter.storage.repositories import SentNotificationRepository
+
+        repo = SentNotificationRepository(dashboard_session)
+        repo.record(alert_type="deal", payload_json='{"title": "Deal-A"}')
+        repo.record(alert_type="price_drop", payload_json='{"title": "Drop-B"}')
+        dashboard_session.flush()
+
+        response = client.get("/notifications/history?alert_type=price_drop")
+        assert response.status_code == 200
+        assert "Drop-B" in response.text
+        assert "Deal-A" not in response.text
+
+    def test_history_filter_by_profile(self, client, dashboard_session):
+        from deal_hunter.storage.repositories import SentNotificationRepository
+
+        repo = SentNotificationRepository(dashboard_session)
+        repo.record(alert_type="deal", payload_json='{"title": "Bikes-X"}', profile="bikes")
+        repo.record(alert_type="deal", payload_json='{"title": "Hifi-Y"}', profile="hifi")
+        dashboard_session.flush()
+
+        response = client.get("/notifications/history?profile=bikes")
+        assert response.status_code == 200
+        assert "Bikes-X" in response.text
+        assert "Hifi-Y" not in response.text
+
+    def test_history_pagination(self, client, dashboard_session):
+        from deal_hunter.storage.repositories import SentNotificationRepository
+
+        repo = SentNotificationRepository(dashboard_session)
+        for i in range(60):
+            repo.record(
+                alert_type="deal",
+                payload_json=f'{{"title": "Row-{i:02d}"}}',
+                sent_at=f"2026-05-12T{i // 60:02d}:{i % 60:02d}:00",
+            )
+        dashboard_session.flush()
+
+        page1 = client.get("/notifications/history?page=1")
+        page2 = client.get("/notifications/history?page=2")
+        assert page1.status_code == 200
+        assert page2.status_code == 200
+        page1_rows = {f"Row-{i:02d}" for i in range(60) if f"Row-{i:02d}" in page1.text}
+        page2_rows = {f"Row-{i:02d}" for i in range(60) if f"Row-{i:02d}" in page2.text}
+        assert len(page1_rows) == 50
+        assert len(page2_rows) == 10
+        assert page1_rows.isdisjoint(page2_rows)
+
+    def test_subnav_present_on_both_pages(self, client):
+        for path in ("/notifications", "/notifications/history"):
+            response = client.get(path)
+            assert response.status_code == 200
+            # Sub-nav has both labels
+            assert "Settings" in response.text
+            assert "History" in response.text

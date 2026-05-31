@@ -1,0 +1,37 @@
+{% if rows %}
+<table class="w-full text-sm">
+    <thead class="text-left text-xs text-on-surface-variant uppercase">
+        <tr>
+            <th class="px-3 py-2">Time</th>
+            <th class="px-3 py-2">Type</th>
+            <th class="px-3 py-2">Profile</th>
+            <th class="px-3 py-2">Subject</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        <tr class="border-t border-outline-variant/30">
+            <td class="px-3 py-2 text-on-surface-variant" title="{{ r.sent_at }}">{{ r.sent_at }}</td>
+            <td class="px-3 py-2">
+                <span class="px-2 py-0.5 rounded-full text-xs bg-secondary/10 text-secondary">{{ r.alert_type }}</span>
+            </td>
+            <td class="px-3 py-2">{{ r.profile or '—' }}</td>
+            <td class="px-3 py-2">
+                {% set title = r.payload.get('title') if r.payload is mapping else None %}
+                {% if title %}
+                    <span class="font-medium">{{ title }}</span>
+                {% elif r.deal_id %}
+                    <code class="text-xs">{{ r.deal_id }}</code>
+                {% else %}
+                    <span class="text-on-surface-variant text-xs">—</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="px-4 py-8 text-center text-on-surface-variant text-sm">
+    Brak wysłanych powiadomień.
+</div>
+{% endif %}

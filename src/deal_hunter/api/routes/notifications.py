@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from deal_hunter.api import templates
-from deal_hunter.api.dependencies import get_db
+from deal_hunter.api.dependencies import _get_mgr, get_db
 from deal_hunter.api.schemas import GlobalNotificationConfig, MuteRequest
 from deal_hunter.core.notification_config import (
     NotificationConfig,
@@ -19,7 +19,7 @@ from deal_hunter.core.notification_config import (
     save_global_config,
 )
 from deal_hunter.core.settings import get_settings
-from deal_hunter.storage.repositories import OfferRepository
+from deal_hunter.storage.repositories import OfferRepository, SentNotificationRepository
 
 PERMANENT_MUTE_SENTINEL = "9999-12-31T00:00:00"
 
@@ -111,3 +111,55 @@ def api_deal_unmute(
     if not ok:
         raise HTTPException(status_code=404, detail="Deal not found")
     return JSONResponse({"ok": True})
+
+
+_HISTORY_PER_PAGE = 50
+
+
+@router.get("/notifications/history", response_class=HTMLResponse)
+def notifications_history_page(
+    request: Request,
+    page: int = 1,
+    alert_type: str | None = None,
+    profile: str | None = None,
+    session: Session = Depends(get_db),
+) -> HTMLResponse:
+    repo = SentNotificationRepository(session)
+    page = max(1, page)
+    rows = repo.list_recent(
+        limit=_HISTORY_PER_PAGE,
+        offset=(page - 1) * _HISTORY_PER_PAGE,
+        alert_type=alert_type or None,
+        profile=profile or None,
+    )
+    total = repo.count(alert_type=alert_type or None, profile=profile or None)
+    total_pages = max(1, (total + _HISTORY_PER_PAGE - 1) // _HISTORY_PER_PAGE)
+
+    # Profile dropdown: union of profiles managed by ProfileManager and any
+    # historic profile values seen in the table (so retired profiles still appear).
+    try:
+        managed_profiles = list(_get_mgr().list_all())
+    except Exception:
+        managed_profiles = []
+    profile_options = sorted(
+        set(managed_profiles) | {r["profile"] for r in repo.list_recent(limit=500) if r["profile"]}
+    )
+
+    template = (
+        "partials/notifications_history_table.html"
+        if request.headers.get("HX-Request")
+        else "notifications_history.html"
+    )
+
+    return templates.TemplateResponse(
+        request,
+        template,
+        {
+            "rows": rows,
+            "page": page,
+            "total_pages": total_pages,
+            "alert_type": alert_type,
+            "profile": profile,
+            "profile_options": profile_options,
+        },
+    )
