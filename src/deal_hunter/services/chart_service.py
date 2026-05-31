@@ -6,6 +6,7 @@ import sys
 
 from deal_hunter.core.settings import get_settings
 from deal_hunter.notifiers.telegram import TelegramNotifier
+from deal_hunter.notifiers.telegram.recorder import record_sent_notification
 from deal_hunter.services.runtime import get_topic_id
 from deal_hunter.storage.database import get_session
 
@@ -40,12 +41,26 @@ def run_trend_chart(profile_name: str) -> None:
     _send_chart(chart_path, caption=f"\U0001f4ca Trend cenowy: {profile_name}")
 
 
-def _send_chart(chart_path: object, *, caption: str) -> None:
+def _send_chart(
+    chart_path: object,
+    *,
+    caption: str,
+    deal_id: str | None = None,
+    profile: str | None = None,
+) -> None:
     """Send a chart file to Telegram if configured, else print a skip message."""
     s = get_settings()
     if not s.telegram_configured:
         print("Telegram not configured — chart not sent.")
         return
     telegram = TelegramNotifier(s.telegram_bot_token, s.telegram_chat_id)
-    telegram.send_photo(str(chart_path), caption=caption, topic_id=get_topic_id())
-    print("Chart sent to Telegram.")
+    if telegram.send_photo(str(chart_path), caption=caption, topic_id=get_topic_id()):
+        record_sent_notification(
+            alert_type="chart",
+            payload={"caption": caption},
+            deal_id=deal_id,
+            profile=profile,
+        )
+        print("Chart sent to Telegram.")
+    else:
+        print("Chart send failed.")

@@ -364,3 +364,89 @@ class TestSendPhoto:
 
         call_kwargs = mock_post.call_args
         assert "caption" not in call_kwargs[1]["data"]
+
+
+class TestChartRecording:
+    """`chart_service._send_chart` and `digest_service.run_digest` record chart sends."""
+
+    def test_chart_service_records_after_successful_send_photo(self, monkeypatch, tmp_path):
+        from deal_hunter.services import chart_service
+
+        fake_chart = tmp_path / "c.png"
+        fake_chart.write_bytes(b"x")
+
+        captured: list[dict] = []
+        monkeypatch.setattr(
+            chart_service,
+            "record_sent_notification",
+            lambda **kw: captured.append(kw),
+        )
+
+        class FakeTG:
+            def send_photo(self, *_a, **_k):
+                return True
+
+        monkeypatch.setattr(chart_service, "TelegramNotifier", lambda *_a, **_k: FakeTG())
+
+        class FakeSettings:
+            telegram_configured = True
+            telegram_bot_token = "tok"  # noqa: S105
+            telegram_chat_id = "chat"
+
+        monkeypatch.setattr(chart_service, "get_settings", lambda: FakeSettings())
+
+        chart_service._send_chart(fake_chart, caption="Caption A")
+        assert len(captured) == 1
+        assert captured[0]["alert_type"] == "chart"
+        assert captured[0]["payload"]["caption"] == "Caption A"
+
+    def test_chart_service_does_not_record_on_failure(self, monkeypatch, tmp_path):
+        from deal_hunter.services import chart_service
+
+        fake_chart = tmp_path / "c.png"
+        fake_chart.write_bytes(b"x")
+        captured: list[dict] = []
+        monkeypatch.setattr(
+            chart_service,
+            "record_sent_notification",
+            lambda **kw: captured.append(kw),
+        )
+
+        class FakeTG:
+            def send_photo(self, *_a, **_k):
+                return False
+
+        monkeypatch.setattr(chart_service, "TelegramNotifier", lambda *_a, **_k: FakeTG())
+
+        class FakeSettings:
+            telegram_configured = True
+            telegram_bot_token = "tok"  # noqa: S105
+            telegram_chat_id = "chat"
+
+        monkeypatch.setattr(chart_service, "get_settings", lambda: FakeSettings())
+
+        chart_service._send_chart(fake_chart, caption="Caption B")
+        assert captured == []
+
+    def test_digest_service_records_chart_after_successful_send_photo(self, monkeypatch, tmp_path):
+        # We don't drive the full digest service here — we test just the chart
+        # branch via the helper this task introduces.
+        from deal_hunter.services import digest_service
+
+        captured: list[dict] = []
+        monkeypatch.setattr(
+            digest_service,
+            "record_sent_notification",
+            lambda **kw: captured.append(kw),
+        )
+
+        class FakeTG:
+            def send_photo(self, *_a, **_k):
+                return True
+
+        fake_chart = tmp_path / "d.png"
+        fake_chart.write_bytes(b"x")
+        digest_service._send_digest_chart(FakeTG(), str(fake_chart), caption="X")
+        assert len(captured) == 1
+        assert captured[0]["alert_type"] == "chart"
+        assert captured[0]["payload"]["caption"] == "X"
