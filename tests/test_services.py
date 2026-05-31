@@ -313,7 +313,7 @@ class TestHealthTracker:
         assert "ceneo" not in failing
 
 
-def test_alert_service_filters_muted_deal_before_send(monkeypatch):
+def test_alert_service_filters_muted_deal_before_send():
     """A deal with muted_until in the future must not enter alert_queue nor reach Telegram."""
     import pytest as _pytest
     from sqlalchemy import create_engine
@@ -322,13 +322,18 @@ def test_alert_service_filters_muted_deal_before_send(monkeypatch):
     from deal_hunter.core.notification_config import NotificationConfig
     from deal_hunter.services.alerter import AlertService
     from deal_hunter.storage.models import Base
-    from deal_hunter.storage.repositories import AlertQueueRepository, OfferRepository
+    from deal_hunter.storage.repositories import (
+        AlertQueueRepository,
+        OfferRepository,
+        SentNotificationRepository,
+    )
 
     eng = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(eng)
     with Session(eng) as session:
         offer_repo = OfferRepository(session)
         alert_repo = AlertQueueRepository(session)
+        sent_repo = SentNotificationRepository(session)
         offer_repo.upsert(
             id="pepper:42",
             title="Test",
@@ -354,7 +359,7 @@ def test_alert_service_filters_muted_deal_before_send(monkeypatch):
                 "send_price_drop_alert": lambda *a, **k: _pytest.fail("must not be called"),
             },
         )()
-        svc = AlertService(telegram, alert_repo, offer_repo=offer_repo)
+        svc = AlertService(telegram, alert_repo, offer_repo=offer_repo, sent_repo=sent_repo)
 
         deal = type("D", (), {"id": "pepper:42", "title": "Test", "link": ""})()
         drops = [
@@ -503,3 +508,87 @@ class TestAlertServiceRecording:
         assert captured[0]["alert_type"] == "source_failure"
         assert captured[0]["profile"] is None
         assert "text_preview" in captured[0]["payload"]
+
+
+def test_cooldown_reads_from_sent_notifications():
+    """A recent row in sent_notifications must trigger cooldown suppression."""
+    from datetime import datetime
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from deal_hunter.core.notification_config import NotificationConfig
+    from deal_hunter.services.alerter import AlertService
+    from deal_hunter.storage.models import Base
+    from deal_hunter.storage.repositories import (
+        AlertQueueRepository,
+        OfferRepository,
+        SentNotificationRepository,
+    )
+
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    with Session(eng) as session:
+        offer_repo = OfferRepository(session)
+        alert_repo = AlertQueueRepository(session)
+        sent_repo = SentNotificationRepository(session)
+
+        offer_repo.upsert(
+            id="pepper:99",
+            title="x",
+            price=100,
+            link="",
+            source="x",
+            description="",
+            image_url="",
+            profile="bikes",
+            score=0,
+            category="",
+            status="active",
+            first_seen="2026-05-01T00:00:00",
+            last_seen="2026-05-01T00:00:00",
+        )
+        sent_repo.record(
+            alert_type="price_drop",
+            payload_json='{"x": 1}',
+            deal_id="pepper:99",
+            sent_at=datetime.now().isoformat(),  # now → in cooldown
+        )
+        session.commit()
+
+        telegram = type(
+            "FakeTG",
+            (),
+            {
+                "send_price_drop_alert": lambda *a, **k: (_ for _ in ()).throw(
+                    AssertionError("must not be called")
+                ),
+            },
+        )()
+        svc = AlertService(telegram, alert_repo, offer_repo=offer_repo, sent_repo=sent_repo)
+        deal = type("D", (), {"id": "pepper:99", "title": "x", "link": ""})()
+        drops = [
+            {
+                "deal": deal,
+                "price_change": {
+                    "type": "drop",
+                    "old_price": 200,
+                    "new_price": 100,
+                    "diff_pln": 100,
+                    "diff_percent": 50.0,
+                    "is_lowest_ever": False,
+                },
+            }
+        ]
+        cfg = NotificationConfig(
+            cooldown_days=7, alert_through_cooldown_if_ath_low=True, default_snooze_days=30
+        )
+        sent = svc.send_price_drop_alerts(
+            drops,
+            profile={},
+            profile_name="bikes",
+            topic_id=None,
+            max_alerts=5,
+            notification_config=cfg,
+        )
+        assert sent == 0

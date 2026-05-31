@@ -15,7 +15,11 @@ from deal_hunter.services.notification_filter import should_send_price_drop
 if TYPE_CHECKING:
     from deal_hunter.core.notification_config import NotificationConfig
     from deal_hunter.notifiers.telegram import TelegramNotifier
-    from deal_hunter.storage.repositories import AlertQueueRepository, OfferRepository
+    from deal_hunter.storage.repositories import (
+        AlertQueueRepository,
+        OfferRepository,
+        SentNotificationRepository,
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -66,10 +70,12 @@ class AlertService:
         telegram: TelegramNotifier | None,
         alert_repo: AlertQueueRepository | None = None,
         offer_repo: OfferRepository | None = None,
+        sent_repo: SentNotificationRepository | None = None,
     ) -> None:
         self.telegram = telegram
         self.alert_repo = alert_repo
         self.offer_repo = offer_repo
+        self.sent_repo = sent_repo
 
     def flush_queued(
         self, profile_name: str, profile: dict, topic_id: int | None, max_alerts: int
@@ -137,7 +143,7 @@ class AlertService:
             return 0
 
         # Apply per-deal mute + per-profile cooldown filter.
-        if notification_config and self.alert_repo and self.offer_repo:
+        if notification_config and self.offer_repo and self.sent_repo:
             allowed: list[dict] = []
             for pda in drops:
                 allow, reason = should_send_price_drop(
@@ -146,7 +152,7 @@ class AlertService:
                     is_all_time_low=bool(pda["price_change"].get("is_lowest_ever")),
                     config=notification_config,
                     deal_repo=self.offer_repo,
-                    alert_repo=self.alert_repo,
+                    sent_repo=self.sent_repo,
                 )
                 logger.info(
                     "price_drop_filter deal=%s allow=%s reason=%s",
