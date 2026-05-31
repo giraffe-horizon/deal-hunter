@@ -125,9 +125,9 @@ class TelegramNotifier:
             return
         self._send_message(msg, topic_id=topic_id, disable_preview=True)
 
-    def send_text(self, text: str, topic_id: int | None = None) -> None:
+    def send_text(self, text: str, topic_id: int | None = None) -> bool:
         """Send a plain text message, optionally to a specific topic."""
-        self._send_message(text, topic_id=topic_id)
+        return self._send_message(text, topic_id=topic_id)
 
     # ── Transport ──
 
@@ -136,8 +136,11 @@ class TelegramNotifier:
         photo_path: str,
         caption: str = "",
         topic_id: int | None = None,
-    ) -> None:
-        """Send a photo via Telegram sendPhoto (multipart/form-data upload)."""
+    ) -> bool:
+        """Send a photo via Telegram sendPhoto (multipart/form-data upload).
+
+        Returns True iff the API returned 200.
+        """
         url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
         data = {"chat_id": self.chat_id}
         if caption:
@@ -153,7 +156,7 @@ class TelegramNotifier:
                     resp = requests.post(url, data=data, files={"photo": f}, timeout=30)
                 if resp.status_code == 200:
                     logger.info(f"Telegram: sent photo {photo_path}")
-                    return
+                    return True
                 if resp.status_code == 429:
                     retry_after = self._retry_after(resp)
                     logger.warning(
@@ -175,6 +178,7 @@ class TelegramNotifier:
                     continue
 
         logger.error("Telegram: failed to send photo after 3 attempts")
+        return False
 
     def _send_message(
         self,
@@ -182,8 +186,8 @@ class TelegramNotifier:
         topic_id: int | None = None,
         disable_preview: bool = False,
         reply_markup: dict | None = None,
-    ) -> None:
-        """Send message with retry and rate limiting."""
+    ) -> bool:
+        """Send message with retry and rate limiting. Returns True iff the API returned 200."""
         payload = {
             "chat_id": self.chat_id,
             "text": text,
@@ -201,7 +205,7 @@ class TelegramNotifier:
                 resp = requests.post(self.api_url, json=payload, timeout=10)
                 if resp.status_code == 200:
                     logger.info(f"Telegram: sent message ({len(text)} chars)")
-                    return
+                    return True
                 if resp.status_code == 429:
                     retry_after = self._retry_after(resp)
                     logger.warning(
@@ -221,6 +225,7 @@ class TelegramNotifier:
                     continue
 
         logger.error("Telegram: failed to send after 3 attempts")
+        return False
 
     @staticmethod
     def _retry_after(resp: requests.Response) -> int:
